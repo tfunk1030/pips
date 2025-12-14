@@ -1,0 +1,6 @@
+{
+  "board_crop": [200, 220, 860, 860],
+  "rows": 8,
+  "cols": 8,
+  "samples_per_cell": 9
+}
