@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "Pips",
+    "slug": "pips",
+    "version": "0.1.0",
+    "sdkVersion": "51.0.0",
+    "platforms": ["ios", "android", "web"],
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1b1f3a"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "plugins": [
+      [
+        "react-native-reanimated",
+        {
+          "enableAndroidChunkedGLSurfaceView": true
+        }
+      ]
+    ]
+  }
+}
