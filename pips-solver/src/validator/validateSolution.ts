@@ -10,7 +10,6 @@ import {
   DominoCheckResult,
   cellKey,
   isAdjacent,
-  cellsEqual,
 } from '../model/types';
 import { getRegionCells } from '../model/normalize';
 

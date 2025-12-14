@@ -3,7 +3,7 @@
  * Lists saved puzzles and allows importing new ones
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,

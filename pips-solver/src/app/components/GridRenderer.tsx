@@ -2,8 +2,8 @@
  * Grid renderer with zoom/pan support using react-native-svg
  */
 
-import React, { useState } from 'react';
-import { View, StyleSheet, Dimensions } from 'react-native';
+import React from 'react';
+import { StyleSheet } from 'react-native';
 import {
   GestureHandlerRootView,
   GestureDetector,
@@ -15,7 +15,7 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 import Svg, { Rect, Line, Text as SvgText, G } from 'react-native-svg';
-import { NormalizedPuzzle, Solution, Cell, cellsEqual } from '../../model/types';
+import { NormalizedPuzzle, Solution, Cell } from '../../model/types';
 
 interface GridRendererProps {
   puzzle: NormalizedPuzzle;
@@ -181,9 +181,6 @@ function renderDominoBorders(puzzle: NormalizedPuzzle, solution: Solution) {
   for (let i = 0; i < solution.dominoes.length; i++) {
     const domino = solution.dominoes[i];
     const { cell1, cell2 } = domino;
-
-    // Determine if horizontal or vertical
-    const isHorizontal = cell1.row === cell2.row;
 
     // Get bounding box
     const minRow = Math.min(cell1.row, cell2.row);
