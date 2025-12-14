@@ -1,0 +1,18 @@
+grid:
+  rows: 2
+  cols: 2
+  cells: |
+    ..
+    ..
+regions: |
+  AA
+  BB
+regionConstraints:
+  A: { sum: 1 }
+  B: { sum: 2, all_equal: true }
+dominoes:
+  maxPip: 1
+  unique: true
+
+
+
