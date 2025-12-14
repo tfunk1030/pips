@@ -120,11 +120,6 @@ function propagateRegionConstraint(
         return false; // Impossible to reach sum
       }
 
-      const minPossible = 0; // Minimum is all zeros
-      if (remaining < minPossible) {
-        return false;
-      }
-
       // If only one cell left, it must equal remaining
       if (unassignedCells.length === 1) {
         const cell = unassignedCells[0];

@@ -9,8 +9,6 @@ import {
   SolverState,
   SolverProgress,
   DominoPlacement,
-  cellKey,
-  dominoId,
   Explanation,
 } from '../model/types';
 import { initializeDomains, propagateConstraints, copyDomains, isConsistent } from './propagate';
@@ -58,7 +56,7 @@ export function solvePuzzle(
   const solutions: Solution[] = [];
 
   // Run backtracking search
-  const result = backtrack(puzzle, initialState, config, stats, solutions);
+  backtrack(puzzle, initialState, config, stats, solutions);
 
   stats.timeMs = Date.now() - startTime;
 

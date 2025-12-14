@@ -4,31 +4,6 @@
 
 export const SAMPLE_PUZZLES = [
   {
-    id: 'sample_2x2_tiny',
-    name: 'Tiny 2x2 Test',
-    yaml: `# Tiny 2x2 Pips puzzle for quick testing
-
-id: sample_2x2_tiny
-name: "Tiny 2x2 Test"
-rows: 2
-cols: 2
-maxPip: 6
-allowDuplicates: false
-
-# Region layout
-regions:
-  - [0, 1]
-  - [0, 1]
-
-# Constraints
-constraints:
-  0:
-    sum: 7
-  1:
-    sum: 5
-`,
-  },
-  {
     id: 'sample_2x4_simple',
     name: 'Simple 2x4 Puzzle',
     yaml: `# Simple 2x4 Pips puzzle
@@ -91,6 +66,31 @@ constraints:
   4:
     op: ">"
     value: 3
+`,
+  },
+  {
+    id: 'sample_2x2_tiny',
+    name: 'Tiny 2x2 Test',
+    yaml: `# Tiny 2x2 Pips puzzle for quick testing
+
+id: sample_2x2_tiny
+name: "Tiny 2x2 Test"
+rows: 2
+cols: 2
+maxPip: 6
+allowDuplicates: false
+
+# Region layout
+regions:
+  - [0, 1]
+  - [0, 1]
+
+# Constraints
+constraints:
+  0:
+    sum: 7
+  1:
+    sum: 5
 `,
   },
 ];

@@ -10,6 +10,17 @@ const PUZZLES_KEY = '@pips_puzzles';
 const SETTINGS_KEY = '@pips_settings';
 
 /**
+ * App settings interface
+ */
+export interface AppSettings {
+  defaultMaxPip: number;
+  defaultAllowDuplicates: boolean;
+  defaultFindAll: boolean;
+  defaultDebugLevel: number;
+  maxIterationsPerTick: number;
+}
+
+/**
  * Get all stored puzzles
  */
 export async function getAllPuzzles(): Promise<StoredPuzzle[]> {
@@ -118,7 +129,7 @@ export async function clearAllPuzzles(): Promise<void> {
 /**
  * Get app settings
  */
-export async function getSettings(): Promise<any> {
+export async function getSettings(): Promise<AppSettings> {
   try {
     const data = await AsyncStorage.getItem(SETTINGS_KEY);
     if (!data) {
@@ -134,14 +145,14 @@ export async function getSettings(): Promise<any> {
 /**
  * Save app settings
  */
-export async function saveSettings(settings: any): Promise<void> {
+export async function saveSettings(settings: AppSettings): Promise<void> {
   await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
 }
 
 /**
  * Get default settings
  */
-function getDefaultSettings() {
+function getDefaultSettings(): AppSettings {
   return {
     defaultMaxPip: 6,
     defaultAllowDuplicates: false,

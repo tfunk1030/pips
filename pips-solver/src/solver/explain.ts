@@ -8,7 +8,6 @@ import {
   Explanation,
   Conflict,
   Cell,
-  cellKey,
 } from '../model/types';
 import { getRegionCells } from '../model/normalize';
 
