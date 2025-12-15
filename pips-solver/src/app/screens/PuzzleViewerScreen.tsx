@@ -3,18 +3,11 @@
  * Displays puzzle grid and allows navigation to solve
  */
 
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Alert,
-} from 'react-native';
-import { StoredPuzzle, Cell } from '../../model/types';
-import { getPuzzle } from '../../storage/puzzles';
+import React, { useEffect, useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { normalizePuzzle } from '../../model/normalize';
+import { Cell, StoredPuzzle } from '../../model/types';
+import { getPuzzle } from '../../storage/puzzles';
 import GridRenderer from '../components/GridRenderer';
 
 export default function PuzzleViewerScreen({ route, navigation }: any) {
@@ -66,7 +59,7 @@ export default function PuzzleViewerScreen({ route, navigation }: any) {
     };
   };
 
-  if (!puzzle) {
+  if (!puzzle || !puzzle.spec) {
     return (
       <View style={styles.container}>
         <Text>Loading...</Text>
@@ -90,14 +83,14 @@ export default function PuzzleViewerScreen({ route, navigation }: any) {
       <ScrollView style={styles.content}>
         <View style={styles.infoCard}>
           <Text style={styles.infoTitle}>Puzzle Info</Text>
-          <Text style={styles.infoText}>Size: {puzzle.spec.rows}x{puzzle.spec.cols}</Text>
+          <Text style={styles.infoText}>
+            Size: {puzzle.spec.rows}x{puzzle.spec.cols}
+          </Text>
           <Text style={styles.infoText}>Max Pip: {puzzle.spec.maxPip || 6}</Text>
           <Text style={styles.infoText}>
             Duplicates: {puzzle.spec.allowDuplicates ? 'Allowed' : 'Not Allowed'}
           </Text>
-          <Text style={styles.infoText}>
-            Status: {puzzle.solved ? 'Solved ✓' : 'Unsolved'}
-          </Text>
+          <Text style={styles.infoText}>Status: {puzzle.solved ? 'Solved ✓' : 'Unsolved'}</Text>
         </View>
 
         <View style={styles.gridContainer}>
@@ -121,18 +114,10 @@ export default function PuzzleViewerScreen({ route, navigation }: any) {
         {puzzle.solution && (
           <View style={styles.solutionCard}>
             <Text style={styles.solutionTitle}>Solution</Text>
-            <Text style={styles.solutionText}>
-              Dominoes: {puzzle.solution.dominoes.length}
-            </Text>
-            <Text style={styles.solutionText}>
-              Nodes Searched: {puzzle.solution.stats.nodes}
-            </Text>
-            <Text style={styles.solutionText}>
-              Backtracks: {puzzle.solution.stats.backtracks}
-            </Text>
-            <Text style={styles.solutionText}>
-              Time: {puzzle.solution.stats.timeMs}ms
-            </Text>
+            <Text style={styles.solutionText}>Dominoes: {puzzle.solution.dominoes.length}</Text>
+            <Text style={styles.solutionText}>Nodes Searched: {puzzle.solution.stats.nodes}</Text>
+            <Text style={styles.solutionText}>Backtracks: {puzzle.solution.stats.backtracks}</Text>
+            <Text style={styles.solutionText}>Time: {puzzle.solution.stats.timeMs}ms</Text>
           </View>
         )}
       </ScrollView>
@@ -142,9 +127,7 @@ export default function PuzzleViewerScreen({ route, navigation }: any) {
           style={styles.solveButton}
           onPress={() => navigation.navigate('Solve', { puzzleId: puzzle.id })}
         >
-          <Text style={styles.solveButtonText}>
-            {puzzle.solved ? 'Re-Solve' : 'Solve Puzzle'}
-          </Text>
+          <Text style={styles.solveButtonText}>{puzzle.solved ? 'Re-Solve' : 'Solve Puzzle'}</Text>
         </TouchableOpacity>
       </View>
     </View>

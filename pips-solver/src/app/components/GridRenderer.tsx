@@ -4,18 +4,10 @@
 
 import React from 'react';
 import { StyleSheet } from 'react-native';
-import {
-  GestureHandlerRootView,
-  GestureDetector,
-  Gesture,
-} from 'react-native-gesture-handler';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-} from 'react-native-reanimated';
-import Svg, { Rect, Line, Text as SvgText, G } from 'react-native-svg';
-import { NormalizedPuzzle, Solution, Cell } from '../../model/types';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+import Svg, { G, Line, Rect, Text as SvgText } from 'react-native-svg';
+import { Cell, NormalizedPuzzle, Solution } from '../../model/types';
 
 interface GridRendererProps {
   puzzle: NormalizedPuzzle;
@@ -29,8 +21,18 @@ const GRID_PADDING = 20;
 
 // Region colors (cycling palette)
 const REGION_COLORS = [
-  '#FFE5E5', '#E5F3FF', '#E5FFE5', '#FFF3E5', '#FFE5FF', '#E5FFFF',
-  '#FFE5F3', '#F3FFE5', '#E5E5FF', '#FFFFE5', '#FFE5E5', '#E5FFE5',
+  '#FFE5E5',
+  '#E5F3FF',
+  '#E5FFE5',
+  '#FFF3E5',
+  '#FFE5FF',
+  '#E5FFFF',
+  '#FFE5F3',
+  '#F3FFE5',
+  '#E5E5FF',
+  '#FFFFE5',
+  '#FFE5E5',
+  '#E5FFE5',
 ];
 
 export default function GridRenderer({
@@ -39,6 +41,11 @@ export default function GridRenderer({
   onCellPress,
   highlightCell,
 }: GridRendererProps) {
+  // Guard against undefined puzzle or spec
+  if (!puzzle || !puzzle.spec) {
+    return null;
+  }
+
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
   const translateX = useSharedValue(0);
@@ -51,19 +58,25 @@ export default function GridRenderer({
 
   // Pinch gesture for zoom
   const pinchGesture = Gesture.Pinch()
-    .onUpdate((e) => {
+    .onUpdate(e => {
       scale.value = savedScale.value * e.scale;
     })
     .onEnd(() => {
       // Clamp scale
-      if (scale.value < 0.5) scale.value = withSpring(0.5);
-      if (scale.value > 3) scale.value = withSpring(3);
-      savedScale.value = scale.value;
+      if (scale.value < 0.5) {
+        scale.value = withSpring(0.5);
+        savedScale.value = 0.5;
+      } else if (scale.value > 3) {
+        scale.value = withSpring(3);
+        savedScale.value = 3;
+      } else {
+        savedScale.value = scale.value;
+      }
     });
 
   // Pan gesture for panning
   const panGesture = Gesture.Pan()
-    .onUpdate((e) => {
+    .onUpdate(e => {
       translateX.value = savedTranslateX.value + e.translationX;
       translateY.value = savedTranslateY.value + e.translationY;
     })
@@ -210,11 +223,7 @@ function renderDominoBorders(puzzle: NormalizedPuzzle, solution: Solution) {
   return elements;
 }
 
-function renderPipValues(
-  puzzle: NormalizedPuzzle,
-  solution: Solution,
-  highlightCell?: Cell
-) {
+function renderPipValues(puzzle: NormalizedPuzzle, solution: Solution, highlightCell?: Cell) {
   const elements: React.ReactElement[] = [];
 
   for (let row = 0; row < puzzle.spec.rows; row++) {
@@ -223,8 +232,7 @@ function renderPipValues(
       const x = GRID_PADDING + col * CELL_SIZE + CELL_SIZE / 2;
       const y = GRID_PADDING + row * CELL_SIZE + CELL_SIZE / 2;
 
-      const isHighlighted =
-        highlightCell && highlightCell.row === row && highlightCell.col === col;
+      const isHighlighted = highlightCell && highlightCell.row === row && highlightCell.col === col;
 
       elements.push(
         <SvgText
@@ -232,7 +240,7 @@ function renderPipValues(
           x={x}
           y={y}
           fontSize={isHighlighted ? 28 : 24}
-          fontWeight={isHighlighted ? 'bold' : 'normal'}
+          fontWeight={isHighlighted ? 700 : 400}
           fill={isHighlighted ? '#FF0000' : '#000'}
           textAnchor="middle"
           alignmentBaseline="central"

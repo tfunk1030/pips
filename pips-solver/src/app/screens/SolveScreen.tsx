@@ -3,21 +3,20 @@
  * Runs the solver and displays results with validation
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Alert,
   ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { StoredPuzzle, SolverProgress, ValidationResult } from '../../model/types';
-import { getPuzzle, updatePuzzleSolution } from '../../storage/puzzles';
-import { getSettings } from '../../storage/puzzles';
 import { normalizePuzzle } from '../../model/normalize';
+import { SolverProgress, StoredPuzzle, ValidationResult } from '../../model/types';
 import { solvePuzzleAsync } from '../../solver/solver';
+import { getPuzzle, getSettings, updatePuzzleSolution } from '../../storage/puzzles';
 import { validateSolution } from '../../validator/validateSolution';
 import GridRenderer from '../components/GridRenderer';
 
@@ -73,7 +72,7 @@ export default function SolveScreen({ route, navigation }: any) {
       const result = await solvePuzzleAsync(
         normalized,
         config,
-        (prog) => setProgress(prog),
+        prog => setProgress(prog),
         cancelSignal.current
       );
 
@@ -98,14 +97,18 @@ export default function SolveScreen({ route, navigation }: any) {
         } else {
           Alert.alert(
             'Validation Failed',
-            `Solver returned an invalid solution!\n\nErrors:\n${validationResult.errors.join('\n')}`,
+            `Solver returned an invalid solution!\n\nErrors:\n${validationResult.errors.join(
+              '\n'
+            )}`,
             [{ text: 'OK' }]
           );
         }
       } else {
         Alert.alert(
           'No Solution',
-          `Puzzle is unsatisfiable.\n\n${result.explanation.message}\n\n${result.explanation.details.join('\n')}`,
+          `Puzzle is unsatisfiable.\n\n${
+            result.explanation.message
+          }\n\n${result.explanation.details.join('\n')}`,
           [{ text: 'OK' }]
         );
       }
@@ -121,7 +124,7 @@ export default function SolveScreen({ route, navigation }: any) {
     cancelSignal.current.cancelled = true;
   };
 
-  if (!puzzle) {
+  if (!puzzle || !puzzle.spec) {
     return (
       <View style={styles.container}>
         <Text>Loading...</Text>
@@ -189,10 +192,7 @@ export default function SolveScreen({ route, navigation }: any) {
                   <View style={styles.checksSection}>
                     <Text style={styles.checksTitle}>Region Checks:</Text>
                     {validation.regionChecks.map((check, i) => (
-                      <Text
-                        key={i}
-                        style={check.valid ? styles.checkValid : styles.checkInvalid}
-                      >
+                      <Text key={i} style={check.valid ? styles.checkValid : styles.checkInvalid}>
                         {check.message}
                       </Text>
                     ))}
@@ -204,9 +204,9 @@ export default function SolveScreen({ route, navigation }: any) {
                     <Text style={styles.checksTitle}>
                       Domino Checks: {validation.dominoChecks.length} total
                     </Text>
-                    {validation.dominoChecks.filter((c) => !c.valid).length > 0 ? (
+                    {validation.dominoChecks.filter(c => !c.valid).length > 0 ? (
                       validation.dominoChecks
-                        .filter((c) => !c.valid)
+                        .filter(c => !c.valid)
                         .map((check, i) => (
                           <Text key={i} style={styles.checkInvalid}>
                             {check.message}
@@ -231,9 +231,7 @@ export default function SolveScreen({ route, navigation }: any) {
           </TouchableOpacity>
         ) : (
           <TouchableOpacity style={styles.solveButton} onPress={handleSolve}>
-            <Text style={styles.solveButtonText}>
-              {puzzle.solved ? 'Re-Solve' : 'Solve'}
-            </Text>
+            <Text style={styles.solveButtonText}>{puzzle.solved ? 'Re-Solve' : 'Solve'}</Text>
           </TouchableOpacity>
         )}
       </View>
