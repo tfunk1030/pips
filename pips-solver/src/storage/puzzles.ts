@@ -18,6 +18,7 @@ export interface AppSettings {
   defaultFindAll: boolean;
   defaultDebugLevel: number;
   maxIterationsPerTick: number;
+  anthropicApiKey?: string;
 }
 
 /**

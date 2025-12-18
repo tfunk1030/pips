@@ -12,6 +12,7 @@ import {
   Switch,
   ScrollView,
   Alert,
+  TextInput,
 } from 'react-native';
 import { getSettings, saveSettings } from '../../storage/puzzles';
 
@@ -22,6 +23,7 @@ export default function SettingsScreen({ navigation }: any) {
     defaultFindAll: false,
     defaultDebugLevel: 0,
     maxIterationsPerTick: 100,
+    anthropicApiKey: '',
   });
 
   useEffect(() => {
@@ -30,7 +32,10 @@ export default function SettingsScreen({ navigation }: any) {
 
   const loadSettings = async () => {
     const loaded = await getSettings();
-    setSettings(loaded);
+    setSettings({
+      ...loaded,
+      anthropicApiKey: loaded.anthropicApiKey || '',
+    });
   };
 
   const handleSave = async () => {
@@ -175,6 +180,29 @@ export default function SettingsScreen({ navigation }: any) {
           </View>
         </View>
 
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>AI Extraction</Text>
+
+          <View style={styles.setting}>
+            <View style={styles.settingInfo}>
+              <Text style={styles.settingLabel}>Anthropic API Key</Text>
+              <Text style={styles.settingDescription}>
+                Required for AI puzzle extraction
+              </Text>
+            </View>
+          </View>
+          <TextInput
+            style={styles.apiKeyInput}
+            value={settings.anthropicApiKey}
+            onChangeText={(value) => updateSetting('anthropicApiKey', value)}
+            placeholder="sk-ant-..."
+            placeholderTextColor="#999"
+            secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+        </View>
+
         <View style={styles.infoSection}>
           <Text style={styles.infoTitle}>About</Text>
           <Text style={styles.infoText}>
@@ -317,5 +345,16 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  apiKeyInput: {
+    backgroundColor: '#f9f9f9',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    fontFamily: 'monospace',
+    marginTop: 8,
   },
 });
