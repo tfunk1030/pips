@@ -1,0 +1,25 @@
+# Simple 2x4 Pips puzzle
+# 4 dominoes needed to fill the grid
+
+id: sample_2x4_simple
+name: "Simple 2x4 Puzzle"
+rows: 2
+cols: 4
+maxPip: 6
+allowDuplicates: false
+
+# Region layout (each number is a region ID)
+regions:
+  - [0, 0, 1, 1]
+  - [2, 2, 3, 3]
+
+# Constraints for each region
+constraints:
+  0:
+    sum: 6    # Region 0 must sum to 6
+  1:
+    sum: 8    # Region 1 must sum to 8
+  2:
+    sum: 5    # Region 2 must sum to 5
+  3:
+    all_equal: true  # Region 3 must have all equal values
