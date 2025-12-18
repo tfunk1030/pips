@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:docs.claude.com)",
+      "Bash(pip install:*)",
+      "Bash(python -c \"import sys; sys.path.insert\\(0, ''..''\\); from claude_agent_sdk import ClaudeSDKClient; print\\(''✓ Claude SDK imported successfully''\\)\")",
+      "Bash(python -c \"import sys; sys.path.insert\\(0, ''..''\\); from claude_agent_sdk import ClaudeSDKClient; print\\(''Claude SDK imported successfully''\\)\")",
+      "Bash(python:*)",
+      "Bash(npx eas-cli:*)"
+    ]
+  }
+}
