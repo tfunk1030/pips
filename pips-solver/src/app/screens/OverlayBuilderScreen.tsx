@@ -3,29 +3,23 @@
  * Main coordinator for the 4-step puzzle creation wizard
  */
 
-import React, { useReducer, useEffect, useCallback, useRef, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Alert,
-  SafeAreaView,
-  TextInput,
-  Modal,
-} from 'react-native';
+import * as FileSystem from 'expo-file-system';
+import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
+import React, { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import { Alert, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { BuilderStep, createInitialBuilderState } from '../../model/overlayTypes';
 import {
-  OverlayBuilderState,
-  BuilderStep,
-  createInitialBuilderState,
-} from '../../model/overlayTypes';
-import { saveDraft, loadDraft, deleteDraft } from '../../storage/drafts';
-import { buildPuzzleSpec, validateBuilderState, getBuilderStats } from '../../utils/specBuilder';
-import { savePuzzle, getSettings } from '../../storage/puzzles';
-import { validatePuzzleSpec } from '../../validator/validateSpec';
-import { extractPuzzleFromImage, convertAIResultToBuilderState, ExtractionProgress } from '../../services/aiExtraction';
+  ExtractionProgress,
+  convertAIResultToBuilderState,
+  extractPuzzleFromImage,
+} from '../../services/aiExtraction';
 import { builderReducer, countValidCells } from '../../state/builderReducer';
+import { deleteDraft, loadDraft, saveDraft } from '../../storage/drafts';
+import { getSettings, savePuzzle } from '../../storage/puzzles';
+import { buildPuzzleSpec, getBuilderStats, validateBuilderState } from '../../utils/specBuilder';
+import { validatePuzzleSpec } from '../../validator/validateSpec';
 
 // Step components
 import Step1GridAlignment from './builder/Step1GridAlignment';
@@ -97,21 +91,74 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
   const pickImage = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        // Avoid deprecated MediaTypeOptions; use new mediaTypes shape.
+        // Some expo-image-picker typings lag behind runtime, so we cast.
+        mediaTypes: ['images'] as any,
         allowsEditing: false,
-        quality: 0.8,
+        // Keep picker base64 reasonably sized; we may still downscale further below.
+        quality: 0.7,
         base64: true,
       });
 
       if (!result.canceled && result.assets[0]) {
         const asset = result.assets[0];
+        // Normalize to a predictable JPEG base64 so the vision API can decode reliably.
+        // Also downscale to avoid memory spikes / iOS "Image context has been lost".
+        let manipulated: { uri: string; width: number; height: number; base64?: string } | null =
+          null;
+
+        // Prefer reading base64 from the file system (more robust than GPU-backed render paths).
+        let base64FromFile: string | undefined = asset.base64 || undefined;
+        if (!base64FromFile) {
+          try {
+            base64FromFile = await FileSystem.readAsStringAsync(asset.uri, {
+              encoding: 'base64' as any,
+            });
+          } catch (e) {
+            // We'll try manipulator below; if that fails too, the picker base64 is required.
+            console.warn('Failed to read image base64 from file system:', e);
+          }
+        }
+
+        const tryManipulate = async (targetWidth: number) => {
+          return await ImageManipulator.manipulateAsync(
+            asset.uri,
+            [{ resize: { width: targetWidth } }],
+            {
+              compress: 0.85,
+              format: ImageManipulator.SaveFormat.JPEG,
+              base64: true,
+            }
+          );
+        };
+
+        try {
+          // First try: reasonable vision input size
+          manipulated = await tryManipulate(1600);
+        } catch (e1) {
+          try {
+            // Fallback: smaller (more likely to succeed on memory-constrained contexts)
+            manipulated = await tryManipulate(1024);
+          } catch (e2) {
+            // Last resort: use base64 from picker or file system, even if we can't re-encode.
+            // This keeps the app usable; aiExtraction.ts will normalize the base64 string.
+            console.warn('Image manipulation failed, falling back to picker base64:', e2);
+            manipulated = null;
+          }
+        }
+
+        const finalUri = manipulated?.uri || asset.uri;
+        const finalWidth = manipulated?.width || asset.width;
+        const finalHeight = manipulated?.height || asset.height;
+        const finalBase64 = manipulated?.base64 || base64FromFile || undefined;
+
         dispatch({
           type: 'SET_IMAGE',
           image: {
-            uri: asset.uri,
-            width: asset.width,
-            height: asset.height,
-            base64: asset.base64 || undefined,
+            uri: finalUri,
+            width: finalWidth,
+            height: finalHeight,
+            base64: finalBase64,
           },
         });
         hasImageRef.current = true;
@@ -211,28 +258,24 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
       goToStep((state.step - 1) as BuilderStep);
     } else {
       // Prompt to save draft before leaving
-      Alert.alert(
-        'Save Progress?',
-        'Do you want to save your progress?',
-        [
-          {
-            text: 'Discard',
-            style: 'destructive',
-            onPress: async () => {
-              await deleteDraft(state.draftId);
-              navigation.goBack();
-            },
+      Alert.alert('Save Progress?', 'Do you want to save your progress?', [
+        {
+          text: 'Discard',
+          style: 'destructive',
+          onPress: async () => {
+            await deleteDraft(state.draftId);
+            navigation.goBack();
           },
-          {
-            text: 'Save & Exit',
-            onPress: async () => {
-              await saveDraft(state);
-              navigation.goBack();
-            },
+        },
+        {
+          text: 'Save & Exit',
+          onPress: async () => {
+            await saveDraft(state);
+            navigation.goBack();
           },
-          { text: 'Cancel', style: 'cancel' },
-        ]
-      );
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
     }
   };
 
@@ -241,26 +284,18 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
     const validation = validateBuilderState(state);
 
     if (!validation.valid) {
-      Alert.alert(
-        'Invalid Puzzle',
-        validation.errors.join('\n'),
-        [{ text: 'OK' }]
-      );
+      Alert.alert('Invalid Puzzle', validation.errors.join('\n'), [{ text: 'OK' }]);
       return;
     }
 
     if (validation.warnings.length > 0) {
-      Alert.alert(
-        'Warnings',
-        `${validation.warnings.join('\n')}\n\nContinue anyway?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Continue',
-            onPress: () => setShowNameModal(true),
-          },
-        ]
-      );
+      Alert.alert('Warnings', `${validation.warnings.join('\n')}\n\nContinue anyway?`, [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Continue',
+          onPress: () => setShowNameModal(true),
+        },
+      ]);
       return;
     }
 
@@ -282,11 +317,7 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
     // Validate the spec
     const specValidation = validatePuzzleSpec(result.spec);
     if (!specValidation.valid) {
-      Alert.alert(
-        'Invalid Puzzle Spec',
-        specValidation.errors.join('\n'),
-        [{ text: 'OK' }]
-      );
+      Alert.alert('Invalid Puzzle Spec', specValidation.errors.join('\n'), [{ text: 'OK' }]);
       return;
     }
 
@@ -338,9 +369,7 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-          <Text style={styles.backButtonText}>
-            {state.step === 1 ? '✕' : '←'}
-          </Text>
+          <Text style={styles.backButtonText}>{state.step === 1 ? '✕' : '←'}</Text>
         </TouchableOpacity>
         <Text style={styles.title}>{stepTitles[state.step - 1]}</Text>
         <Text style={styles.stepIndicator}>{state.step}/4</Text>
@@ -415,7 +444,8 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
                 const stats = getBuilderStats(state);
                 return (
                   <Text style={styles.modalStatsText}>
-                    {stats.cellCount} cells • {stats.regionCount} regions • {stats.dominoCount} dominoes
+                    {stats.cellCount} cells • {stats.regionCount} regions • {stats.dominoCount}{' '}
+                    dominoes
                   </Text>
                 );
               })()}

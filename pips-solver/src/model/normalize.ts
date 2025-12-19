@@ -21,6 +21,10 @@ export function normalizePuzzle(spec: PuzzleSpec): NormalizedPuzzle {
   };
 }
 
+function isHole(spec: PuzzleSpec, row: number, col: number): boolean {
+  return spec.regions[row]?.[col] === -1;
+}
+
 /**
  * Build adjacency list for all cells
  */
@@ -29,6 +33,10 @@ function buildAdjacencyList(spec: PuzzleSpec): Map<string, Cell[]> {
 
   for (let row = 0; row < spec.rows; row++) {
     for (let col = 0; col < spec.cols; col++) {
+      // Skip holes entirely
+      if (isHole(spec, row, col)) {
+        continue;
+      }
       const cell: Cell = { row, col };
       const key = cellKey(cell);
       const neighbors: Cell[] = [];
@@ -46,7 +54,9 @@ function buildAdjacencyList(spec: PuzzleSpec): Map<string, Cell[]> {
         const newCol = col + dc;
 
         if (newRow >= 0 && newRow < spec.rows && newCol >= 0 && newCol < spec.cols) {
-          neighbors.push({ row: newRow, col: newCol });
+          if (!isHole(spec, newRow, newCol)) {
+            neighbors.push({ row: newRow, col: newCol });
+          }
         }
       }
 
@@ -66,6 +76,9 @@ function buildRegionCells(spec: PuzzleSpec): Map<number, Cell[]> {
   for (let row = 0; row < spec.rows; row++) {
     for (let col = 0; col < spec.cols; col++) {
       const regionId = spec.regions[row][col];
+      if (regionId === -1) {
+        continue; // hole
+      }
 
       if (!regionCells.has(regionId)) {
         regionCells.set(regionId, []);
@@ -87,6 +100,9 @@ function buildEdges(spec: PuzzleSpec): Edge[] {
 
   for (let row = 0; row < spec.rows; row++) {
     for (let col = 0; col < spec.cols; col++) {
+      if (isHole(spec, row, col)) {
+        continue;
+      }
       const cell1: Cell = { row, col };
 
       // Only check right and down to avoid duplicates
@@ -97,6 +113,9 @@ function buildEdges(spec: PuzzleSpec): Edge[] {
 
       for (const cell2 of neighbors) {
         if (cell2.row < spec.rows && cell2.col < spec.cols) {
+          if (isHole(spec, cell2.row, cell2.col)) {
+            continue;
+          }
           // Create a canonical edge key (sorted by row,col)
           const key1 = cellKey(cell1);
           const key2 = cellKey(cell2);

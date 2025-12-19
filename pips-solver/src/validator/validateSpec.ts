@@ -42,21 +42,28 @@ export function validatePuzzleSpec(spec: PuzzleSpec): ValidationResult {
       }
     }
 
-    // Check that all region IDs are non-negative integers
+    // Check that all region IDs are integers; allow -1 for holes
     const regionIds = new Set<number>();
+    let holeCount = 0;
     for (let r = 0; r < spec.rows; r++) {
       for (let c = 0; c < spec.cols; c++) {
         const regionId = spec.regions[r]?.[c];
-        if (typeof regionId !== 'number' || regionId < 0 || !Number.isInteger(regionId)) {
+        if (typeof regionId !== 'number' || !Number.isInteger(regionId)) {
           errors.push(`Invalid region ID at (${r},${c}): ${regionId}`);
+        } else if (regionId === -1) {
+          holeCount++;
         } else {
+          if (regionId < 0) {
+            errors.push(`Invalid region ID at (${r},${c}): ${regionId}`);
+            continue;
+          }
           regionIds.add(regionId);
         }
       }
     }
 
-    // Check that regions cover the grid completely
-    const expectedCells = spec.rows * spec.cols;
+    // Check that non-hole cells are covered
+    const expectedCells = spec.rows * spec.cols - holeCount;
     let actualCells = 0;
     for (const regionId of regionIds) {
       let count = 0;
@@ -130,6 +137,12 @@ export function validatePuzzleSpec(spec: PuzzleSpec): ValidationResult {
         }
       }
 
+      if (constraint.all_different !== undefined) {
+        if (typeof constraint.all_different !== 'boolean') {
+          errors.push(`Invalid all_different for region ${regionId}: ${constraint.all_different}`);
+        }
+      }
+
       if (constraint.size !== undefined) {
         if (typeof constraint.size !== 'number' || constraint.size <= 0) {
           errors.push(`Invalid size constraint for region ${regionId}: ${constraint.size}`);
@@ -153,14 +166,16 @@ export function validatePuzzleSpec(spec: PuzzleSpec): ValidationResult {
       }
 
       // Check for conflicting constraints
-      if (constraint.all_equal && constraint.op === '≠') {
-        errors.push(`Region ${regionId} has conflicting all_equal and ≠ constraints`);
+      if (constraint.all_equal && constraint.all_different) {
+        errors.push(`Region ${regionId} has conflicting all_equal and all_different constraints`);
       }
     }
   }
 
   // Check grid size is compatible with dominoes
-  const totalCells = spec.rows * spec.cols;
+  const totalCells = spec.regions
+    ? spec.regions.flat().filter((rid) => rid !== -1).length
+    : spec.rows * spec.cols;
   if (totalCells % 2 !== 0) {
     errors.push(
       `Grid has odd number of cells (${totalCells}). Dominoes require even number of cells.`

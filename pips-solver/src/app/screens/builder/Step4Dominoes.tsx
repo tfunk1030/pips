@@ -4,23 +4,12 @@
  */
 
 import React, { useState } from 'react';
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { BuilderAction, DominoPair, OverlayBuilderState } from '../../../model/overlayTypes';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  TextInput,
-} from 'react-native';
-import {
-  OverlayBuilderState,
-  BuilderAction,
-  DominoPair,
-} from '../../../model/overlayTypes';
-import {
+  getPipPositions,
   parseDominoShorthand,
   validateDominoCount,
-  getPipPositions,
 } from '../../../utils/dominoUtils';
 
 interface Props {
@@ -72,7 +61,13 @@ export default function Step4Dominoes({ state, dispatch }: Props) {
           onChangeText={setQuickInput}
           placeholder="Type: 61 33 36 43 14"
           placeholderTextColor="#666"
-          keyboardType="numeric"
+          // Use a keyboard that has a space bar so users can type "61 33 36..."
+          // We still validate by stripping non 0-6 digits in parseDominoShorthand.
+          keyboardType="default"
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="done"
+          blurOnSubmit
           onSubmitEditing={handleQuickApply}
         />
         <TouchableOpacity style={styles.quickButton} onPress={handleQuickApply}>
@@ -80,9 +75,7 @@ export default function Step4Dominoes({ state, dispatch }: Props) {
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.hint}>
-        Type digit pairs (61 = [6,1]) or tap dominoes to adjust
-      </Text>
+      <Text style={styles.hint}>Type digit pairs (61 = [6,1]) or tap dominoes to adjust</Text>
 
       {/* Validation status */}
       <View style={[styles.validationBanner, validation.valid && styles.validationBannerValid]}>
@@ -106,10 +99,7 @@ export default function Step4Dominoes({ state, dispatch }: Props) {
               onTapLeft={() => handleCyclePip(index, 0, 1)}
               onTapRight={() => handleCyclePip(index, 1, 1)}
             />
-            <TouchableOpacity
-              style={styles.removeButton}
-              onPress={() => handleRemoveDomino(index)}
-            >
+            <TouchableOpacity style={styles.removeButton} onPress={() => handleRemoveDomino(index)}>
               <Text style={styles.removeButtonText}>✕</Text>
             </TouchableOpacity>
           </View>

@@ -41,7 +41,7 @@ export function solvePuzzle(
     gridPips: Array(puzzle.spec.rows)
       .fill(null)
       .map(() => Array(puzzle.spec.cols).fill(null)),
-    usedDominoes: new Set(),
+    usedDominoes: new Map(),
     placements: [],
     domains: initializeDomains(puzzle, config.maxPip),
   };
@@ -59,6 +59,11 @@ export function solvePuzzle(
   backtrack(puzzle, initialState, config, stats, solutions);
 
   stats.timeMs = Date.now() - startTime;
+  // Stamp time on solutions (solution objects are created during search)
+  for (const sol of solutions) {
+    sol.stats.timeMs = stats.timeMs;
+    sol.stats.solutions = solutions.length;
+  }
 
   if (solutions.length > 0) {
     return {
@@ -95,7 +100,7 @@ function backtrack(
   if (isComplete(state, puzzle)) {
     if (isConsistent(puzzle, state)) {
       const solution: Solution = {
-        gridPips: state.gridPips.map((row) => [...row]) as number[][],
+        gridPips: state.gridPips.map((row) => [...row]),
         dominoes: [...state.placements],
         stats: {
           nodes: stats.nodes,
@@ -127,6 +132,7 @@ function backtrack(
 
   // Get candidate dominoes for this edge
   const candidates = getCandidateDominoes(
+    puzzle,
     edge,
     state,
     config.maxPip,
@@ -154,12 +160,12 @@ function backtrack(
 
     // Save state for backtracking
     const savedDomains = copyDomains(state.domains);
-    const savedUsedDominoes = new Set(state.usedDominoes);
+    const savedUsedDominoes = new Map(state.usedDominoes);
 
     // Apply placement
     state.gridPips[edge.cell1.row][edge.cell1.col] = domino.pip1;
     state.gridPips[edge.cell2.row][edge.cell2.col] = domino.pip2;
-    state.usedDominoes.add(domino.id);
+    state.usedDominoes.set(domino.id, (state.usedDominoes.get(domino.id) || 0) + 1);
     state.placements.push(placement);
 
     // Propagate constraints
@@ -207,6 +213,10 @@ function backtrack(
 function isComplete(state: SolverState, puzzle: NormalizedPuzzle): boolean {
   for (let row = 0; row < puzzle.spec.rows; row++) {
     for (let col = 0; col < puzzle.spec.cols; col++) {
+      // Holes are always "complete"
+      if (puzzle.spec.regions[row]?.[col] === -1) {
+        continue;
+      }
       if (state.gridPips[row][col] === null) {
         return false;
       }
@@ -219,9 +229,13 @@ function isComplete(state: SolverState, puzzle: NormalizedPuzzle): boolean {
  * Reconstruct state from solution (for explanation)
  */
 function stateFromSolution(solution: Solution, puzzle: NormalizedPuzzle): SolverState {
+  const used = new Map<string, number>();
+  for (const d of solution.dominoes) {
+    used.set(d.domino.id, (used.get(d.domino.id) || 0) + 1);
+  }
   return {
     gridPips: solution.gridPips.map((row) => [...row]),
-    usedDominoes: new Set(solution.dominoes.map((d) => d.domino.id)),
+    usedDominoes: used,
     placements: [...solution.dominoes],
     domains: new Map(),
   };
@@ -243,7 +257,7 @@ export async function solvePuzzleAsync(
     gridPips: Array(puzzle.spec.rows)
       .fill(null)
       .map(() => Array(puzzle.spec.cols).fill(null)),
-    usedDominoes: new Set(),
+    usedDominoes: new Map(),
     placements: [],
     domains: initializeDomains(puzzle, config.maxPip),
   };
@@ -261,6 +275,10 @@ export async function solvePuzzleAsync(
   await backtrackAsync(puzzle, initialState, config, stats, solutions, onProgress, signal);
 
   stats.timeMs = Date.now() - startTime;
+  for (const sol of solutions) {
+    sol.stats.timeMs = stats.timeMs;
+    sol.stats.solutions = solutions.length;
+  }
 
   if (solutions.length > 0) {
     return {
@@ -318,7 +336,7 @@ async function backtrackAsync(
   if (isComplete(state, puzzle)) {
     if (isConsistent(puzzle, state)) {
       const solution: Solution = {
-        gridPips: state.gridPips.map((row) => [...row]) as number[][],
+        gridPips: state.gridPips.map((row) => [...row]),
         dominoes: [...state.placements],
         stats: {
           nodes: stats.nodes,
@@ -339,7 +357,7 @@ async function backtrackAsync(
     return false;
   }
 
-  const candidates = getCandidateDominoes(edge, state, config.maxPip, config.allowDuplicates);
+  const candidates = getCandidateDominoes(puzzle, edge, state, config.maxPip, config.allowDuplicates);
 
   if (candidates.length === 0) {
     stats.prunes++;
@@ -358,11 +376,11 @@ async function backtrackAsync(
     };
 
     const savedDomains = copyDomains(state.domains);
-    const savedUsedDominoes = new Set(state.usedDominoes);
+    const savedUsedDominoes = new Map(state.usedDominoes);
 
     state.gridPips[edge.cell1.row][edge.cell1.col] = domino.pip1;
     state.gridPips[edge.cell2.row][edge.cell2.col] = domino.pip2;
-    state.usedDominoes.add(domino.id);
+    state.usedDominoes.set(domino.id, (state.usedDominoes.get(domino.id) || 0) + 1);
     state.placements.push(placement);
 
     const prop1 = propagateConstraints(puzzle, state, edge.cell1, domino.pip1);

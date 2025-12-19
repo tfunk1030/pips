@@ -42,25 +42,43 @@ export function validateSolution(
     }
   }
 
-  // Validate all cells are filled
+  // Validate all non-hole cells are filled (holes must be null)
   for (let r = 0; r < puzzle.spec.rows; r++) {
     for (let c = 0; c < puzzle.spec.cols; c++) {
+      const isHole = puzzle.spec.regions[r]?.[c] === -1;
       const value = solution.gridPips[r][c];
+      if (isHole) {
+        if (value !== null) {
+          errors.push(`Hole cell (${r},${c}) must be null`);
+        }
+        continue;
+      }
+
       if (value === null || value === undefined) {
         errors.push(`Cell (${r},${c}) is not filled`);
-      } else {
-        // Validate pip value is in valid range
-        const maxPip = puzzle.spec.maxPip || 6;
-        if (value < 0 || value > maxPip) {
-          errors.push(`Cell (${r},${c}) has invalid pip value ${value} (max: ${maxPip})`);
-        }
+        continue;
+      }
+
+      // Validate pip value is in valid range
+      const maxPip = puzzle.spec.maxPip || 6;
+      if (value < 0 || value > maxPip) {
+        errors.push(`Cell (${r},${c}) has invalid pip value ${value} (max: ${maxPip})`);
       }
     }
   }
 
   // Validate dominoes
   const cellToDomino = new Map<string, number>(); // cellKey -> domino index
-  const dominoIds = new Set<string>();
+
+  // Tray inventory counts (if provided)
+  const trayCounts = new Map<string, number>();
+  if (Array.isArray(puzzle.spec.dominoes) && puzzle.spec.dominoes.length > 0) {
+    for (const [a, b] of puzzle.spec.dominoes) {
+      const id = a <= b ? `${a}-${b}` : `${b}-${a}`;
+      trayCounts.set(id, (trayCounts.get(id) || 0) + 1);
+    }
+  }
+  const usedCounts = new Map<string, number>();
 
   for (let i = 0; i < solution.dominoes.length; i++) {
     const placement = solution.dominoes[i];
@@ -74,6 +92,15 @@ export function validateSolution(
     if (!isAdjacent(placement.cell1, placement.cell2)) {
       check.valid = false;
       check.message = `Domino ${i} cells are not adjacent`;
+      errors.push(check.message);
+    }
+
+    // Check cells are not holes
+    const hole1 = puzzle.spec.regions[placement.cell1.row]?.[placement.cell1.col] === -1;
+    const hole2 = puzzle.spec.regions[placement.cell2.row]?.[placement.cell2.col] === -1;
+    if (hole1 || hole2) {
+      check.valid = false;
+      check.message = `Domino ${i} covers a hole cell`;
       errors.push(check.message);
     }
 
@@ -106,13 +133,22 @@ export function validateSolution(
     }
 
     // Check for duplicate domino usage (if not allowed)
-    if (!puzzle.spec.allowDuplicates) {
-      if (dominoIds.has(placement.domino.id)) {
+    usedCounts.set(placement.domino.id, (usedCounts.get(placement.domino.id) || 0) + 1);
+
+    if (trayCounts.size > 0) {
+      const available = trayCounts.get(placement.domino.id) || 0;
+      const used = usedCounts.get(placement.domino.id) || 0;
+      if (used > available) {
+        check.valid = false;
+        check.message = `Domino ${placement.domino.id} used ${used}x but tray has ${available}x`;
+        errors.push(check.message);
+      }
+    } else if (!puzzle.spec.allowDuplicates) {
+      if ((usedCounts.get(placement.domino.id) || 0) > 1) {
         check.valid = false;
         check.message = `Domino ${placement.domino.id} used multiple times`;
         errors.push(check.message);
       }
-      dominoIds.add(placement.domino.id);
     }
 
     // Check cells aren't used in multiple dominoes
@@ -140,6 +176,9 @@ export function validateSolution(
   // Check all cells are covered by dominoes
   for (let r = 0; r < puzzle.spec.rows; r++) {
     for (let c = 0; c < puzzle.spec.cols; c++) {
+      if (puzzle.spec.regions[r]?.[c] === -1) {
+        continue; // hole
+      }
       const key = cellKey({ row: r, col: c });
       if (!cellToDomino.has(key)) {
         errors.push(`Cell (${r},${c}) is not covered by any domino`);
@@ -151,7 +190,9 @@ export function validateSolution(
   for (const [regionIdStr, constraint] of Object.entries(puzzle.spec.constraints)) {
     const regionId = parseInt(regionIdStr, 10);
     const cells = getRegionCells(puzzle, regionId);
-    const values = cells.map((c) => solution.gridPips[c.row][c.col]);
+    const values = cells
+      .map((c) => solution.gridPips[c.row][c.col])
+      .filter((v): v is number => v !== null && v !== undefined);
 
     const check: RegionCheckResult = {
       regionId,
@@ -187,27 +228,40 @@ export function validateSolution(
 
     // Check operator constraint
     if (constraint.op && constraint.value !== undefined) {
-      const violators = values.filter((v) => {
+      const actualSum = values.reduce((a, b) => a + b, 0);
+      const ok = (() => {
         switch (constraint.op) {
           case '=':
-            return v !== constraint.value;
+            return actualSum === constraint.value;
           case '<':
-            return v >= constraint.value!;
+            return actualSum < constraint.value!;
           case '>':
-            return v <= constraint.value!;
+            return actualSum > constraint.value!;
           case '≠':
-            return v === constraint.value;
+            return actualSum !== constraint.value;
           default:
-            return false;
+            return true;
         }
-      });
+      })();
 
-      if (violators.length > 0) {
+      if (!ok) {
         check.valid = false;
-        check.message = `Region ${regionId} constraint "${constraint.op} ${constraint.value}" violated by: ${violators.join(', ')}`;
+        check.message = `Region ${regionId} sum constraint "${constraint.op} ${constraint.value}" violated: sum=${actualSum}`;
         errors.push(check.message);
       } else {
-        check.message = `Region ${regionId} all ${constraint.op} ${constraint.value} ✓`;
+        check.message = `Region ${regionId} sum ${constraint.op} ${constraint.value} ✓ (sum=${actualSum})`;
+      }
+    }
+
+    // Check all_different constraint
+    if (constraint.all_different) {
+      const s = new Set(values);
+      if (s.size !== values.length) {
+        check.valid = false;
+        check.message = `Region ${regionId} all_different constraint violated: ${values.join(', ')}`;
+        errors.push(check.message);
+      } else {
+        check.message = `Region ${regionId} all_different ✓`;
       }
     }
 

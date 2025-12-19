@@ -9,12 +9,13 @@ import {
   Alert,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { normalizePuzzle } from '../../model/normalize';
-import { SolverProgress, StoredPuzzle, ValidationResult } from '../../model/types';
+import { Cell, SolverProgress, StoredPuzzle, ValidationResult } from '../../model/types';
 import { solvePuzzleAsync } from '../../solver/solver';
 import { getPuzzle, getSettings, updatePuzzleSolution } from '../../storage/puzzles';
 import { validateSolution } from '../../validator/validateSolution';
@@ -28,15 +29,29 @@ export default function SolveScreen({ route, navigation }: any) {
   const [validation, setValidation] = useState<ValidationResult | null>(null);
   const [showValidation, setShowValidation] = useState(false);
   const cancelSignal = useRef({ cancelled: false });
+  const [stepByStep, setStepByStep] = useState(false);
+  const [revealed, setRevealed] = useState<boolean[][]>([]);
+  const [highlightCell, setHighlightCell] = useState<Cell | null>(null);
 
   useEffect(() => {
     loadPuzzle();
   }, [puzzleId]);
 
+  const initRevealState = (loaded: StoredPuzzle) => {
+    if (!loaded.solution) {
+      setRevealed([]);
+      return;
+    }
+    const rows = loaded.spec.rows;
+    const cols = loaded.spec.cols;
+    setRevealed(Array.from({ length: rows }, () => Array.from({ length: cols }, () => false)));
+  };
+
   const loadPuzzle = async () => {
     const loaded = await getPuzzle(puzzleId);
     if (loaded) {
       setPuzzle(loaded);
+      initRevealState(loaded);
       if (loaded.solution) {
         // Validate existing solution
         const normalized = normalizePuzzle(loaded.spec);
@@ -49,7 +64,7 @@ export default function SolveScreen({ route, navigation }: any) {
     }
   };
 
-  const handleSolve = async () => {
+  const doSolve = async (opts?: { ignoreTray?: boolean }) => {
     if (!puzzle) return;
 
     setSolving(true);
@@ -59,11 +74,20 @@ export default function SolveScreen({ route, navigation }: any) {
 
     try {
       const settings = await getSettings();
-      const normalized = normalizePuzzle(puzzle.spec);
+      const requiredDominoes = Math.floor(
+        puzzle.spec.regions.flat().filter(regionId => regionId !== -1).length / 2
+      );
+
+      const specForSolve = opts?.ignoreTray
+        ? { ...puzzle.spec, dominoes: undefined, allowDuplicates: true }
+        : puzzle.spec;
+
+      const normalized = normalizePuzzle(specForSolve);
 
       const config = {
         maxPip: puzzle.spec.maxPip || settings.defaultMaxPip,
-        allowDuplicates: puzzle.spec.allowDuplicates || settings.defaultAllowDuplicates,
+        allowDuplicates:
+          (opts?.ignoreTray ? true : puzzle.spec.allowDuplicates) || settings.defaultAllowDuplicates,
         findAll: settings.defaultFindAll,
         maxIterationsPerTick: settings.maxIterationsPerTick,
         debugLevel: settings.defaultDebugLevel as 0 | 1 | 2,
@@ -88,7 +112,9 @@ export default function SolveScreen({ route, navigation }: any) {
           await updatePuzzleSolution(puzzle.id, solution);
 
           // Update local state
-          setPuzzle({ ...puzzle, solution, solved: true });
+          const updated = { ...puzzle, solution, solved: true };
+          setPuzzle(updated);
+          initRevealState(updated);
 
           Alert.alert(
             'Success!',
@@ -120,6 +146,30 @@ export default function SolveScreen({ route, navigation }: any) {
     }
   };
 
+  const handleSolve = async () => {
+    if (!puzzle) return;
+
+    const requiredDominoes = Math.floor(
+      puzzle.spec.regions.flat().filter(regionId => regionId !== -1).length / 2
+    );
+    const trayCount = puzzle.spec.dominoes?.length;
+
+    if (trayCount !== undefined && trayCount !== requiredDominoes) {
+      Alert.alert(
+        'Domino tray incomplete',
+        `This puzzle has ${requiredDominoes} domino slots (cells/2) but only ${trayCount} tray dominoes were entered.\n\nYou can still solve by ignoring the tray constraint (duplicates allowed), or go back and enter the full tray.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Solve ignoring tray', onPress: () => doSolve({ ignoreTray: true }) },
+          { text: 'Solve anyway', onPress: () => doSolve() },
+        ]
+      );
+      return;
+    }
+
+    await doSolve();
+  };
+
   const handleCancel = () => {
     cancelSignal.current.cancelled = true;
   };
@@ -134,6 +184,68 @@ export default function SolveScreen({ route, navigation }: any) {
 
   const normalized = normalizePuzzle(puzzle.spec);
 
+  const effectiveSolution = (() => {
+    if (!puzzle.solution) return undefined;
+    if (!stepByStep) return puzzle.solution;
+
+    const gridPips = puzzle.solution.gridPips.map((row, r) =>
+      row.map((v, c) => {
+        if (normalized.spec.regions[r]?.[c] === -1) return null;
+        return revealed[r]?.[c] ? v : null;
+      })
+    );
+
+    return { ...puzzle.solution, gridPips };
+  })();
+
+  const revealCell = (cell: Cell) => {
+    if (!puzzle.solution) return;
+    if (normalized.spec.regions[cell.row]?.[cell.col] === -1) return;
+
+    setRevealed(prev => {
+      const next =
+        prev.length === normalized.spec.rows
+          ? prev.map(r => [...r])
+          : Array.from({ length: normalized.spec.rows }, () =>
+              Array.from({ length: normalized.spec.cols }, () => false)
+            );
+      next[cell.row][cell.col] = !next[cell.row][cell.col];
+      return next;
+    });
+
+    setHighlightCell(cell);
+    setTimeout(() => setHighlightCell(null), 600);
+  };
+
+  const revealNext = () => {
+    if (!puzzle.solution) return;
+    for (let r = 0; r < normalized.spec.rows; r++) {
+      for (let c = 0; c < normalized.spec.cols; c++) {
+        if (normalized.spec.regions[r]?.[c] === -1) continue;
+        if (!revealed[r]?.[c]) {
+          revealCell({ row: r, col: c });
+          return;
+        }
+      }
+    }
+  };
+
+  const revealAll = () => {
+    if (!puzzle.solution) return;
+    setRevealed(
+      Array.from({ length: normalized.spec.rows }, () =>
+        Array.from({ length: normalized.spec.cols }, () => true)
+      )
+    );
+    setHighlightCell(null);
+  };
+
+  const resetReveal = () => {
+    if (!puzzle.solution) return;
+    initRevealState(puzzle);
+    setHighlightCell(null);
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -147,8 +259,39 @@ export default function SolveScreen({ route, navigation }: any) {
       <ScrollView style={styles.content}>
         {/* Grid View */}
         <View style={styles.gridContainer}>
-          <GridRenderer puzzle={normalized} solution={puzzle.solution} />
+          <GridRenderer
+            puzzle={normalized}
+            solution={effectiveSolution}
+            onCellPress={stepByStep ? revealCell : undefined}
+            highlightCell={highlightCell || undefined}
+          />
         </View>
+
+        {puzzle.solution && (
+          <View style={styles.stepByStepCard}>
+            <View style={styles.stepByStepRow}>
+              <Text style={styles.stepByStepLabel}>Step-by-step reveal</Text>
+              <Switch value={stepByStep} onValueChange={setStepByStep} />
+            </View>
+
+            {stepByStep && (
+              <>
+                <View style={styles.stepButtonsRow}>
+                  <TouchableOpacity style={styles.stepButton} onPress={revealNext}>
+                    <Text style={styles.stepButtonText}>Reveal next</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.stepButton} onPress={revealAll}>
+                    <Text style={styles.stepButtonText}>Reveal all</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.stepButton} onPress={resetReveal}>
+                    <Text style={styles.stepButtonText}>Reset</Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.stepHint}>Tap a cell to reveal/hide its value.</Text>
+              </>
+            )}
+          </View>
+        )}
 
         {/* Progress Display */}
         {solving && progress && (
@@ -284,6 +427,48 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
     height: 400,
+  },
+  stepByStepCard: {
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginBottom: 16,
+    marginTop: -4,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#eee',
+  },
+  stepByStepRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  stepByStepLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111',
+  },
+  stepButtonsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 10,
+  },
+  stepButton: {
+    backgroundColor: '#222',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  stepButtonText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  stepHint: {
+    marginTop: 10,
+    fontSize: 12,
+    color: '#666',
   },
   progressCard: {
     backgroundColor: '#E3F2FD',

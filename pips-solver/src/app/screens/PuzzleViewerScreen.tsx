@@ -37,18 +37,28 @@ export default function PuzzleViewerScreen({ route, navigation }: any) {
     if (!puzzle) return null;
 
     const regionId = puzzle.spec.regions[cell.row][cell.col];
+    if (regionId === -1) {
+      return {
+        position: `(${cell.row}, ${cell.col})`,
+        regionId: '—',
+        constraint: 'Hole (no cell)',
+      };
+    }
+
     const constraint = puzzle.spec.constraints[regionId];
 
     let constraintText = '';
     if (constraint) {
       if (constraint.sum !== undefined) {
-        constraintText += `Sum: ${constraint.sum}`;
+        constraintText += `Sum = ${constraint.sum}`;
+      } else if (constraint.op && constraint.value !== undefined) {
+        constraintText += `Sum ${constraint.op} ${constraint.value}`;
       }
       if (constraint.all_equal) {
         constraintText += (constraintText ? ', ' : '') + 'All Equal';
       }
-      if (constraint.op && constraint.value !== undefined) {
-        constraintText += (constraintText ? ', ' : '') + `All ${constraint.op} ${constraint.value}`;
+      if (constraint.all_different) {
+        constraintText += (constraintText ? ', ' : '') + 'All Different';
       }
     }
 

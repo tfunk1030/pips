@@ -7,10 +7,16 @@
 export type ConstraintOp = '=' | '<' | '>' | '≠';
 
 export interface RegionConstraint {
+  /**
+   * Region sum constraint.
+   * - If `sum` is present: region sum must equal this number.
+   * - If `op`+`value` are present: region sum must satisfy `sum op value`.
+   */
   sum?: number;
   op?: ConstraintOp;
   value?: number;
   all_equal?: boolean;
+  all_different?: boolean;
   size?: number; // Optional sanity check
 }
 
@@ -21,8 +27,17 @@ export interface PuzzleSpec {
   cols: number;
   maxPip?: number; // Default 6 (double-six)
   allowDuplicates?: boolean; // Default false
-  regions: number[][]; // regions[r][c] = regionId
+  /**
+   * Region id grid. Use -1 to indicate a hole (no cell).
+   * regions[r][c] = regionId, or -1 for hole.
+   */
+  regions: number[][];
   constraints: { [regionId: number]: RegionConstraint };
+  /**
+   * Exact domino inventory from the tray (multiset). Each entry is a (pip1,pip2) pair.
+   * If omitted, solver may fall back to a generated set (legacy behavior).
+   */
+  dominoes?: Array<[number, number]>;
 }
 
 // ===== Normalized Puzzle Types =====
@@ -61,7 +76,8 @@ export interface DominoPlacement {
 // ===== Solution Types =====
 
 export interface Solution {
-  gridPips: number[][]; // gridPips[r][c] = pip value
+  /** gridPips[r][c] = pip value; null for holes */
+  gridPips: (number | null)[][];
   dominoes: DominoPlacement[];
   stats: SolverStats;
 }
@@ -102,7 +118,8 @@ export interface DominoCheckResult {
 
 export interface SolverState {
   gridPips: (number | null)[][]; // null = unassigned
-  usedDominoes: Set<string>; // domino ids
+  /** Domino usage counts by normalized domino id (e.g. "1-6" -> 2) */
+  usedDominoes: Map<string, number>;
   placements: DominoPlacement[];
   domains: Map<string, number[]>; // cellKey -> possible pip values
 }

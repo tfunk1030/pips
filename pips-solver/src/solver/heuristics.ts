@@ -3,7 +3,7 @@
  * Implements MRV (Minimum Remaining Values) and other ordering strategies
  */
 
-import { NormalizedPuzzle, SolverState, Edge, Cell, cellKey, Domino } from '../model/types';
+import { NormalizedPuzzle, SolverState, Edge, Cell, cellKey, Domino, dominoId } from '../model/types';
 import { getNeighbors } from '../model/normalize';
 
 /**
@@ -53,6 +53,7 @@ export function selectNextEdge(
  * Returns dominoes that could be placed on this edge
  */
 export function getCandidateDominoes(
+  puzzle: NormalizedPuzzle,
   edge: Edge,
   state: SolverState,
   maxPip: number,
@@ -65,24 +66,39 @@ export function getCandidateDominoes(
   const domain2 = state.domains.get(key2) || [];
 
   const candidates: Domino[] = [];
-  const seen = new Set<string>();
+
+  // Build inventory counts if the puzzle specifies an explicit tray.
+  // NOTE: This is still per-call; the next optimization step is to precompute this once.
+  const inventoryCounts = new Map<string, number>();
+  if (Array.isArray(puzzle.spec.dominoes) && puzzle.spec.dominoes.length > 0) {
+    for (const [a, b] of puzzle.spec.dominoes) {
+      const id = dominoId(a, b);
+      inventoryCounts.set(id, (inventoryCounts.get(id) || 0) + 1);
+    }
+  }
 
   for (const pip1 of domain1) {
     for (const pip2 of domain2) {
-      // Create domino ID (normalized)
-      const id = pip1 <= pip2 ? `${pip1}-${pip2}` : `${pip2}-${pip1}`;
+      const id = dominoId(pip1, pip2);
 
-      // Skip if we've already considered this domino from the other orientation
-      if (seen.has(id)) {
-        continue;
+      // If we have an explicit tray inventory, enforce multiset counts.
+      if (inventoryCounts.size > 0) {
+        const available = inventoryCounts.get(id) || 0;
+        const used = state.usedDominoes.get(id) || 0;
+        if (used >= available) {
+          continue;
+        }
+      } else {
+        // Legacy behavior: if duplicates aren't allowed, each id can be used at most once.
+        if (!allowDuplicates) {
+          const used = state.usedDominoes.get(id) || 0;
+          if (used >= 1) {
+            continue;
+          }
+        }
       }
-      seen.add(id);
 
       // Check if domino is available
-      if (!allowDuplicates && state.usedDominoes.has(id)) {
-        continue;
-      }
-
       candidates.push({
         id,
         pip1,

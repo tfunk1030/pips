@@ -2,8 +2,8 @@
  * Grid renderer with zoom/pan support using react-native-svg
  */
 
-import React from 'react';
-import { StyleSheet } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { LayoutChangeEvent, StyleSheet } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import Svg, { G, Line, Rect, Text as SvgText } from 'react-native-svg';
@@ -52,9 +52,15 @@ export default function GridRenderer({
   const translateY = useSharedValue(0);
   const savedTranslateX = useSharedValue(0);
   const savedTranslateY = useSharedValue(0);
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
   const gridWidth = puzzle.spec.cols * CELL_SIZE + GRID_PADDING * 2;
   const gridHeight = puzzle.spec.rows * CELL_SIZE + GRID_PADDING * 2;
+
+  const handleLayout = useCallback((e: LayoutChangeEvent) => {
+    const { width, height } = e.nativeEvent.layout;
+    setContainerSize({ width, height });
+  }, []);
 
   // Pinch gesture for zoom
   const pinchGesture = Gesture.Pinch()
@@ -85,7 +91,33 @@ export default function GridRenderer({
       savedTranslateY.value = translateY.value;
     });
 
-  const composed = Gesture.Simultaneous(pinchGesture, panGesture);
+  const tapGesture = Gesture.Tap()
+    .runOnJS(true)
+    .onEnd(e => {
+      if (!onCellPress) return;
+      if (containerSize.width <= 0 || containerSize.height <= 0) return;
+
+      // Invert current transform to map touch -> SVG space
+      const localX = (e.x - translateX.value) / scale.value;
+      const localY = (e.y - translateY.value) / scale.value;
+
+      // Account for centering of the <Svg> within the container
+      const offsetX = (containerSize.width - gridWidth) / 2;
+      const offsetY = (containerSize.height - gridHeight) / 2;
+
+      const svgX = localX - offsetX;
+      const svgY = localY - offsetY;
+
+      const col = Math.floor((svgX - GRID_PADDING) / CELL_SIZE);
+      const row = Math.floor((svgY - GRID_PADDING) / CELL_SIZE);
+
+      if (row < 0 || row >= puzzle.spec.rows || col < 0 || col >= puzzle.spec.cols) return;
+      if (puzzle.spec.regions[row]?.[col] === -1) return; // hole
+
+      onCellPress({ row, col });
+    });
+
+  const composed = Gesture.Simultaneous(pinchGesture, panGesture, tapGesture);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [
@@ -96,7 +128,7 @@ export default function GridRenderer({
   }));
 
   return (
-    <GestureHandlerRootView style={styles.container}>
+    <GestureHandlerRootView style={styles.container} onLayout={handleLayout}>
       <GestureDetector gesture={composed}>
         <Animated.View style={[styles.svgContainer, animatedStyle]}>
           <Svg width={gridWidth} height={gridHeight}>
@@ -129,7 +161,8 @@ function renderRegions(puzzle: NormalizedPuzzle) {
   for (let row = 0; row < puzzle.spec.rows; row++) {
     for (let col = 0; col < puzzle.spec.cols; col++) {
       const regionId = puzzle.spec.regions[row][col];
-      const color = REGION_COLORS[regionId % REGION_COLORS.length];
+      const isHole = regionId === -1;
+      const color = isHole ? '#111' : REGION_COLORS[regionId % REGION_COLORS.length];
 
       const x = GRID_PADDING + col * CELL_SIZE;
       const y = GRID_PADDING + row * CELL_SIZE;
@@ -142,6 +175,7 @@ function renderRegions(puzzle: NormalizedPuzzle) {
           width={CELL_SIZE}
           height={CELL_SIZE}
           fill={color}
+          opacity={isHole ? 0.9 : 1}
         />
       );
     }
@@ -228,7 +262,13 @@ function renderPipValues(puzzle: NormalizedPuzzle, solution: Solution, highlight
 
   for (let row = 0; row < puzzle.spec.rows; row++) {
     for (let col = 0; col < puzzle.spec.cols; col++) {
+      if (puzzle.spec.regions[row]?.[col] === -1) {
+        continue; // hole
+      }
       const value = solution.gridPips[row][col];
+      if (value === null || value === undefined) {
+        continue;
+      }
       const x = GRID_PADDING + col * CELL_SIZE + CELL_SIZE / 2;
       const y = GRID_PADDING + row * CELL_SIZE + CELL_SIZE / 2;
 

@@ -5,10 +5,10 @@
  */
 
 import {
-  OverlayBuilderState,
   BuilderAction,
-  createInitialBuilderState,
   DominoPair,
+  OverlayBuilderState,
+  createInitialBuilderState,
 } from '../model/overlayTypes';
 import { parseConstraintShorthand } from '../utils/constraintParser';
 
@@ -91,15 +91,13 @@ export function builderReducer(
 
     case 'TOGGLE_HOLE': {
       const newHoles = state.grid.holes.map((row, r) =>
-        row.map((cell, c) =>
-          r === action.row && c === action.col ? !cell : cell
-        )
+        row.map((cell, c) => (r === action.row && c === action.col ? !cell : cell))
       );
       // Also update region grid - holes become null
       const newRegionGrid = state.regions.regionGrid.map((row, r) =>
         row.map((cell, c) => {
           if (r === action.row && c === action.col) {
-            return newHoles[r][c] ? null : (cell ?? 0);
+            return newHoles[r][c] ? null : cell ?? 0;
           }
           return cell;
         })
@@ -128,9 +126,7 @@ export function builderReducer(
       }
       const newRegionGrid = state.regions.regionGrid.map((row, r) =>
         row.map((cell, c) =>
-          r === action.row && c === action.col
-            ? state.regions.palette.selectedIndex
-            : cell
+          r === action.row && c === action.col ? state.regions.palette.selectedIndex : cell
         )
       );
       return {
@@ -213,7 +209,7 @@ export function builderReducer(
     case 'CYCLE_DOMINO_PIP': {
       const newDominoes = [...state.dominoes.dominoes];
       const domino = [...newDominoes[action.dominoIndex]] as DominoPair;
-      domino[action.half] = ((domino[action.half] + action.direction + 7) % 7);
+      domino[action.half] = (domino[action.half] + action.direction + 7) % 7;
       newDominoes[action.dominoIndex] = domino;
       return {
         ...state,
@@ -230,7 +226,9 @@ export function builderReducer(
     case 'AUTO_FILL_DOMINOES': {
       const cellCount = countValidCells(state.grid.holes);
       const needed = Math.floor(cellCount / 2);
-      const dominoes: DominoPair[] = Array(needed).fill(null).map(() => [0, 0]);
+      const dominoes: DominoPair[] = Array(needed)
+        .fill(null)
+        .map(() => [0, 0]);
       return {
         ...state,
         dominoes: { ...state.dominoes, dominoes, expectedCount: needed },
@@ -243,7 +241,17 @@ export function builderReducer(
 
     case 'AI_SUCCESS': {
       // Merge AI results into state
-      const newGrid = { ...state.grid, ...action.grid };
+      // Calculate optimal bounds for the new grid if we have image dimensions
+      let gridBounds = action.grid.bounds || state.grid.bounds;
+      if (state.image && action.grid.rows && action.grid.cols) {
+        const { calculateOptimalBounds } = require('../utils/gridCalculations');
+        gridBounds = calculateOptimalBounds(action.grid.rows, action.grid.cols, {
+          width: state.image.width,
+          height: state.image.height,
+        });
+      }
+
+      const newGrid = { ...state.grid, ...action.grid, bounds: gridBounds };
       const newRegions = { ...state.regions, ...action.regions };
       const newConstraints = { ...state.constraints, ...action.constraints };
       return {

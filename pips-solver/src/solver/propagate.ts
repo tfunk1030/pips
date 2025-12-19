@@ -21,10 +21,71 @@ export function initializeDomains(
   const domains = new Map<string, number[]>();
   const allPips = Array.from({ length: maxPip + 1 }, (_, i) => i);
 
+  // Default: all pips for all non-hole cells
   for (let row = 0; row < puzzle.spec.rows; row++) {
     for (let col = 0; col < puzzle.spec.cols; col++) {
+      if (puzzle.spec.regions[row]?.[col] === -1) continue; // hole
       const cell: Cell = { row, col };
-      domains.set(cellKey(cell), [...allPips]);
+      domains.set(cellKey(cell), allPips);
+    }
+  }
+
+  // Initial pruning based on region constraints (cheap and effective)
+  for (const [regionIdStr, constraint] of Object.entries(puzzle.spec.constraints)) {
+    const regionId = parseInt(regionIdStr, 10);
+    if (Number.isNaN(regionId)) continue;
+
+    const cells = getRegionCells(puzzle, regionId);
+    if (cells.length === 0) continue;
+
+    // all_different feasibility (quick fail)
+    if (constraint.all_different && cells.length > maxPip + 1) {
+      // Force an immediate contradiction: empty one domain.
+      domains.set(cellKey(cells[0]), []);
+      continue;
+    }
+
+    const hasEqSum = constraint.sum !== undefined || (constraint.op === '=' && constraint.value !== undefined);
+    const targetSum = constraint.sum !== undefined ? constraint.sum : (constraint.op === '=' ? constraint.value : undefined);
+
+    // If we know the exact sum, we can bound each cell by simple arithmetic (non-negative pips).
+    if (hasEqSum && targetSum !== undefined) {
+      const n = cells.length;
+
+      // If all_equal + exact sum, it's forced.
+      if (constraint.all_equal) {
+        if (targetSum % n !== 0) {
+          domains.set(cellKey(cells[0]), []);
+          continue;
+        }
+        const v = targetSum / n;
+        if (v < 0 || v > maxPip) {
+          domains.set(cellKey(cells[0]), []);
+          continue;
+        }
+        for (const cell of cells) {
+          domains.set(cellKey(cell), [v]);
+        }
+        continue;
+      }
+
+      const lo = Math.max(0, targetSum - (n - 1) * maxPip);
+      const hi = Math.min(maxPip, targetSum);
+      const bounded = allPips.filter((p) => p >= lo && p <= hi);
+      for (const cell of cells) {
+        domains.set(cellKey(cell), bounded);
+      }
+      continue;
+    }
+
+    // If sum < K, every cell must be < K (since pips are non-negative).
+    if (constraint.op === '<' && constraint.value !== undefined) {
+      const hi = Math.min(maxPip, constraint.value - 1);
+      const bounded = allPips.filter((p) => p <= hi);
+      for (const cell of cells) {
+        domains.set(cellKey(cell), bounded);
+      }
+      continue;
     }
   }
 
@@ -41,39 +102,40 @@ export function propagateConstraints(
   assignedCell: Cell,
   assignedValue: number
 ): boolean {
-  // Create a snapshot for potential rollback
-  const domainBackup = new Map(state.domains);
-
-  try {
-    // Remove assigned value from the cell's domain
-    const key = cellKey(assignedCell);
-    state.domains.set(key, [assignedValue]);
-
-    // Propagate region constraints
-    const regionId = getRegionId(puzzle, assignedCell);
-    const constraint = puzzle.spec.constraints[regionId];
-
-    if (constraint) {
-      if (!propagateRegionConstraint(puzzle, state, regionId, constraint)) {
-        state.domains = domainBackup;
-        return false;
-      }
-    }
-
-    // Check all cells have non-empty domains
-    for (const [cellKey, domain] of state.domains) {
-      const [row, col] = cellKey.split(',').map(Number);
-      if (state.gridPips[row][col] === null && domain.length === 0) {
-        state.domains = domainBackup;
-        return false;
-      }
-    }
-
-    return true;
-  } catch (error) {
-    state.domains = domainBackup;
+  // Should never assign into a hole, but be defensive.
+  if (puzzle.spec.regions[assignedCell.row]?.[assignedCell.col] === -1) {
     return false;
   }
+
+  // NOTE: We intentionally do not snapshot/rollback domains here.
+  // The solver already snapshots full state per placement and will restore on backtrack.
+
+  // Remove assigned value from the cell's domain
+  const key = cellKey(assignedCell);
+  state.domains.set(key, [assignedValue]);
+
+  // Propagate region constraints
+  const regionId = getRegionId(puzzle, assignedCell);
+  const constraint = puzzle.spec.constraints[regionId];
+
+  if (constraint) {
+    if (!propagateRegionConstraint(puzzle, state, regionId, constraint)) {
+      return false;
+    }
+  }
+
+  // Check all cells have non-empty domains
+  for (const [cellKey, domain] of state.domains) {
+    const [row, col] = cellKey.split(',').map(Number);
+    if (puzzle.spec.regions[row]?.[col] === -1) {
+      continue; // hole
+    }
+    if (state.gridPips[row][col] === null && domain.length === 0) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 /**
@@ -97,41 +159,6 @@ function propagateRegionConstraint(
       assigned.push(value);
     } else {
       unassignedCells.push(cell);
-    }
-  }
-
-  // Check sum constraint
-  if (constraint.sum !== undefined) {
-    const currentSum = assigned.reduce((a, b) => a + b, 0);
-    const remaining = constraint.sum - currentSum;
-
-    if (remaining < 0) {
-      return false; // Already exceeded sum
-    }
-
-    if (unassignedCells.length === 0 && currentSum !== constraint.sum) {
-      return false; // All assigned but sum doesn't match
-    }
-
-    // Prune domains based on sum constraint
-    if (unassignedCells.length > 0) {
-      const maxPossible = unassignedCells.length * puzzle.spec.maxPip!;
-      if (remaining > maxPossible) {
-        return false; // Impossible to reach sum
-      }
-
-      // If only one cell left, it must equal remaining
-      if (unassignedCells.length === 1) {
-        const cell = unassignedCells[0];
-        const key = cellKey(cell);
-        const domain = state.domains.get(key) || [];
-
-        if (!domain.includes(remaining)) {
-          return false;
-        }
-
-        state.domains.set(key, [remaining]);
-      }
     }
   }
 
@@ -159,25 +186,102 @@ function propagateRegionConstraint(
     }
   }
 
-  // Check comparison constraints (op + value)
-  if (constraint.op && constraint.value !== undefined) {
+  // Check all_different constraint
+  if (constraint.all_different) {
+    const seen = new Set<number>();
+    for (const v of assigned) {
+      if (seen.has(v)) {
+        return false;
+      }
+      seen.add(v);
+    }
+    // Forward check: remove assigned values from unassigned domains
     for (const cell of unassignedCells) {
       const key = cellKey(cell);
       const domain = state.domains.get(key) || [];
-      const newDomain = domain.filter((pip) =>
-        checkConstraintOp(pip, constraint.op!, constraint.value!)
-      );
-
+      const newDomain = domain.filter((pip) => !seen.has(pip));
       if (newDomain.length === 0) {
         return false;
       }
-
       state.domains.set(key, newDomain);
     }
+  }
 
-    // Check assigned values satisfy constraint
-    for (const value of assigned) {
-      if (!checkConstraintOp(value, constraint.op, constraint.value)) {
+  // Region sum constraints:
+  // - `sum`: exact equality
+  // - `op/value`: inequality on the REGION SUM (not per-cell)
+  const currentSum = assigned.reduce((a, b) => a + b, 0);
+
+  // Compute tight bounds from domains for remaining cells.
+  let minPossibleSum = currentSum;
+  let maxPossibleSum = currentSum;
+  for (const cell of unassignedCells) {
+    const key = cellKey(cell);
+    const domain = state.domains.get(key) || [];
+    if (domain.length === 0) {
+      return false;
+    }
+    minPossibleSum += Math.min(...domain);
+    maxPossibleSum += Math.max(...domain);
+  }
+
+  // Exact sum
+  if (constraint.sum !== undefined) {
+    const target = constraint.sum;
+    if (target < minPossibleSum || target > maxPossibleSum) {
+      return false;
+    }
+
+    if (unassignedCells.length === 0 && currentSum !== target) {
+      return false;
+    }
+
+    // If only one cell left, force it.
+    if (unassignedCells.length === 1) {
+      const cell = unassignedCells[0];
+      const key = cellKey(cell);
+      const domain = state.domains.get(key) || [];
+      const forced = target - currentSum;
+      if (!domain.includes(forced)) {
+        return false;
+      }
+      state.domains.set(key, [forced]);
+    }
+  }
+
+  // Sum inequality (op/value)
+  if (constraint.op && constraint.value !== undefined) {
+    const op = constraint.op;
+    const target = constraint.value;
+
+    // Conservative feasibility check using min/max possible sums.
+    if (op === '=') {
+      if (target < minPossibleSum || target > maxPossibleSum) {
+        return false;
+      }
+      if (unassignedCells.length === 0 && currentSum !== target) {
+        return false;
+      }
+    } else if (op === '<') {
+      if (minPossibleSum >= target) {
+        return false;
+      }
+      if (unassignedCells.length === 0 && !(currentSum < target)) {
+        return false;
+      }
+    } else if (op === '>') {
+      if (maxPossibleSum <= target) {
+        return false;
+      }
+      if (unassignedCells.length === 0 && !(currentSum > target)) {
+        return false;
+      }
+    } else if (op === '≠') {
+      if (unassignedCells.length === 0 && currentSum === target) {
+        return false;
+      }
+      // If the sum is forced to equal target regardless of assignments, prune.
+      if (minPossibleSum === maxPossibleSum && minPossibleSum === target) {
         return false;
       }
     }
@@ -208,11 +312,9 @@ function checkConstraintOp(value: number, op: string, target: number): boolean {
  * Deep copy domains map
  */
 export function copyDomains(domains: Map<string, number[]>): Map<string, number[]> {
-  const copy = new Map<string, number[]>();
-  for (const [key, values] of domains) {
-    copy.set(key, [...values]);
-  }
-  return copy;
+  // We only ever replace domain arrays (never mutate them in place),
+  // so a shallow copy is safe and much faster than deep cloning.
+  return new Map(domains);
 }
 
 /**
@@ -238,9 +340,14 @@ export function isConsistent(puzzle: NormalizedPuzzle, state: SolverState): bool
 
     // Only check constraints if all cells are assigned
     if (!hasUnassigned) {
-      if (constraint.sum !== undefined) {
-        const sum = assigned.reduce((a, b) => a + b, 0);
-        if (sum !== constraint.sum) {
+      const sum = assigned.reduce((a, b) => a + b, 0);
+
+      if (constraint.sum !== undefined && sum !== constraint.sum) {
+        return false;
+      }
+
+      if (constraint.op && constraint.value !== undefined) {
+        if (!checkConstraintOp(sum, constraint.op, constraint.value)) {
           return false;
         }
       }
@@ -251,8 +358,9 @@ export function isConsistent(puzzle: NormalizedPuzzle, state: SolverState): bool
         }
       }
 
-      if (constraint.op && constraint.value !== undefined) {
-        if (!assigned.every((v) => checkConstraintOp(v, constraint.op!, constraint.value!))) {
+      if (constraint.all_different) {
+        const s = new Set(assigned);
+        if (s.size !== assigned.length) {
           return false;
         }
       }

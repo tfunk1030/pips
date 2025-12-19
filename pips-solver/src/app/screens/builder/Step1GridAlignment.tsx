@@ -3,26 +3,22 @@
  * Allows user to position grid over the image, adjust rows/cols, and mark holes
  */
 
-import React, { useCallback, useState, useRef } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  Image,
-  TouchableOpacity,
-  ScrollView,
   ActivityIndicator,
+  Image,
   LayoutChangeEvent,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { useSharedValue, useAnimatedStyle, runOnJS } from 'react-native-reanimated';
-import Svg, { Line, Rect, Circle } from 'react-native-svg';
-import {
-  OverlayBuilderState,
-  BuilderAction,
-  GridBounds,
-} from '../../../model/overlayTypes';
-import { hitTestCell, constrainBounds } from '../../../utils/gridCalculations';
+import Animated from 'react-native-reanimated';
+import Svg, { Circle, Line, Rect } from 'react-native-svg';
+import { BuilderAction, GridBounds, OverlayBuilderState } from '../../../model/overlayTypes';
+import { constrainBounds, hitTestCell } from '../../../utils/gridCalculations';
 
 interface Props {
   state: OverlayBuilderState;
@@ -95,7 +91,7 @@ export default function Step1GridAlignment({
         />
 
         {/* Grid overlay with draggable edges */}
-        {containerSize.width > 0 && (
+        {containerSize.width > 0 && containerSize.height > 0 && (
           <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
             <DraggableGridOverlay
               bounds={grid.bounds}
@@ -114,34 +110,22 @@ export default function Step1GridAlignment({
       <View style={styles.controls}>
         <View style={styles.controlRow}>
           <Text style={styles.controlLabel}>Rows</Text>
-          <TouchableOpacity
-            style={styles.controlButton}
-            onPress={() => handleRowChange(-1)}
-          >
+          <TouchableOpacity style={styles.controlButton} onPress={() => handleRowChange(-1)}>
             <Text style={styles.controlButtonText}>−</Text>
           </TouchableOpacity>
           <Text style={styles.controlValue}>{grid.rows}</Text>
-          <TouchableOpacity
-            style={styles.controlButton}
-            onPress={() => handleRowChange(1)}
-          >
+          <TouchableOpacity style={styles.controlButton} onPress={() => handleRowChange(1)}>
             <Text style={styles.controlButtonText}>+</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.controlRow}>
           <Text style={styles.controlLabel}>Cols</Text>
-          <TouchableOpacity
-            style={styles.controlButton}
-            onPress={() => handleColChange(-1)}
-          >
+          <TouchableOpacity style={styles.controlButton} onPress={() => handleColChange(-1)}>
             <Text style={styles.controlButtonText}>−</Text>
           </TouchableOpacity>
           <Text style={styles.controlValue}>{grid.cols}</Text>
-          <TouchableOpacity
-            style={styles.controlButton}
-            onPress={() => handleColChange(1)}
-          >
+          <TouchableOpacity style={styles.controlButton} onPress={() => handleColChange(1)}>
             <Text style={styles.controlButtonText}>+</Text>
           </TouchableOpacity>
         </View>
@@ -164,15 +148,11 @@ export default function Step1GridAlignment({
               <Text style={styles.aiButtonText}>Use AI to Extract Puzzle</Text>
             )}
           </TouchableOpacity>
-          <Text style={styles.aiHint}>
-            AI will detect grid, regions, constraints, and dominoes
-          </Text>
+          <Text style={styles.aiHint}>AI will detect grid, regions, constraints, and dominoes</Text>
         </View>
       )}
 
-      <Text style={styles.hint}>
-        Drag edges to align grid. Tap cells to mark holes.
-      </Text>
+      <Text style={styles.hint}>Drag edges to align grid. Tap cells to mark holes.</Text>
 
       <TouchableOpacity style={styles.newImageButton} onPress={onPickNewImage}>
         <Text style={styles.newImageButtonText}>Choose Different Image</Text>
@@ -213,12 +193,16 @@ function DraggableGridOverlay({
 
   // Convert percentage to pixels
   const toPixels = (pct: number, dimension: 'width' | 'height') => {
-    return (pct / 100) * containerSize[dimension];
+    const dim = containerSize[dimension];
+    if (!dim || dim <= 0) return 0;
+    return (pct / 100) * dim;
   };
 
   // Convert pixels to percentage
   const toPercent = (px: number, dimension: 'width' | 'height') => {
-    return (px / containerSize[dimension]) * 100;
+    const dim = containerSize[dimension];
+    if (!dim || dim <= 0) return 0;
+    return (px / dim) * 100;
   };
 
   // Calculate pixel positions
@@ -232,51 +216,69 @@ function DraggableGridOverlay({
 
   // Create gesture for left edge
   const leftGesture = Gesture.Pan()
+    .runOnJS(true)
     .onBegin(() => {
       startBoundsRef.current = bounds;
     })
-    .onUpdate((e) => {
+    .onUpdate(e => {
       const deltaPercent = toPercent(e.translationX, 'width');
-      const newLeft = Math.max(0, Math.min(bounds.right - 10, startBoundsRef.current.left + deltaPercent));
-      runOnJS(onBoundsChange)({ ...bounds, left: newLeft });
+      const start = startBoundsRef.current;
+      const newLeft = Math.max(0, Math.min(start.right - 10, start.left + deltaPercent));
+      onBoundsChange({ ...start, left: newLeft });
     })
     .hitSlop({ left: HANDLE_HIT_SLOP, right: HANDLE_HIT_SLOP, top: 0, bottom: 0 });
 
   // Create gesture for right edge
   const rightGesture = Gesture.Pan()
+    .runOnJS(true)
     .onBegin(() => {
       startBoundsRef.current = bounds;
     })
-    .onUpdate((e) => {
+    .onUpdate(e => {
       const deltaPercent = toPercent(e.translationX, 'width');
-      const newRight = Math.min(100, Math.max(bounds.left + 10, startBoundsRef.current.right + deltaPercent));
-      runOnJS(onBoundsChange)({ ...bounds, right: newRight });
+      const start = startBoundsRef.current;
+      const newRight = Math.min(100, Math.max(start.left + 10, start.right + deltaPercent));
+      onBoundsChange({ ...start, right: newRight });
     })
     .hitSlop({ left: HANDLE_HIT_SLOP, right: HANDLE_HIT_SLOP, top: 0, bottom: 0 });
 
   // Create gesture for top edge
   const topGesture = Gesture.Pan()
+    .runOnJS(true)
     .onBegin(() => {
       startBoundsRef.current = bounds;
     })
-    .onUpdate((e) => {
+    .onUpdate(e => {
       const deltaPercent = toPercent(e.translationY, 'height');
-      const newTop = Math.max(0, Math.min(bounds.bottom - 10, startBoundsRef.current.top + deltaPercent));
-      runOnJS(onBoundsChange)({ ...bounds, top: newTop });
+      const start = startBoundsRef.current;
+      const newTop = Math.max(0, Math.min(start.bottom - 10, start.top + deltaPercent));
+      onBoundsChange({ ...start, top: newTop });
     })
     .hitSlop({ left: 0, right: 0, top: HANDLE_HIT_SLOP, bottom: HANDLE_HIT_SLOP });
 
   // Create gesture for bottom edge
   const bottomGesture = Gesture.Pan()
+    .runOnJS(true)
     .onBegin(() => {
       startBoundsRef.current = bounds;
     })
-    .onUpdate((e) => {
+    .onUpdate(e => {
       const deltaPercent = toPercent(e.translationY, 'height');
-      const newBottom = Math.min(100, Math.max(bounds.top + 10, startBoundsRef.current.bottom + deltaPercent));
-      runOnJS(onBoundsChange)({ ...bounds, bottom: newBottom });
+      const start = startBoundsRef.current;
+      const newBottom = Math.min(100, Math.max(start.top + 10, start.bottom + deltaPercent));
+      onBoundsChange({ ...start, bottom: newBottom });
     })
     .hitSlop({ left: 0, right: 0, top: HANDLE_HIT_SLOP, bottom: HANDLE_HIT_SLOP });
+
+  // Tap to toggle holes (cells that are not part of the puzzle)
+  const tapGesture = Gesture.Tap()
+    .runOnJS(true)
+    .onEnd(e => {
+      const cell = hitTestCell(e.x, e.y, bounds, rows, cols, containerSize);
+      if (cell) {
+        onCellTap(cell.row, cell.col);
+      }
+    });
 
   return (
     <View style={StyleSheet.absoluteFill}>
@@ -370,6 +372,11 @@ function DraggableGridOverlay({
           strokeWidth={2}
         />
       </Svg>
+
+      {/* Tap layer for toggling holes (kept under edge handles) */}
+      <GestureDetector gesture={tapGesture}>
+        <Animated.View style={StyleSheet.absoluteFill} />
+      </GestureDetector>
 
       {/* Draggable edge handles (invisible touch targets) */}
       {/* Left edge */}

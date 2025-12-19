@@ -77,6 +77,25 @@ export function parsePuzzle(input: string): ParseResult {
       }
     }
 
+    // Validate region ids (integers, allow -1 for holes)
+    for (let r = 0; r < data.rows; r++) {
+      for (let c = 0; c < data.cols; c++) {
+        const regionId = data.regions[r]?.[c];
+        if (typeof regionId !== 'number' || !Number.isInteger(regionId)) {
+          return {
+            success: false,
+            error: `Invalid region ID at (${r},${c}): ${regionId}`,
+          };
+        }
+        if (regionId < -1) {
+          return {
+            success: false,
+            error: `Invalid region ID at (${r},${c}): ${regionId} (min -1 for holes)`,
+          };
+        }
+      }
+    }
+
     // Parse constraints
     const constraints: { [regionId: number]: any } = {};
     if (data.constraints) {
@@ -128,6 +147,16 @@ export function parsePuzzle(input: string): ParseResult {
           };
         }
 
+        if (
+          constraint.all_different !== undefined &&
+          typeof constraint.all_different !== 'boolean'
+        ) {
+          return {
+            success: false,
+            error: `all_different must be boolean for region ${regionId}`,
+          };
+        }
+
         constraints[regionId] = constraint;
       }
     }
@@ -141,6 +170,7 @@ export function parsePuzzle(input: string): ParseResult {
       allowDuplicates: data.allowDuplicates !== undefined ? data.allowDuplicates : false,
       regions: data.regions,
       constraints,
+      dominoes: Array.isArray(data.dominoes) ? data.dominoes : undefined,
     };
 
     return {
@@ -168,6 +198,7 @@ export function specToYAML(spec: PuzzleSpec): string {
     allowDuplicates: spec.allowDuplicates,
     regions: spec.regions,
     constraints: spec.constraints,
+    dominoes: spec.dominoes,
   });
 }
 
@@ -185,6 +216,7 @@ export function specToJSON(spec: PuzzleSpec): string {
       allowDuplicates: spec.allowDuplicates,
       regions: spec.regions,
       constraints: spec.constraints,
+      dominoes: spec.dominoes,
     },
     null,
     2

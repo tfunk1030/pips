@@ -107,6 +107,7 @@ export function buildPuzzleSpec(
     allowDuplicates: false,
     regions: regionsMatrix,
     constraints: specConstraints,
+    dominoes: dominoes.dominoes,
   };
 
   // Generate YAML
@@ -131,17 +132,16 @@ export function buildPuzzleSpec(
 function convertConstraint(def: ConstraintDef): RegionConstraint {
   switch (def.type) {
     case 'sum':
-      return {
-        sum: def.value,
-        op: convertOp(def.op),
-        value: def.value,
-      };
+      // For NYT Pips, operators apply to the REGION SUM.
+      // Represent equals as `sum`, and comparisons as `op/value`.
+      if (!def.op || def.op === '==') {
+        return { sum: def.value };
+      }
+      return { op: convertOp(def.op), value: def.value };
     case 'all_equal':
       return { all_equal: true };
     case 'all_different':
-      // Note: all_different isn't directly supported by the solver yet
-      // but we can represent it as a warning
-      return { all_equal: false };
+      return { all_different: true };
     default:
       return {};
   }
@@ -161,7 +161,7 @@ function convertOp(op?: string): SpecConstraintOp | undefined {
     case '!=':
       return '≠';
     default:
-      return '=';
+      return undefined;
   }
 }
 

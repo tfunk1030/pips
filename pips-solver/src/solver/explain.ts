@@ -191,13 +191,14 @@ function checkDominoExhaustion(
   puzzle: NormalizedPuzzle,
   state: SolverState
 ): Conflict | null {
-  if (puzzle.spec.allowDuplicates) {
-    return null; // Can't exhaust dominoes if duplicates allowed
+  const trayCount = Array.isArray(puzzle.spec.dominoes) ? puzzle.spec.dominoes.length : 0;
+  if (trayCount === 0 && puzzle.spec.allowDuplicates) {
+    return null; // Legacy mode: unlimited reuse allowed
   }
 
-  const maxPip = puzzle.spec.maxPip || 6;
-  const totalDominoes = ((maxPip + 1) * (maxPip + 2)) / 2;
-  const usedCount = state.usedDominoes.size;
+  const totalDominoes =
+    trayCount > 0 ? trayCount : (((puzzle.spec.maxPip || 6) + 1) * ((puzzle.spec.maxPip || 6) + 2)) / 2;
+  const usedCount = state.placements.length;
 
   // Count how many more dominoes we need
   let emptyEdges = 0;
@@ -246,13 +247,14 @@ export function explainSuccess(puzzle: NormalizedPuzzle, state: SolverState): Ex
     }
 
     if (constraint.op && constraint.value !== undefined) {
-      constraintDesc += ` all ${constraint.op} ${constraint.value}`;
+      const sum = values.reduce((a, b) => a + b, 0);
+      constraintDesc += ` sum ${constraint.op} ${constraint.value} (sum: ${sum})`;
     }
 
     details.push(constraintDesc);
   }
 
-  details.push(`Total dominoes used: ${state.usedDominoes.size}`);
+  details.push(`Total dominoes placed: ${state.placements.length}`);
 
   return {
     type: 'success',

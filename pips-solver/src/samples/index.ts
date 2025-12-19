@@ -93,4 +93,43 @@ constraints:
     sum: 5
 `,
   },
+  {
+    id: 'sample_3x3_hole_tray',
+    name: '3x3 Hole + Tray Inventory',
+    yaml: `# 3x3 with center hole to validate holes + tray inventory.
+#
+# Hole at (1,1). Remaining 8 cells => 4 dominoes.
+# Each cell is its own region with sum == fixed pip value.
+#
+# Expected tile multiset: [0,1] [2,3] [4,5] [6,6]
+
+id: sample_3x3_hole_tray
+name: "3x3 Hole + Tray Inventory"
+rows: 3
+cols: 3
+maxPip: 6
+allowDuplicates: false
+
+regions:
+  - [0, 1, 2]
+  - [3, -1, 4]
+  - [5, 6, 7]
+
+constraints:
+  0: { sum: 0 }
+  1: { sum: 1 }
+  2: { sum: 2 }
+  3: { sum: 4 }
+  4: { sum: 3 }
+  5: { sum: 5 }
+  6: { sum: 6 }
+  7: { sum: 6 }
+
+dominoes:
+  - [0, 1]
+  - [2, 3]
+  - [4, 5]
+  - [6, 6]
+`,
+  },
 ];

@@ -3,23 +3,20 @@
  * Allows user to paint cells with region colors using tap or drag gestures
  */
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
   Image,
-  TouchableOpacity,
-  ScrollView,
   LayoutChangeEvent,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { runOnJS } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 import Svg, { Line, Rect } from 'react-native-svg';
-import {
-  OverlayBuilderState,
-  BuilderAction,
-} from '../../../model/overlayTypes';
+import { BuilderAction, OverlayBuilderState } from '../../../model/overlayTypes';
 import { hitTestCell } from '../../../utils/gridCalculations';
 
 interface Props {
@@ -54,16 +51,9 @@ export default function Step2RegionPainting({ state, dispatch }: Props) {
   // Paint cell and track to avoid repainting same cell during drag
   const paintCellIfNew = useCallback(
     (x: number, y: number) => {
-      if (containerSize.width === 0) return;
+      if (containerSize.width === 0 || containerSize.height === 0) return;
 
-      const cell = hitTestCell(
-        x,
-        y,
-        grid.bounds,
-        grid.rows,
-        grid.cols,
-        containerSize
-      );
+      const cell = hitTestCell(x, y, grid.bounds, grid.rows, grid.cols, containerSize);
 
       if (cell && !grid.holes[cell.row]?.[cell.col]) {
         const last = lastPaintedCellRef.current;
@@ -78,12 +68,14 @@ export default function Step2RegionPainting({ state, dispatch }: Props) {
 
   // Combined tap and pan gesture for painting
   const paintGesture = Gesture.Pan()
-    .onBegin((e) => {
+    // Keep this on the JS thread so we can safely mutate refs / call dispatch
+    .runOnJS(true)
+    .onBegin(e => {
       lastPaintedCellRef.current = null;
-      runOnJS(paintCellIfNew)(e.x, e.y);
+      paintCellIfNew(e.x, e.y);
     })
-    .onUpdate((e) => {
-      runOnJS(paintCellIfNew)(e.x, e.y);
+    .onUpdate(e => {
+      paintCellIfNew(e.x, e.y);
     })
     .onEnd(() => {
       lastPaintedCellRef.current = null;
@@ -192,26 +184,28 @@ export default function Step2RegionPainting({ state, dispatch }: Props) {
         {/* Cell labels (non-interactive, for visual feedback) */}
         <View style={StyleSheet.absoluteFill} pointerEvents="none">
           {Array.from({ length: grid.rows }, (_, r) =>
-            Array.from({ length: grid.cols }, (_, c) => (
-              !grid.holes[r]?.[c] && (
-                <View
-                  key={`label-${r}-${c}`}
-                  style={{
-                    position: 'absolute',
-                    left: `${grid.bounds.left + c * cellWidth}%`,
-                    top: `${grid.bounds.top + r * cellHeight}%`,
-                    width: `${cellWidth}%`,
-                    height: `${cellHeight}%`,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Text style={styles.cellLabelText}>
-                    {palette.labels[regionGrid[r]?.[c] ?? 0]}
-                  </Text>
-                </View>
-              )
-            ))
+            Array.from(
+              { length: grid.cols },
+              (_, c) =>
+                !grid.holes[r]?.[c] && (
+                  <View
+                    key={`label-${r}-${c}`}
+                    style={{
+                      position: 'absolute',
+                      left: `${grid.bounds.left + c * cellWidth}%`,
+                      top: `${grid.bounds.top + r * cellHeight}%`,
+                      width: `${cellWidth}%`,
+                      height: `${cellHeight}%`,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Text style={styles.cellLabelText}>
+                      {palette.labels[regionGrid[r]?.[c] ?? 0]}
+                    </Text>
+                  </View>
+                )
+            )
           )}
         </View>
 
