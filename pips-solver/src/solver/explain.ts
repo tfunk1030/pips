@@ -200,23 +200,26 @@ function checkDominoExhaustion(
     trayCount > 0 ? trayCount : (((puzzle.spec.maxPip || 6) + 1) * ((puzzle.spec.maxPip || 6) + 2)) / 2;
   const usedCount = state.placements.length;
 
-  // Count how many more dominoes we need
-  let emptyEdges = 0;
-  for (const edge of puzzle.edges) {
-    if (
-      state.gridPips[edge.cell1.row][edge.cell1.col] === null &&
-      state.gridPips[edge.cell2.row][edge.cell2.col] === null
-    ) {
-      emptyEdges++;
+  // Count how many empty cells there are (each domino covers 2 cells)
+  let emptyCells = 0;
+  for (let row = 0; row < state.gridPips.length; row++) {
+    for (let col = 0; col < state.gridPips[row].length; col++) {
+      const regionId = puzzle.spec.regions[row]?.[col];
+      // Check if this cell is a valid grid cell (not a hole, i.e. region >= 0) and is empty
+      if (regionId !== undefined && regionId !== -1 && state.gridPips[row][col] === null) {
+        emptyCells++;
+      }
     }
   }
 
+  // Each domino covers 2 cells, so we need emptyCells / 2 dominoes
+  const dominoesNeeded = Math.ceil(emptyCells / 2);
   const availableDominoes = totalDominoes - usedCount;
 
-  if (emptyEdges > availableDominoes) {
+  if (dominoesNeeded > availableDominoes) {
     return {
       type: 'domino_exhausted',
-      description: `Not enough dominoes remaining (need ${emptyEdges}, have ${availableDominoes})`,
+      description: `Not enough dominoes remaining (need ${dominoesNeeded}, have ${availableDominoes})`,
     };
   }
 
