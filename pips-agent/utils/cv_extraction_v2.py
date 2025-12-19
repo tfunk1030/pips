@@ -122,69 +122,6 @@ def detect_by_region_contours(image_path: str, debug_dir: str = None) -> Detecti
         )
 
 
-def detect_by_constraint_labels(image_path: str, debug_dir: str = None) -> DetectionResult:
-    """
-    Strategy 2: Detect cells using constraint diamond labels as anchors.
-
-    Diamond markers indicate region boundaries, use them to infer cell layout.
-    """
-    try:
-        img = cv2.imread(image_path)
-        if img is None:
-            return DetectionResult(
-                success=False, cells=[], grid_dims=None, regions=None,
-                confidence=0.0, method="constraint_labels",
-                error="Could not read image"
-            )
-
-        # Convert to grayscale
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-        # Detect diamond shapes using shape detection
-        diamonds = detect_diamond_shapes(img)
-
-        if len(diamonds) == 0:
-            return DetectionResult(
-                success=False, cells=[], grid_dims=None, regions=None,
-                confidence=0.0, method="constraint_labels",
-                error="No constraint labels detected"
-            )
-
-        # Use diamond positions to infer grid structure
-        # Diamonds are between regions, so cells are in the spaces
-        cells = infer_cells_from_markers(img, diamonds)
-
-        if len(cells) == 0:
-            return DetectionResult(
-                success=False, cells=[], grid_dims=None, regions=None,
-                confidence=0.0, method="constraint_labels",
-                error="Could not infer cells from markers"
-            )
-
-        grid_dims = estimate_grid_dims(cells)
-        regions = detect_regions_from_cells(img, cells)
-        confidence = calculate_confidence(cells, grid_dims)
-
-        if debug_dir:
-            save_debug_image(img, cells, f"{debug_dir}/constraint_method.png")
-
-        return DetectionResult(
-            success=True,
-            cells=cells,
-            grid_dims=grid_dims,
-            regions=regions,
-            confidence=confidence,
-            method="constraint_labels"
-        )
-
-    except Exception as e:
-        return DetectionResult(
-            success=False, cells=[], grid_dims=None, regions=None,
-            confidence=0.0, method="constraint_labels",
-            error=str(e)
-        )
-
-
 def detect_by_color_segmentation(image_path: str, debug_dir: str = None) -> DetectionResult:
     """
     Strategy 3: Segment by color first, then find cells within each color region.
@@ -282,7 +219,7 @@ def extract_puzzle_multi_strategy(
         Best detection result with highest confidence
     """
     if strategies is None:
-        strategies = ["region_contours", "color_segmentation", "constraint_labels"]
+        strategies = ["region_contours", "color_segmentation"]
 
     if output_dir:
         Path(output_dir).mkdir(parents=True, exist_ok=True)
@@ -296,10 +233,6 @@ def extract_puzzle_multi_strategy(
 
     if "color_segmentation" in strategies:
         result = detect_by_color_segmentation(image_path, output_dir)
-        results.append(result)
-
-    if "constraint_labels" in strategies:
-        result = detect_by_constraint_labels(image_path, output_dir)
         results.append(result)
 
     # Filter successful results
@@ -456,51 +389,6 @@ def calculate_confidence(
             confidence += 0.15
 
     return min(confidence, 1.0)
-
-
-def detect_diamond_shapes(img: np.ndarray) -> List[Tuple[int, int]]:
-    """Detect diamond-shaped constraint labels"""
-    # Convert to grayscale
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-    # Detect edges
-    edges = cv2.Canny(gray, 50, 150)
-
-    # Find contours
-    contours, _ = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-
-    diamonds = []
-    for contour in contours:
-        # Approximate contour to polygon
-        epsilon = 0.04 * cv2.arcLength(contour, True)
-        approx = cv2.approxPolyDP(contour, epsilon, True)
-
-        # Diamonds have 4 vertices
-        if len(approx) == 4:
-            # Check if it's roughly diamond-shaped (not rectangle)
-            # Compute angle between edges
-            # For now, just collect all quadrilaterals
-            M = cv2.moments(contour)
-            if M["m00"] > 0:
-                cx = int(M["m10"] / M["m00"])
-                cy = int(M["m01"] / M["m00"])
-                diamonds.append((cx, cy))
-
-    return diamonds
-
-
-def infer_cells_from_markers(
-    img: np.ndarray,
-    markers: List[Tuple[int, int]]
-) -> List[Tuple[int, int, int, int]]:
-    """
-    Infer cell positions from constraint marker positions.
-
-    Markers are between cells, so cells are in the gaps.
-    """
-    # This is a complex heuristic - for now, return empty
-    # TODO: Implement full marker-based cell inference
-    return []
 
 
 def save_debug_image(

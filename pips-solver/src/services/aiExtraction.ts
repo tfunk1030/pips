@@ -17,15 +17,7 @@ import {
   GridState,
   RegionState,
 } from '../model/overlayTypes';
-
-// Prefer newest supported models, but gracefully fall back if the account
-// doesn't have access to a given model ID.
-const MODEL_CANDIDATES = [
-  'claude-sonnet-4-20250514',
-  // Older fallbacks (may be retired for some accounts, but cheap to try)
-  'claude-3-5-sonnet-20240620',
-  'claude-3-opus-20240229',
-] as const;
+import { MODEL_CANDIDATES } from '../config/models';
 
 // ════════════════════════════════════════════════════════════════════════════
 // Zod Schemas for AI Response Validation
@@ -75,27 +67,6 @@ export interface ExtractionProgress {
 }
 
 function normalizeBase64ImageData(input: string): string {
-  // #region agent log
-  const logEntry = {
-    location: 'aiExtraction.ts:76',
-    message: 'normalizeBase64ImageData entry',
-    data: {
-      inputLength: input?.length || 0,
-      inputPrefix: input?.substring(0, 50) || 'null',
-      hasDataPrefix: input?.startsWith('data:') || false,
-    },
-    timestamp: Date.now(),
-    sessionId: 'debug-session',
-    runId: 'run1',
-    hypothesisId: 'A',
-  };
-  console.log('[DEBUG] normalizeBase64ImageData entry:', logEntry);
-  fetch('http://127.0.0.1:7242/ingest/9150e6c0-f2ac-4ac3-b8cb-698ec1abb2d7', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(logEntry),
-  }).catch(() => {});
-  // #endregion
   let s = input.trim();
 
   // Handle "data:image/...;base64,xxxx" strings.
@@ -112,48 +83,10 @@ function normalizeBase64ImageData(input: string): string {
   // Note: We don't add padding here because base64 padding is part of the encoding
   // and should already be present if needed. Adding padding could corrupt valid data.
 
-  // #region agent log
-  const logExit = {
-    location: 'aiExtraction.ts:90',
-    message: 'normalizeBase64ImageData exit',
-    data: {
-      outputLength: s?.length || 0,
-      outputPrefix: s?.substring(0, 50) || 'null',
-      isEmpty: s?.length === 0,
-    },
-    timestamp: Date.now(),
-    sessionId: 'debug-session',
-    runId: 'run1',
-    hypothesisId: 'A',
-  };
-  console.log('[DEBUG] normalizeBase64ImageData exit:', logExit);
-  fetch('http://127.0.0.1:7242/ingest/9150e6c0-f2ac-4ac3-b8cb-698ec1abb2d7', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(logExit),
-  }).catch(() => {});
-  // #endregion
   return s;
 }
 
 function inferImageMediaTypeFromBase64(base64: string): string {
-  // #region agent log
-  const logEntry = {
-    location: 'aiExtraction.ts:93',
-    message: 'inferImageMediaTypeFromBase64 entry',
-    data: { base64Length: base64?.length || 0, base64Prefix: base64?.substring(0, 20) || 'null' },
-    timestamp: Date.now(),
-    sessionId: 'debug-session',
-    runId: 'run1',
-    hypothesisId: 'B',
-  };
-  console.log('[DEBUG] inferImageMediaTypeFromBase64 entry:', logEntry);
-  fetch('http://127.0.0.1:7242/ingest/9150e6c0-f2ac-4ac3-b8cb-698ec1abb2d7', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(logEntry),
-  }).catch(() => {});
-  // #endregion
   const b64 = normalizeBase64ImageData(base64);
 
   // Try to decode first few bytes to check magic numbers
@@ -231,23 +164,6 @@ function inferImageMediaTypeFromBase64(base64: string): string {
 
   const mediaType = mediaTypeMap[detectedType] || 'image/jpeg'; // Default to JPEG
 
-  // #region agent log
-  const logExit = {
-    location: `aiExtraction.ts:${detectedType === 'unknown' ? '106' : '97'}`,
-    message: detectedType === 'unknown' ? 'defaulting to JPEG' : `detected ${detectedType}`,
-    data: { mediaType, detectedType, base64Prefix: b64?.substring(0, 20) || 'null' },
-    timestamp: Date.now(),
-    sessionId: 'debug-session',
-    runId: 'run1',
-    hypothesisId: 'B',
-  };
-  console.log('[DEBUG] Media type detection result:', logExit);
-  fetch('http://127.0.0.1:7242/ingest/9150e6c0-f2ac-4ac3-b8cb-698ec1abb2d7', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(logExit),
-  }).catch(() => {});
-  // #endregion
   return mediaType;
 }
 
@@ -276,25 +192,6 @@ export async function extractPuzzleFromImage(
   }
 
   const normalizedImage = normalizeBase64ImageData(base64Image);
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/9150e6c0-f2ac-4ac3-b8cb-698ec1abb2d7', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      location: 'aiExtraction.ts:133',
-      message: 'normalized image in extractPuzzleFromImage',
-      data: {
-        originalLength: base64Image?.length || 0,
-        normalizedLength: normalizedImage?.length || 0,
-        isEmpty: !normalizedImage || normalizedImage.length === 0,
-      },
-      timestamp: Date.now(),
-      sessionId: 'debug-session',
-      runId: 'run1',
-      hypothesisId: 'E',
-    }),
-  }).catch(() => {});
-  // #endregion
   if (!normalizedImage) {
     return { success: false, error: 'Image data is empty' };
   }
@@ -404,46 +301,7 @@ async function extractBoard(
   apiKey: string
 ): Promise<{ success: boolean; data?: BoardExtractionResult; error?: string; reasoning?: string }> {
   try {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/9150e6c0-f2ac-4ac3-b8cb-698ec1abb2d7', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        location: 'aiExtraction.ts:220',
-        message: 'extractBoard entry',
-        data: {
-          base64Length: base64Image?.length || 0,
-          base64Prefix: base64Image?.substring(0, 30) || 'null',
-          base64Suffix: base64Image?.substring(Math.max(0, base64Image?.length - 30)) || 'null',
-          isEmpty: base64Image?.length === 0,
-        },
-        timestamp: Date.now(),
-        sessionId: 'debug-session',
-        runId: 'run1',
-        hypothesisId: 'C',
-      }),
-    }).catch(() => {});
-    // #endregion
     const mediaType = inferImageMediaTypeFromBase64(base64Image);
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/9150e6c0-f2ac-4ac3-b8cb-698ec1abb2d7', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        location: 'aiExtraction.ts:225',
-        message: 'before API call',
-        data: {
-          mediaType,
-          base64Length: base64Image?.length || 0,
-          normalizedLength: normalizeBase64ImageData(base64Image)?.length || 0,
-        },
-        timestamp: Date.now(),
-        sessionId: 'debug-session',
-        runId: 'run1',
-        hypothesisId: 'C',
-      }),
-    }).catch(() => {});
-    // #endregion
     const normalizedBase64 = normalizeBase64ImageData(base64Image);
     // Validate base64 format
     const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
@@ -475,50 +333,6 @@ async function extractBoard(
         };
       }
     }
-    // #region agent log
-    const logData = {
-      location: 'aiExtraction.ts:228',
-      message: 'using normalized base64',
-      data: {
-        normalizedLength: normalizedBase64?.length || 0,
-        normalizedPrefix: normalizedBase64?.substring(0, 30) || 'null',
-        normalizedSuffix:
-          normalizedBase64?.substring(Math.max(0, normalizedBase64.length - 30)) || 'null',
-        mediaType,
-        isValidBase64: base64Regex.test(normalizedBase64),
-        payloadSize: JSON.stringify([
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'image',
-                source: { type: 'base64', media_type: mediaType, data: normalizedBase64 },
-              },
-              { type: 'text', text: BOARD_EXTRACTION_PROMPT },
-            ],
-          },
-        ]).length,
-      },
-      timestamp: Date.now(),
-      sessionId: 'debug-session',
-      runId: 'run1',
-      hypothesisId: 'C',
-    };
-    console.log('[DEBUG] extractBoard - Before API call:', JSON.stringify(logData, null, 2));
-    console.log('[DEBUG] extractBoard - Base64 first 50 chars:', normalizedBase64.substring(0, 50));
-    console.log(
-      '[DEBUG] extractBoard - Base64 last 50 chars:',
-      normalizedBase64.substring(Math.max(0, normalizedBase64.length - 50))
-    );
-    console.log('[DEBUG] extractBoard - Media type:', mediaType);
-    fetch('http://127.0.0.1:7242/ingest/9150e6c0-f2ac-4ac3-b8cb-698ec1abb2d7', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(logData),
-    }).catch(() => {});
-    // #endregion
-    console.log('[DEBUG] extractBoard - About to call API...');
-    const apiCallStartTime = Date.now();
     const response = await callClaudeWithFallback(apiKey, [
       {
         role: 'user',
@@ -531,33 +345,14 @@ async function extractBoard(
         ],
       },
     ]);
-    const apiCallDuration = Date.now() - apiCallStartTime;
-    console.log(`[DEBUG] extractBoard - API call completed in ${apiCallDuration}ms`);
-    console.log('[DEBUG] extractBoard - Response received:', {
-      contentLength: response.content?.length || 0,
-      stopReason: response.stop_reason,
-      firstContentText: response.content?.[0]?.text?.substring(0, 200) || 'none',
-    });
 
     const text = response.content.map(b => b.text).join('\n');
-    console.log('[DEBUG] extractBoard - Extracted text length:', text.length);
-    console.log(
-      '[DEBUG] extractBoard - Full response text (first 1000 chars):',
-      text.substring(0, 1000)
-    );
-    console.log(
-      '[DEBUG] extractBoard - Full response text (last 500 chars):',
-      text.substring(Math.max(0, text.length - 500))
-    );
 
     // Try to parse JSON from the response
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      console.error('[DEBUG] extractBoard - No JSON found in response. Full text:', text);
       return { success: false, error: 'Could not parse board extraction response - no JSON found' };
     }
-
-    console.log('[DEBUG] extractBoard - Found JSON match, length:', jsonMatch[0].length);
 
     // Fix multi-line strings in shape and regions fields
     // The AI sometimes returns strings split across lines like:
@@ -595,24 +390,10 @@ async function extractBoard(
     jsonString = fixMultilineString('shape', jsonString);
     jsonString = fixMultilineString('regions', jsonString);
 
-    console.log(
-      '[DEBUG] extractBoard - Fixed JSON string (first 500 chars):',
-      jsonString.substring(0, 500)
-    );
-
     let rawParsed;
     try {
       rawParsed = JSON.parse(jsonString);
-      console.log(
-        '[DEBUG] extractBoard - Parsed JSON successfully:',
-        JSON.stringify(rawParsed, null, 2)
-      );
     } catch (parseError) {
-      console.error('[DEBUG] extractBoard - JSON parse error:', parseError);
-      console.error(
-        '[DEBUG] extractBoard - JSON string that failed (first 1000 chars):',
-        jsonString.substring(0, 1000)
-      );
 
       // Fallback: try to fix by removing all newlines between quoted strings and joining them
       try {
@@ -640,7 +421,6 @@ async function extractBoard(
         );
 
         rawParsed = JSON.parse(fallbackFix);
-        console.log('[DEBUG] extractBoard - Parsed with fallback fix');
       } catch (secondError) {
         return {
           success: false,
@@ -655,25 +435,10 @@ async function extractBoard(
       const errors = validationResult.error.issues.map(
         (e: z.ZodIssue) => `${e.path.join('.')}: ${e.message}`
       );
-      console.error('[DEBUG] extractBoard - Validation failed:', errors);
-      console.error('[DEBUG] extractBoard - Raw parsed data:', JSON.stringify(rawParsed, null, 2));
       return { success: false, error: `Board validation failed: ${errors.join(', ')}` };
     }
 
-    console.log('[DEBUG] extractBoard - Validation passed');
-
     const validated = validationResult.data;
-    console.log('[DEBUG] extractBoard - Final validated data:', {
-      rows: validated.rows,
-      cols: validated.cols,
-      shapeLength: validated.shape?.length,
-      shapePreview: validated.shape?.substring(0, 200),
-      regionsLength: validated.regions?.length,
-      regionsPreview: validated.regions?.substring(0, 200),
-      constraintsCount: Object.keys(validated.constraints || {}).length,
-      constraints: validated.constraints,
-      reasoningLength: validated.reasoning?.length || 0,
-    });
     return {
       success: true,
       data: {
@@ -739,21 +504,6 @@ async function extractDominoes(
     .replace('{regions}', board.regions);
 
   try {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/9150e6c0-f2ac-4ac3-b8cb-698ec1abb2d7', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        location: 'aiExtraction.ts:325',
-        message: 'extractDominoes before API call',
-        data: { base64Length: base64Image?.length || 0 },
-        timestamp: Date.now(),
-        sessionId: 'debug-session',
-        runId: 'run1',
-        hypothesisId: 'C',
-      }),
-    }).catch(() => {});
-    // #endregion
     const mediaType = inferImageMediaTypeFromBase64(base64Image);
     const normalizedBase64 = normalizeBase64ImageData(base64Image);
     const response = await callClaudeWithFallback(apiKey, [
@@ -878,51 +628,6 @@ async function callClaude(
   messages: ClaudeMessage[],
   model: string
 ): Promise<ClaudeResponse> {
-  // #region agent log
-  const imageContent = messages[0]?.content?.find(
-    (c): c is { type: 'image'; source: { type: 'base64'; media_type: string; data: string } } =>
-      c.type === 'image'
-  );
-  const logEntry = {
-    location: 'aiExtraction.ts:441',
-    message: 'callClaude entry',
-    data: {
-      model,
-      apiKeyLength: apiKey?.length || 0,
-      hasImageContent: !!imageContent,
-      imageMediaType: imageContent?.source?.media_type || 'none',
-      imageDataLength: imageContent?.source?.data?.length || 0,
-      imageDataPrefix: imageContent?.source?.data?.substring(0, 30) || 'null',
-      imageDataSuffix:
-        imageContent?.source?.data?.substring(
-          Math.max(0, (imageContent?.source?.data?.length || 0) - 30)
-        ) || 'null',
-      payloadSize: JSON.stringify({ model, max_tokens: 2048, messages }).length,
-    },
-    timestamp: Date.now(),
-    sessionId: 'debug-session',
-    runId: 'run1',
-    hypothesisId: 'D',
-  };
-  console.log('[DEBUG] callClaude - Request details:', JSON.stringify(logEntry, null, 2));
-  if (imageContent) {
-    console.log('[DEBUG] callClaude - Image content structure:', {
-      type: imageContent.type,
-      sourceType: imageContent.source.type,
-      mediaType: imageContent.source.media_type,
-      dataLength: imageContent.source.data?.length,
-      dataFirst50: imageContent.source.data?.substring(0, 50),
-      dataLast50: imageContent.source.data?.substring(
-        Math.max(0, (imageContent.source.data?.length || 0) - 50)
-      ),
-    });
-  }
-  fetch('http://127.0.0.1:7242/ingest/9150e6c0-f2ac-4ac3-b8cb-698ec1abb2d7', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(logEntry),
-  }).catch(() => {});
-  // #endregion
   // For Expo web, Anthropic requires this header to allow browser access.
   const extraHeaders: Record<string, string> =
     Platform.OS === 'web' ? { 'anthropic-dangerous-direct-browser-access': 'true' } : {};
@@ -932,16 +637,6 @@ async function callClaude(
     max_tokens: 2048,
     messages,
   };
-
-  console.log('[DEBUG] callClaude - Request body (without image data):', {
-    model: requestBody.model,
-    max_tokens: requestBody.max_tokens,
-    messagesCount: requestBody.messages.length,
-    firstMessageRole: requestBody.messages[0]?.role,
-    firstMessageContentTypes: requestBody.messages[0]?.content?.map((c: any) => c.type),
-  });
-  console.log('[DEBUG] callClaude - About to make fetch request...');
-  const fetchStartTime = Date.now();
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -954,72 +649,12 @@ async function callClaude(
     body: JSON.stringify(requestBody),
   });
 
-  // #region agent log
-  const fetchDuration = Date.now() - fetchStartTime;
-  console.log(`[DEBUG] callClaude - Fetch completed in ${fetchDuration}ms`);
-  const responseLog = {
-    location: 'aiExtraction.ts:465',
-    message: 'API response received',
-    data: {
-      status: response.status,
-      statusText: response.statusText,
-      ok: response.ok,
-      fetchDuration,
-    },
-    timestamp: Date.now(),
-    sessionId: 'debug-session',
-    runId: 'run1',
-    hypothesisId: 'D',
-  };
-  console.log('[DEBUG] callClaude - API response received:', responseLog);
-  fetch('http://127.0.0.1:7242/ingest/9150e6c0-f2ac-4ac3-b8cb-698ec1abb2d7', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(responseLog),
-  }).catch(() => {});
-  // #endregion
-
   if (!response.ok) {
     const error = await response.text();
-    // #region agent log
-    const logData = {
-      location: 'aiExtraction.ts:467',
-      message: 'API error response',
-      data: {
-        status: response.status,
-        errorText: error,
-        errorLength: error?.length || 0,
-        errorPrefix: error?.substring(0, 200) || 'null',
-        fullError: error, // Include full error for debugging
-      },
-      timestamp: Date.now(),
-      sessionId: 'debug-session',
-      runId: 'run1',
-      hypothesisId: 'D',
-    };
-    console.error('[DEBUG] API error response:', JSON.stringify(logData, null, 2));
-    console.error('[DEBUG] Full error text:', error);
-    try {
-      const errorJson = JSON.parse(error);
-      console.error('[DEBUG] Parsed error JSON:', JSON.stringify(errorJson, null, 2));
-    } catch (e) {
-      console.error('[DEBUG] Error text is not JSON:', e);
-    }
-    fetch('http://127.0.0.1:7242/ingest/9150e6c0-f2ac-4ac3-b8cb-698ec1abb2d7', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(logData),
-    }).catch(() => {});
-    // #endregion
     throw new Error(`API error: ${response.status} - ${error}`);
   }
 
-  console.log('[DEBUG] callClaude - Parsing JSON response...');
-  const jsonStartTime = Date.now();
-  const result = await response.json();
-  const jsonDuration = Date.now() - jsonStartTime;
-  console.log(`[DEBUG] callClaude - JSON parsed in ${jsonDuration}ms`);
-  return result;
+  return await response.json();
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1035,16 +670,6 @@ export function convertAIResultToBuilderState(result: AIExtractionResult): {
   constraints: Partial<ConstraintState>;
   dominoes: DominoPair[];
 } {
-  console.log('[DEBUG] convertAIResultToBuilderState - Input result:', {
-    boardRows: result.board.rows,
-    boardCols: result.board.cols,
-    shapeLength: result.board.shape?.length,
-    shapePreview: result.board.shape?.substring(0, 200),
-    regionsLength: result.board.regions?.length,
-    regionsPreview: result.board.regions?.substring(0, 200),
-    constraintsCount: Object.keys(result.board.constraints || {}).length,
-    dominoesCount: result.dominoes.dominoes?.length || 0,
-  });
   const { board, dominoes } = result;
 
   // Parse shape to create holes array
@@ -1057,24 +682,11 @@ export function convertAIResultToBuilderState(result: AIExtractionResult): {
 
   const holes: boolean[][] = shapeLines.map(line => Array.from(line).map(char => char === '#'));
 
-  console.log('[DEBUG] convertAIResultToBuilderState - Parsed shape:', {
-    shapeLinesCount: shapeLines.length,
-    shapeLines: shapeLines,
-    calculatedRows: rows,
-    calculatedCols: cols,
-    holesCount: holes.flat().filter(h => h).length,
-  });
-
   // Parse regions
   const regionLines = board.regions
     .trim()
     .split('\n')
     .map(line => line.trim());
-
-  console.log('[DEBUG] convertAIResultToBuilderState - Parsed regions:', {
-    regionLinesCount: regionLines.length,
-    regionLines: regionLines,
-  });
 
   const labelToIndex: Record<string, number> = {};
   let nextIndex = 0;
@@ -1090,12 +702,6 @@ export function convertAIResultToBuilderState(result: AIExtractionResult): {
       return labelToIndex[char];
     })
   );
-
-  console.log('[DEBUG] convertAIResultToBuilderState - Region mapping:', {
-    labelToIndex,
-    regionGridDimensions: `${regionGrid.length}x${regionGrid[0]?.length || 0}`,
-    regionGridPreview: regionGrid.slice(0, 2).map(row => row.slice(0, 4)),
-  });
 
   // Convert constraints
   const regionConstraints: Record<number, ConstraintDef> = {};
@@ -1123,23 +729,10 @@ export function convertAIResultToBuilderState(result: AIExtractionResult): {
   // so we'll use default bounds. The user can adjust in Step 1 if needed.
   // Alternatively, we could pass image dimensions to this function.
 
-  const convertedState = {
+  return {
     grid: { rows, cols, holes, bounds },
     regions: { regionGrid, palette: { ...DEFAULT_PALETTE, selectedIndex: 0 } },
     constraints: { regionConstraints, selectedRegion: null },
     dominoes: dominoes.dominoes,
   };
-
-  console.log('[DEBUG] convertAIResultToBuilderState - Final result:', {
-    gridRows: convertedState.grid.rows,
-    gridCols: convertedState.grid.cols,
-    gridBounds: convertedState.grid.bounds,
-    holesArray: convertedState.grid.holes?.map(row => row.map(h => (h ? '#' : '.')).join('')),
-    regionGridRows: convertedState.regions.regionGrid?.length,
-    regionGridCols: convertedState.regions.regionGrid?.[0]?.length,
-    constraintsCount: Object.keys(convertedState.constraints.regionConstraints || {}).length,
-    dominoesCount: convertedState.dominoes.length,
-  });
-
-  return convertedState;
 }

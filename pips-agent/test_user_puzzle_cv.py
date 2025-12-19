@@ -59,7 +59,7 @@ def test_user_puzzle():
     result = extract_puzzle_multi_strategy(
         image_path,
         output_dir='debug/user_puzzle_validation',
-        strategies=['region_contours', 'color_segmentation', 'constraint_labels']
+        strategies=['region_contours', 'color_segmentation']
     )
 
     # Display results
@@ -145,7 +145,7 @@ def test_user_puzzle():
     print("="*60)
 
     print("\nWhat v2 improved:")
-    print("  - Multi-strategy approach (tries 3 methods)")
+    print("  - Multi-strategy approach (tries 2 methods)")
     print("  - Region contour detection for irregular grids")
     print("  - Color segmentation for complex layouts")
     print("  - Confidence scoring to pick best result")
@@ -155,7 +155,6 @@ def test_user_puzzle():
         print(f"  - Cell count detection (off by {abs(detected_cells - expected_cells)})")
     if detected_regions != expected_regions:
         print(f"  - Region identification (off by {abs(detected_regions - expected_regions)})")
-    print("  - Constraint label -> cell inference (partial)")
     print("  - Domino pip counting (not implemented)")
 
     print("\n" + "="*60)
