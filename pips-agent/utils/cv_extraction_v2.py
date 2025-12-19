@@ -8,7 +8,7 @@ import sys
 import cv2
 import numpy as np
 from pathlib import Path
-from typing import List, Tuple, Dict, Set, Optional
+from typing import List, Tuple, Dict, Optional
 from dataclasses import dataclass
 
 # Add parent directory to path
