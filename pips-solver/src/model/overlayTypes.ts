@@ -99,6 +99,13 @@ export interface OverlayBuilderState {
   aiStatus: 'idle' | 'extracting' | 'done' | 'error';
   aiError?: string;
   aiReasoning?: string;
+  /** AI confidence scores */
+  aiConfidence?: {
+    grid?: number;
+    regions?: number;
+    constraints?: number;
+    dominoes?: number;
+  };
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -141,7 +148,20 @@ export type BuilderAction =
 
   // AI Extraction
   | { type: 'AI_START' }
-  | { type: 'AI_SUCCESS'; grid: Partial<GridState>; regions: Partial<RegionState>; constraints: Partial<ConstraintState>; dominoes: DominoPair[]; reasoning: string }
+  | {
+      type: 'AI_SUCCESS';
+      grid: Partial<GridState>;
+      regions: Partial<RegionState>;
+      constraints: Partial<ConstraintState>;
+      dominoes: DominoPair[];
+      reasoning: string;
+      confidence?: {
+        grid?: number;
+        regions?: number;
+        constraints?: number;
+        dominoes?: number;
+      };
+    }
   | { type: 'AI_ERROR'; error: string };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -164,19 +184,39 @@ export interface DraftMeta {
 export interface BoardExtractionResult {
   rows: number;
   cols: number;
+  gridLocation?: {
+    left: number;
+    top: number;
+    right: number;
+    bottom: number;
+    imageWidth: number;
+    imageHeight: number;
+  };
   shape: string;
   regions: string;
   constraints: Record<string, { type: string; op?: string; value?: number }>;
+  confidence?: {
+    grid: number;
+    regions: number;
+    constraints: number;
+  };
 }
 
 export interface DominoExtractionResult {
   dominoes: DominoPair[];
+  confidence?: number;
 }
 
 export interface AIExtractionResult {
   board: BoardExtractionResult;
   dominoes: DominoExtractionResult;
   reasoning: string;
+  confidence?: number;
+  confidenceScores?: {
+    grid?: number;
+    regions?: number;
+    constraints?: number;
+  };
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -212,13 +252,17 @@ export function createDefaultGridState(rows = 4, cols = 4): GridState {
     rows,
     cols,
     bounds: { ...DEFAULT_GRID_BOUNDS },
-    holes: Array(rows).fill(null).map(() => Array(cols).fill(false)),
+    holes: Array(rows)
+      .fill(null)
+      .map(() => Array(cols).fill(false)),
   };
 }
 
 export function createDefaultRegionState(rows: number, cols: number): RegionState {
   return {
-    regionGrid: Array(rows).fill(null).map(() => Array(cols).fill(0)),
+    regionGrid: Array(rows)
+      .fill(null)
+      .map(() => Array(cols).fill(0)),
     palette: { ...DEFAULT_PALETTE },
   };
 }

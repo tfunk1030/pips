@@ -18,6 +18,7 @@ import Animated from 'react-native-reanimated';
 import Svg, { Line, Rect } from 'react-native-svg';
 import { BuilderAction, OverlayBuilderState } from '../../../model/overlayTypes';
 import { hitTestCell } from '../../../utils/gridCalculations';
+import ConfidenceIndicator from '../../components/ConfidenceIndicator';
 
 interface Props {
   state: OverlayBuilderState;
@@ -96,6 +97,13 @@ export default function Step2RegionPainting({ state, dispatch }: Props) {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      {/* AI Confidence Indicator */}
+      {state.aiStatus === 'done' && state.aiConfidence?.regions && (
+        <View style={styles.confidenceSection}>
+          <ConfidenceIndicator label="Region Boundaries" confidence={state.aiConfidence.regions} compact />
+        </View>
+      )}
+
       {/* Color Palette */}
       <View style={styles.paletteContainer}>
         <Text style={styles.paletteLabel}>Select Region:</Text>
@@ -298,5 +306,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: 'center',
     marginTop: 12,
+  },
+  confidenceSection: {
+    marginBottom: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#222',
+    borderRadius: 8,
   },
 });

@@ -19,6 +19,7 @@ import Animated from 'react-native-reanimated';
 import Svg, { Circle, Line, Rect } from 'react-native-svg';
 import { BuilderAction, GridBounds, OverlayBuilderState } from '../../../model/overlayTypes';
 import { constrainBounds, hitTestCell } from '../../../utils/gridCalculations';
+import ConfidenceIndicator from '../../components/ConfidenceIndicator';
 
 interface Props {
   state: OverlayBuilderState;
@@ -130,6 +131,14 @@ export default function Step1GridAlignment({
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* AI Confidence Indicator */}
+      {state.aiStatus === 'done' && state.aiConfidence?.grid && (
+        <View style={styles.confidenceSection}>
+          <Text style={styles.confidenceTitle}>AI Extraction Confidence</Text>
+          <ConfidenceIndicator label="Grid Layout" confidence={state.aiConfidence.grid} compact />
+        </View>
+      )}
 
       {/* AI Extraction Button */}
       {onAIExtract && (
@@ -562,6 +571,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 8,
     textAlign: 'center',
+  },
+  confidenceSection: {
+    marginTop: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#222',
+    borderRadius: 8,
+  },
+  confidenceTitle: {
+    color: '#888',
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 8,
+    textTransform: 'uppercase',
   },
   edgeHandle: {
     position: 'absolute',

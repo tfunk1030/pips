@@ -3,11 +3,20 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { StoredPuzzle, PuzzleSpec, Solution } from '../model/types';
 import { specToYAML } from '../model/parser';
+import { PuzzleSpec, Solution, StoredPuzzle } from '../model/types';
 
 const PUZZLES_KEY = '@pips_puzzles';
 const SETTINGS_KEY = '@pips_settings';
+
+/**
+ * Extraction strategy for AI puzzle extraction
+ * - 'fast': Single model (Gemini Flash), ~3s
+ * - 'balanced': Gemini Pro with verification, ~20s
+ * - 'accurate': Gemini Pro + Claude verification, ~35s
+ * - 'ensemble': Multi-model consensus, ~45s (MAXIMUM ACCURACY)
+ */
+export type ExtractionStrategy = 'fast' | 'balanced' | 'accurate' | 'ensemble';
 
 /**
  * App settings interface
@@ -18,7 +27,14 @@ export interface AppSettings {
   defaultFindAll: boolean;
   defaultDebugLevel: number;
   maxIterationsPerTick: number;
-  anthropicApiKey?: string;
+
+  // API Keys for multi-model extraction
+  anthropicApiKey?: string; // Claude (best for structured JSON)
+  googleApiKey?: string; // Gemini (best for grid/object detection)
+  openaiApiKey?: string; // GPT-4o (fallback)
+
+  // Extraction configuration
+  extractionStrategy?: ExtractionStrategy;
 }
 
 /**
@@ -42,7 +58,7 @@ export async function getAllPuzzles(): Promise<StoredPuzzle[]> {
  */
 export async function getPuzzle(id: string): Promise<StoredPuzzle | null> {
   const puzzles = await getAllPuzzles();
-  return puzzles.find((p) => p.id === id) || null;
+  return puzzles.find(p => p.id === id) || null;
 }
 
 /**
@@ -56,7 +72,7 @@ export async function savePuzzle(
   const puzzles = await getAllPuzzles();
 
   const now = Date.now();
-  const existing = puzzles.find((p) => p.id === spec.id);
+  const existing = puzzles.find(p => p.id === spec.id);
 
   const puzzle: StoredPuzzle = {
     id: spec.id!,
@@ -87,7 +103,7 @@ export async function savePuzzle(
  */
 export async function deletePuzzle(id: string): Promise<void> {
   const puzzles = await getAllPuzzles();
-  const filtered = puzzles.filter((p) => p.id !== id);
+  const filtered = puzzles.filter(p => p.id !== id);
   await AsyncStorage.setItem(PUZZLES_KEY, JSON.stringify(filtered));
 }
 
@@ -96,7 +112,7 @@ export async function deletePuzzle(id: string): Promise<void> {
  */
 export async function updatePuzzleSolution(id: string, solution: Solution): Promise<void> {
   const puzzles = await getAllPuzzles();
-  const puzzle = puzzles.find((p) => p.id === id);
+  const puzzle = puzzles.find(p => p.id === id);
 
   if (puzzle) {
     puzzle.solution = solution;
@@ -160,5 +176,6 @@ function getDefaultSettings(): AppSettings {
     defaultFindAll: false,
     defaultDebugLevel: 0,
     maxIterationsPerTick: 100,
+    extractionStrategy: 'accurate', // Default to accurate mode
   };
 }

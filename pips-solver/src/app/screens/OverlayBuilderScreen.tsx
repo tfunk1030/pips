@@ -9,17 +9,22 @@ import * as ImagePicker from 'expo-image-picker';
 import React, { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { Alert, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { BuilderStep, createInitialBuilderState } from '../../model/overlayTypes';
 import {
-  ExtractionProgress,
+  AIExtractionResult,
+  BuilderStep,
+  createInitialBuilderState,
+} from '../../model/overlayTypes';
+import {
   convertAIResultToBuilderState,
-  extractPuzzleFromImage,
+  extractPuzzleMultiModel,
 } from '../../services/aiExtraction';
+import { ExtractionProgress as EnsembleProgress } from '../../services/ensembleExtraction';
 import { builderReducer, countValidCells } from '../../state/builderReducer';
 import { deleteDraft, loadDraft, saveDraft } from '../../storage/drafts';
 import { getSettings, savePuzzle } from '../../storage/puzzles';
 import { buildPuzzleSpec, getBuilderStats, validateBuilderState } from '../../utils/specBuilder';
 import { validatePuzzleSpec } from '../../validator/validateSpec';
+import AIVerificationModal from '../components/AIVerificationModal';
 
 // Step components
 import Step1GridAlignment from './builder/Step1GridAlignment';
@@ -47,6 +52,7 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
   const [showNameModal, setShowNameModal] = useState(false);
   const [puzzleName, setPuzzleName] = useState('');
   const [aiProgress, setAIProgress] = useState<string | null>(null);
+  const [pendingAIResult, setPendingAIResult] = useState<AIExtractionResult | null>(null);
 
   // Load draft if provided
   useEffect(() => {
@@ -120,6 +126,14 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
           }
         }
 
+        // Check if the image might be in HEIC format (common on iOS)
+        const isLikelyHEIC =
+          asset.uri.toLowerCase().includes('.heic') || asset.uri.toLowerCase().includes('.heif');
+
+        if (isLikelyHEIC) {
+          console.log('[DEBUG] Detected HEIC format - must convert to JPEG for AI processing');
+        }
+
         const tryManipulate = async (targetWidth: number) => {
           return await ImageManipulator.manipulateAsync(
             asset.uri,
@@ -144,6 +158,24 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
             // This keeps the app usable; aiExtraction.ts will normalize the base64 string.
             console.warn('Image manipulation failed, falling back to picker base64:', e2);
             manipulated = null;
+
+            // If we have no usable base64 OR image is HEIC, show error and bail
+            // HEIC cannot be sent to Claude API - must be converted to JPEG/PNG
+            if (!base64FromFile || isLikelyHEIC) {
+              const reason = isLikelyHEIC
+                ? 'This image is in HEIC format which must be converted to JPEG for AI processing, but the conversion failed.'
+                : 'Failed to process the selected image.';
+
+              Alert.alert(
+                'Image Processing Error',
+                `${reason}\n\nThis can happen with certain image formats or if the image is too large. Please try:\n\n1. Taking a screenshot of the puzzle (screenshots are usually PNG)\n2. Converting the image to JPEG first\n3. Using a different image`,
+                [{ text: 'OK' }]
+              );
+              if (!hasImageRef.current) {
+                navigation.goBack();
+              }
+              return;
+            }
           }
         }
 
@@ -151,6 +183,23 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
         const finalWidth = manipulated?.width || asset.width;
         const finalHeight = manipulated?.height || asset.height;
         const finalBase64 = manipulated?.base64 || base64FromFile || undefined;
+
+        // Validate base64 exists and looks valid
+        if (!finalBase64 || finalBase64.length < 100) {
+          Alert.alert(
+            'Image Data Error',
+            'The selected image could not be processed. Please try selecting a different image or taking a screenshot.',
+            [{ text: 'OK' }]
+          );
+          if (!hasImageRef.current) {
+            navigation.goBack();
+          }
+          return;
+        }
+
+        console.log(
+          `[DEBUG] Image prepared - size: ${finalWidth}x${finalHeight}, base64 length: ${finalBase64.length}`
+        );
 
         dispatch({
           type: 'SET_IMAGE',
@@ -181,12 +230,21 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
       return;
     }
 
-    // Get API key from settings
+    // Get API keys from settings
     const settings = await getSettings();
-    if (!settings.anthropicApiKey) {
+
+    // Check if we have at least one API key configured
+    const hasGoogleKey = !!settings.googleApiKey?.trim();
+    const hasAnthropicKey = !!settings.anthropicApiKey?.trim();
+    const hasOpenAIKey = !!settings.openaiApiKey?.trim();
+
+    if (!hasGoogleKey && !hasAnthropicKey && !hasOpenAIKey) {
       Alert.alert(
         'API Key Required',
-        'Please add your Anthropic API key in Settings to use AI extraction.',
+        'Please add at least one API key in Settings to use AI extraction.\n\n' +
+          '🔵 Google (Gemini) - Best for grid detection\n' +
+          '🟠 Anthropic (Claude) - Best for structured output\n' +
+          '🟢 OpenAI (GPT-4o) - General fallback',
         [
           { text: 'Cancel', style: 'cancel' },
           {
@@ -199,44 +257,130 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
     }
 
     dispatch({ type: 'AI_START' });
-    setAIProgress('Starting extraction...');
 
-    const result = await extractPuzzleFromImage(
-      state.image.base64,
-      settings.anthropicApiKey,
-      (progress: ExtractionProgress) => {
-        setAIProgress(progress.message);
-      }
-    );
+    // Get configured strategy
+    const strategy = settings.extractionStrategy || 'accurate';
+    const strategyNames: Record<string, string> = {
+      fast: '⚡ Fast',
+      balanced: '⚖️ Balanced',
+      accurate: '🎯 Accurate',
+      ensemble: '🏆 Maximum Accuracy',
+    };
+    setAIProgress(`Starting ${strategyNames[strategy]} extraction...`);
+
+    // Use new multi-model extraction for maximum accuracy
+    const result = await extractPuzzleMultiModel(state.image.base64, {
+      strategy,
+      apiKeys: {
+        google: settings.googleApiKey,
+        anthropic: settings.anthropicApiKey,
+        openai: settings.openaiApiKey,
+      },
+      onProgress: (progress: EnsembleProgress) => {
+        // Show more detailed progress for ensemble mode
+        const modelInfo = progress.modelsUsed?.length ? ` (${progress.modelsUsed.join(', ')})` : '';
+        setAIProgress(`${progress.message}${modelInfo}`);
+      },
+    });
 
     if (result.success && result.result) {
       const converted = convertAIResultToBuilderState(result.result);
-      dispatch({
-        type: 'AI_SUCCESS',
-        grid: converted.grid,
-        regions: converted.regions,
-        constraints: converted.constraints,
-        dominoes: converted.dominoes,
-        reasoning: result.result.reasoning,
+
+      console.log('[DEBUG] AI extraction result:', {
+        boardRows: result.result.board.rows,
+        boardCols: result.result.board.cols,
+        boardShape: result.result.board.shape,
+        boardRegions: result.result.board.regions,
+        gridLocation: result.result.board.gridLocation,
+        constraintCount: Object.keys(result.result.board.constraints || {}).length,
+        dominoCount: result.result.dominoes.dominoes.length,
+        modelsUsed: result.modelsUsed,
+        timing: result.timing,
       });
+
+      console.log('[DEBUG] Converted state:', {
+        gridRows: converted.grid.rows,
+        gridCols: converted.grid.cols,
+        gridHoles: converted.grid.holes?.length,
+        regionGridSize: converted.regions.regionGrid?.length,
+        constraintCount: Object.keys(converted.constraints.regionConstraints || {}).length,
+        dominoCount: converted.dominoes.length,
+      });
+
+      // Log timing info
+      if (result.timing) {
+        console.log(
+          `[DEBUG] Extraction timing: board=${result.timing.boardMs}ms, dominoes=${result.timing.dominoesMs}ms, total=${result.timing.totalMs}ms`
+        );
+      }
+
       setAIProgress(null);
 
-      // Show appropriate message based on partial vs full success
-      if (result.partial) {
-        Alert.alert(
-          'Partial Success',
-          'Board structure extracted successfully, but domino extraction failed. Please add dominoes manually in Step 4.',
-          [{ text: 'OK' }]
-        );
-      } else {
-        Alert.alert('Success', 'AI extraction complete! Review and adjust the results.');
-      }
+      // Show verification modal instead of immediately applying
+      setPendingAIResult(result.result);
     } else {
       dispatch({ type: 'AI_ERROR', error: result.error || 'Unknown error' });
       setAIProgress(null);
-      Alert.alert('Extraction Failed', result.error || 'Failed to extract puzzle data');
+
+      // Provide more helpful error message
+      let errorMsg = result.error || 'Failed to extract puzzle data';
+      let helpText = '';
+
+      if (errorMsg.includes('API key')) {
+        helpText = '\n\nPlease check your API key in Settings.';
+      } else if (errorMsg.includes('Could not process image') || errorMsg.includes('400')) {
+        errorMsg = 'Board extraction failed: Could not process image';
+        helpText =
+          '\n\nThe image format may not be compatible with the AI service. This can happen when:\n\n• The image is in an unsupported format (e.g., HEIC)\n• The image failed to convert to JPEG\n• The image is corrupted\n\nPlease try:\n1. Taking a screenshot of the puzzle instead\n2. Converting the image to JPEG/PNG first\n3. Using a different image';
+      } else if (errorMsg.includes('model')) {
+        helpText = '\n\nThere may be an issue with the AI model. Please try again later.';
+      } else if (errorMsg.includes('JSON') || errorMsg.includes('parsing')) {
+        helpText = '\n\nThe AI response was malformed. Try again, or extract manually.';
+      } else {
+        helpText = '\n\nYou can still build the puzzle manually through the steps.';
+      }
+
+      Alert.alert('Extraction Failed', errorMsg + helpText);
     }
   }, [state.image, navigation]);
+
+  const handleAcceptAIResult = useCallback(() => {
+    if (!pendingAIResult) return;
+
+    const converted = convertAIResultToBuilderState(pendingAIResult);
+    const boardConf = pendingAIResult.board.confidence;
+    const dominoConf = pendingAIResult.dominoes.confidence;
+
+    dispatch({
+      type: 'AI_SUCCESS',
+      grid: converted.grid,
+      regions: converted.regions,
+      constraints: converted.constraints,
+      dominoes: converted.dominoes,
+      reasoning: pendingAIResult.reasoning,
+      confidence: {
+        grid: boardConf?.grid,
+        regions: boardConf?.regions,
+        constraints: boardConf?.constraints,
+        dominoes: dominoConf,
+      },
+    });
+
+    console.log('[DEBUG] Accepted and applied AI result');
+    setPendingAIResult(null);
+
+    // Auto-navigate to Step 2 to review regions
+    dispatch({ type: 'SET_STEP', step: 2 });
+  }, [pendingAIResult]);
+
+  const handleRejectAIResult = useCallback(() => {
+    console.log('[DEBUG] User rejected AI result');
+    setPendingAIResult(null);
+    Alert.alert(
+      'Extraction Rejected',
+      'You can manually build the puzzle using the step-by-step wizard.'
+    );
+  }, []);
 
   const goToStep = (step: BuilderStep) => {
     dispatch({ type: 'SET_STEP', step });
@@ -470,6 +614,17 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
           </View>
         </View>
       </Modal>
+
+      {/* AI Verification Modal */}
+      {pendingAIResult && (
+        <AIVerificationModal
+          visible={true}
+          boardResult={pendingAIResult.board}
+          dominoResult={pendingAIResult.dominoes}
+          onAccept={handleAcceptAIResult}
+          onReject={handleRejectAIResult}
+        />
+      )}
     </SafeAreaView>
   );
 }

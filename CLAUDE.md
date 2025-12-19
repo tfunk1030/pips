@@ -40,21 +40,25 @@ npm run web       # Web browser
 The mobile app follows a clear modular architecture:
 
 - **`src/model/`**: Core data structures, YAML/JSON parsing, puzzle normalization
+
   - `types.ts`: TypeScript interfaces for puzzles, solutions, constraints
   - `parser.ts`: YAML/JSON puzzle specification parser
   - `normalize.ts`: Precomputes adjacency lists, region cells, valid edges
 
 - **`src/solver/`**: CSP solver engine (backtracking with constraint propagation)
+
   - `solver.ts`: Main backtracking algorithm with async/non-blocking support
   - `heuristics.ts`: MRV (Minimum Remaining Values) heuristic for variable ordering
   - `propagate.ts`: Forward checking and constraint propagation
   - `explain.ts`: Generates explanations for unsatisfiable puzzles
 
 - **`src/validator/`**: Validation modules
+
   - `validateSpec.ts`: Ensures puzzle specification is well-formed
   - `validateSolution.ts`: Verifies solution correctness against all constraints
 
 - **`src/app/`**: UI layer
+
   - `screens/`: React Native screens (Home, PuzzleViewer, Solve, Settings)
   - `components/`: Reusable components (GridRenderer with SVG-based rendering)
   - `navigation/`: Navigation setup using React Navigation
@@ -66,12 +70,14 @@ The mobile app follows a clear modular architecture:
 ### CSP Solver Algorithm
 
 The solver uses:
+
 - **Backtracking** with constraint propagation
 - **MRV Heuristic**: Chooses most constrained edge first
 - **Forward Checking**: Prunes domains after each assignment
 - **Non-blocking execution**: Yields to event loop every N iterations to keep UI responsive
 
 Constraint types supported:
+
 - `sum`: Region values must sum to N (with operators: ==, !=, <, >)
 - `all_equal`: All values in region must be identical
 
@@ -81,6 +87,31 @@ Constraint types supported:
 - The solver runs incrementally/non-blocking to keep UI responsive
 - Puzzle specifications use YAML format (see `src/samples/` for examples)
 - TypeScript strict mode is enabled
+
+### AI Extraction Features
+
+The mobile app includes AI-powered puzzle extraction from screenshots using Claude Vision API:
+
+#### Enhanced Extraction (Implemented Dec 2025)
+
+- **Confidence Scores:** AI returns confidence metrics (0.0-1.0) for grid, regions, and constraints
+- **Visual Feedback:** Confidence indicators in UI with color coding (green/orange/red)
+- **Smart Prompts:** Explicit format examples and common mistake avoidance in prompts
+- **Self-Verification:** Optional verification pass where Claude checks its own extraction (triggered on low confidence)
+- **Better Error Messages:** Context-aware error messages with actionable next steps
+
+#### Extraction Flow
+
+1. **Pass 1: Board Structure** - Extracts grid dimensions, holes, regions, constraints with confidence scores
+2. **Optional Verification** - If confidence < 90%, Claude verifies and corrects its extraction
+3. **Pass 2: Dominoes** - Extracts domino tiles from reference tray with confidence score
+4. **User Review** - Confidence indicators help users identify areas needing verification
+
+#### Configuration
+
+- API key stored in app Settings
+- Verification pass optional (default: disabled, auto-enabled on low confidence)
+- See `IMPLEMENTATION_SUMMARY.md` for detailed implementation notes
 
 ## Python Backend (Root Directory)
 
@@ -103,12 +134,14 @@ python extract_board_cells_v4_edges_plus_masks.py
 ### Architecture
 
 - **`solve_pips.py`**: Main CSP solver for Pips puzzles
+
   - Parses YAML puzzle specifications with ASCII art board layouts
   - Implements backtracking with constraint propagation
   - Uses MRV-ish heuristic for cell selection
   - Supports sum and all_equal constraints with comparison operators
 
 - **`extract_board_cells_gridlines.py`**: Computer vision pipeline for extracting puzzle grid from screenshots
+
   - Uses edge detection and projection analysis to find grid lines
   - Filters candidates by interior brightness to distinguish real cells from background
   - Outputs cell coordinates to `cells.txt`
@@ -132,8 +165,8 @@ pips:
 dominoes:
   unique: true
   tiles:
-    - [6,1]
-    - [6,2]
+    - [6, 1]
+    - [6, 2]
     # ... more domino pairs
 
 board:
@@ -148,8 +181,8 @@ board:
     ##HGFD####
 
 region_constraints:
-  A: { type: sum, op: "==", value: 12 }
-  B: { type: sum, op: "<",  value: 2 }
+  A: { type: sum, op: '==', value: 12 }
+  B: { type: sum, op: '<', value: 2 }
   E: { type: all_equal }
 ```
 

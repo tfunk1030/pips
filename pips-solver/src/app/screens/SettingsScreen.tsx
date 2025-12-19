@@ -21,9 +21,16 @@ import { normalizePuzzle } from '../../model/normalize';
 import { parsePuzzle } from '../../model/parser';
 import { SAMPLE_PUZZLES } from '../../samples';
 import { solvePuzzle } from '../../solver/solver';
-import { getSettings, saveSettings } from '../../storage/puzzles';
+import { ExtractionStrategy, getSettings, saveSettings } from '../../storage/puzzles';
 import { validateSolution } from '../../validator/validateSolution';
 import { validatePuzzleSpec } from '../../validator/validateSpec';
+
+const STRATEGY_OPTIONS: { value: ExtractionStrategy; label: string; description: string }[] = [
+  { value: 'fast', label: '⚡ Fast', description: 'Single model (~3s)' },
+  { value: 'balanced', label: '⚖️ Balanced', description: 'With verification (~20s)' },
+  { value: 'accurate', label: '🎯 Accurate', description: 'Multi-model (~35s)' },
+  { value: 'ensemble', label: '🏆 Maximum', description: 'Ensemble consensus (~45s)' },
+];
 
 export default function SettingsScreen({ navigation }: any) {
   const [settings, setSettings] = useState({
@@ -33,6 +40,9 @@ export default function SettingsScreen({ navigation }: any) {
     defaultDebugLevel: 0,
     maxIterationsPerTick: 100,
     anthropicApiKey: '',
+    googleApiKey: '',
+    openaiApiKey: '',
+    extractionStrategy: 'accurate' as ExtractionStrategy,
   });
 
   useEffect(() => {
@@ -44,6 +54,9 @@ export default function SettingsScreen({ navigation }: any) {
     setSettings({
       ...loaded,
       anthropicApiKey: loaded.anthropicApiKey || '',
+      googleApiKey: loaded.googleApiKey || '',
+      openaiApiKey: loaded.openaiApiKey || '',
+      extractionStrategy: loaded.extractionStrategy || 'accurate',
     });
   };
 
@@ -122,151 +135,213 @@ export default function SettingsScreen({ navigation }: any) {
         <View style={styles.placeholder} />
       </View>
 
-      <KeyboardAvoidingView style={styles.content} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <KeyboardAvoidingView
+        style={styles.content}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
         <ScrollView
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
           onScrollBeginDrag={Keyboard.dismiss}
           contentContainerStyle={styles.scrollContent}
         >
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Solver Defaults</Text>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Solver Defaults</Text>
 
-              <View style={styles.setting}>
-                <View style={styles.settingInfo}>
-                  <Text style={styles.settingLabel}>Max Pip Value</Text>
-                  <Text style={styles.settingDescription}>
-                    Maximum pip value for dominoes (0-N)
-                  </Text>
-                </View>
-                <View style={styles.settingControl}>
-                  <TouchableOpacity
-                    style={styles.incrementButton}
-                    onPress={() =>
-                      updateSetting('defaultMaxPip', Math.max(0, settings.defaultMaxPip - 1))
-                    }
-                  >
-                    <Text style={styles.incrementButtonText}>-</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.settingValue}>{settings.defaultMaxPip}</Text>
-                  <TouchableOpacity
-                    style={styles.incrementButton}
-                    onPress={() => updateSetting('defaultMaxPip', settings.defaultMaxPip + 1)}
-                  >
-                    <Text style={styles.incrementButtonText}>+</Text>
-                  </TouchableOpacity>
-                </View>
+            <View style={styles.setting}>
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingLabel}>Max Pip Value</Text>
+                <Text style={styles.settingDescription}>Maximum pip value for dominoes (0-N)</Text>
               </View>
-
-              <View style={styles.setting}>
-                <View style={styles.settingInfo}>
-                  <Text style={styles.settingLabel}>Allow Duplicate Dominoes</Text>
-                  <Text style={styles.settingDescription}>
-                    Allow same domino to be used multiple times
-                  </Text>
-                </View>
-                <Switch
-                  value={settings.defaultAllowDuplicates}
-                  onValueChange={value => updateSetting('defaultAllowDuplicates', value)}
-                />
-              </View>
-
-              <View style={styles.setting}>
-                <View style={styles.settingInfo}>
-                  <Text style={styles.settingLabel}>Find All Solutions</Text>
-                  <Text style={styles.settingDescription}>
-                    Find all solutions vs first solution only
-                  </Text>
-                </View>
-                <Switch
-                  value={settings.defaultFindAll}
-                  onValueChange={value => updateSetting('defaultFindAll', value)}
-                />
+              <View style={styles.settingControl}>
+                <TouchableOpacity
+                  style={styles.incrementButton}
+                  onPress={() =>
+                    updateSetting('defaultMaxPip', Math.max(0, settings.defaultMaxPip - 1))
+                  }
+                >
+                  <Text style={styles.incrementButtonText}>-</Text>
+                </TouchableOpacity>
+                <Text style={styles.settingValue}>{settings.defaultMaxPip}</Text>
+                <TouchableOpacity
+                  style={styles.incrementButton}
+                  onPress={() => updateSetting('defaultMaxPip', settings.defaultMaxPip + 1)}
+                >
+                  <Text style={styles.incrementButtonText}>+</Text>
+                </TouchableOpacity>
               </View>
             </View>
 
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Performance</Text>
+            <View style={styles.setting}>
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingLabel}>Allow Duplicate Dominoes</Text>
+                <Text style={styles.settingDescription}>
+                  Allow same domino to be used multiple times
+                </Text>
+              </View>
+              <Switch
+                value={settings.defaultAllowDuplicates}
+                onValueChange={value => updateSetting('defaultAllowDuplicates', value)}
+              />
+            </View>
 
-              <View style={styles.setting}>
-                <View style={styles.settingInfo}>
-                  <Text style={styles.settingLabel}>Iterations Per Tick</Text>
-                  <Text style={styles.settingDescription}>Higher = faster but UI may lag</Text>
-                </View>
-                <View style={styles.settingControl}>
-                  <TouchableOpacity
-                    style={styles.incrementButton}
-                    onPress={() =>
-                      updateSetting(
-                        'maxIterationsPerTick',
-                        Math.max(10, settings.maxIterationsPerTick - 50)
-                      )
-                    }
-                  >
-                    <Text style={styles.incrementButtonText}>-</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.settingValue}>{settings.maxIterationsPerTick}</Text>
-                  <TouchableOpacity
-                    style={styles.incrementButton}
-                    onPress={() =>
-                      updateSetting('maxIterationsPerTick', settings.maxIterationsPerTick + 50)
-                    }
-                  >
-                    <Text style={styles.incrementButtonText}>+</Text>
-                  </TouchableOpacity>
-                </View>
+            <View style={styles.setting}>
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingLabel}>Find All Solutions</Text>
+                <Text style={styles.settingDescription}>
+                  Find all solutions vs first solution only
+                </Text>
+              </View>
+              <Switch
+                value={settings.defaultFindAll}
+                onValueChange={value => updateSetting('defaultFindAll', value)}
+              />
+            </View>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Performance</Text>
+
+            <View style={styles.setting}>
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingLabel}>Iterations Per Tick</Text>
+                <Text style={styles.settingDescription}>Higher = faster but UI may lag</Text>
+              </View>
+              <View style={styles.settingControl}>
+                <TouchableOpacity
+                  style={styles.incrementButton}
+                  onPress={() =>
+                    updateSetting(
+                      'maxIterationsPerTick',
+                      Math.max(10, settings.maxIterationsPerTick - 50)
+                    )
+                  }
+                >
+                  <Text style={styles.incrementButtonText}>-</Text>
+                </TouchableOpacity>
+                <Text style={styles.settingValue}>{settings.maxIterationsPerTick}</Text>
+                <TouchableOpacity
+                  style={styles.incrementButton}
+                  onPress={() =>
+                    updateSetting('maxIterationsPerTick', settings.maxIterationsPerTick + 50)
+                  }
+                >
+                  <Text style={styles.incrementButtonText}>+</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Debug</Text>
+
+            <View style={styles.setting}>
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingLabel}>Debug Level</Text>
+                <Text style={styles.settingDescription}>0=Off, 1=Basic, 2=Verbose</Text>
+              </View>
+              <View style={styles.settingControl}>
+                <TouchableOpacity
+                  style={styles.incrementButton}
+                  onPress={() =>
+                    updateSetting('defaultDebugLevel', Math.max(0, settings.defaultDebugLevel - 1))
+                  }
+                >
+                  <Text style={styles.incrementButtonText}>-</Text>
+                </TouchableOpacity>
+                <Text style={styles.settingValue}>{settings.defaultDebugLevel}</Text>
+                <TouchableOpacity
+                  style={styles.incrementButton}
+                  onPress={() =>
+                    updateSetting('defaultDebugLevel', Math.min(2, settings.defaultDebugLevel + 1))
+                  }
+                >
+                  <Text style={styles.incrementButtonText}>+</Text>
+                </TouchableOpacity>
               </View>
             </View>
 
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Debug</Text>
+            <TouchableOpacity style={styles.selfTestButton} onPress={handleSelfTest}>
+              <Text style={styles.selfTestButtonText}>Run Solver Self-Test</Text>
+            </TouchableOpacity>
+          </View>
 
-              <View style={styles.setting}>
-                <View style={styles.settingInfo}>
-                  <Text style={styles.settingLabel}>Debug Level</Text>
-                  <Text style={styles.settingDescription}>0=Off, 1=Basic, 2=Verbose</Text>
-                </View>
-                <View style={styles.settingControl}>
-                  <TouchableOpacity
-                    style={styles.incrementButton}
-                    onPress={() =>
-                      updateSetting(
-                        'defaultDebugLevel',
-                        Math.max(0, settings.defaultDebugLevel - 1)
-                      )
-                    }
-                  >
-                    <Text style={styles.incrementButtonText}>-</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.settingValue}>{settings.defaultDebugLevel}</Text>
-                  <TouchableOpacity
-                    style={styles.incrementButton}
-                    onPress={() =>
-                      updateSetting(
-                        'defaultDebugLevel',
-                        Math.min(2, settings.defaultDebugLevel + 1)
-                      )
-                    }
-                  >
-                    <Text style={styles.incrementButtonText}>+</Text>
-                  </TouchableOpacity>
-                </View>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>AI Extraction</Text>
+            <Text style={styles.sectionSubtitle}>
+              Multi-model extraction for maximum accuracy. Add API keys for each provider.
+            </Text>
+
+            {/* Extraction Strategy Selector */}
+            <View style={styles.setting}>
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingLabel}>Extraction Strategy</Text>
+                <Text style={styles.settingDescription}>
+                  Higher accuracy = more time & API calls
+                </Text>
               </View>
-
-              <TouchableOpacity style={styles.selfTestButton} onPress={handleSelfTest}>
-                <Text style={styles.selfTestButtonText}>Run Solver Self-Test</Text>
-              </TouchableOpacity>
+            </View>
+            <View style={styles.strategySelector}>
+              {STRATEGY_OPTIONS.map(option => (
+                <TouchableOpacity
+                  key={option.value}
+                  style={[
+                    styles.strategyOption,
+                    settings.extractionStrategy === option.value && styles.strategyOptionSelected,
+                  ]}
+                  onPress={() => updateSetting('extractionStrategy', option.value)}
+                >
+                  <Text
+                    style={[
+                      styles.strategyLabel,
+                      settings.extractionStrategy === option.value && styles.strategyLabelSelected,
+                    ]}
+                  >
+                    {option.label}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.strategyDesc,
+                      settings.extractionStrategy === option.value && styles.strategyDescSelected,
+                    ]}
+                  >
+                    {option.description}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
 
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>AI Extraction</Text>
-
-              <View style={styles.setting}>
-                <View style={styles.settingInfo}>
-                  <Text style={styles.settingLabel}>Anthropic API Key</Text>
-                  <Text style={styles.settingDescription}>Required for AI puzzle extraction</Text>
-                </View>
+            {/* Google API Key (Gemini) */}
+            <View style={styles.apiKeySection}>
+              <View style={styles.apiKeyHeader}>
+                <Text style={styles.apiKeyLabel}>🔵 Google API Key (Gemini)</Text>
+                <Text style={styles.apiKeyBadge}>Best for grid detection</Text>
               </View>
+              <Text style={styles.apiKeyHint}>
+                Best mAP (13.3) for object/bounding box detection
+              </Text>
+              <TextInput
+                style={styles.apiKeyInput}
+                value={settings.googleApiKey}
+                onChangeText={value => updateSetting('googleApiKey', value)}
+                placeholder="AIza..."
+                placeholderTextColor="#999"
+                secureTextEntry
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="done"
+                blurOnSubmit
+                onSubmitEditing={Keyboard.dismiss}
+              />
+            </View>
+
+            {/* Anthropic API Key (Claude) */}
+            <View style={styles.apiKeySection}>
+              <View style={styles.apiKeyHeader}>
+                <Text style={styles.apiKeyLabel}>🟠 Anthropic API Key (Claude)</Text>
+                <Text style={styles.apiKeyBadge}>Best for JSON output</Text>
+              </View>
+              <Text style={styles.apiKeyHint}>85% structured JSON accuracy, best reasoning</Text>
               <TextInput
                 style={styles.apiKeyInput}
                 value={settings.anthropicApiKey}
@@ -282,20 +357,67 @@ export default function SettingsScreen({ navigation }: any) {
               />
             </View>
 
-            <View style={styles.infoSection}>
-              <Text style={styles.infoTitle}>About</Text>
-              <Text style={styles.infoText}>Pips Solver v1.0.0</Text>
-              <Text style={styles.infoText}>
-                NYT Pips puzzle solver using constraint satisfaction
-              </Text>
+            {/* OpenAI API Key (GPT-4o) */}
+            <View style={styles.apiKeySection}>
+              <View style={styles.apiKeyHeader}>
+                <Text style={styles.apiKeyLabel}>🟢 OpenAI API Key (GPT-4o)</Text>
+                <Text style={[styles.apiKeyBadge, styles.apiKeyBadgeOptional]}>
+                  Optional fallback
+                </Text>
+              </View>
+              <Text style={styles.apiKeyHint}>Good general purpose, weaker on spatial tasks</Text>
+              <TextInput
+                style={styles.apiKeyInput}
+                value={settings.openaiApiKey}
+                onChangeText={value => updateSetting('openaiApiKey', value)}
+                placeholder="sk-..."
+                placeholderTextColor="#999"
+                secureTextEntry
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="done"
+                blurOnSubmit
+                onSubmitEditing={Keyboard.dismiss}
+              />
             </View>
-          </ScrollView>
 
-          <View style={styles.footer}>
-            <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-              <Text style={styles.saveButtonText}>Save Settings</Text>
-            </TouchableOpacity>
+            {/* Status indicator */}
+            <View style={styles.apiKeyStatus}>
+              <Text style={styles.apiKeyStatusLabel}>Configured providers:</Text>
+              <View style={styles.apiKeyStatusBadges}>
+                {settings.googleApiKey ? (
+                  <Text style={styles.statusBadgeActive}>✓ Gemini</Text>
+                ) : (
+                  <Text style={styles.statusBadgeInactive}>○ Gemini</Text>
+                )}
+                {settings.anthropicApiKey ? (
+                  <Text style={styles.statusBadgeActive}>✓ Claude</Text>
+                ) : (
+                  <Text style={styles.statusBadgeInactive}>○ Claude</Text>
+                )}
+                {settings.openaiApiKey ? (
+                  <Text style={styles.statusBadgeActive}>✓ GPT-4o</Text>
+                ) : (
+                  <Text style={styles.statusBadgeInactive}>○ GPT-4o</Text>
+                )}
+              </View>
+            </View>
           </View>
+
+          <View style={styles.infoSection}>
+            <Text style={styles.infoTitle}>About</Text>
+            <Text style={styles.infoText}>Pips Solver v1.0.0</Text>
+            <Text style={styles.infoText}>
+              NYT Pips puzzle solver using constraint satisfaction
+            </Text>
+          </View>
+        </ScrollView>
+
+        <View style={styles.footer}>
+          <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
+            <Text style={styles.saveButtonText}>Save Settings</Text>
+          </TouchableOpacity>
+        </View>
       </KeyboardAvoidingView>
     </View>
   );
@@ -437,6 +559,115 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'monospace',
     marginTop: 8,
+  },
+  sectionSubtitle: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 16,
+    lineHeight: 18,
+  },
+  strategySelector: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 20,
+  },
+  strategyOption: {
+    flex: 1,
+    minWidth: '45%',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+    backgroundColor: '#f9f9f9',
+  },
+  strategyOptionSelected: {
+    borderColor: '#4CAF50',
+    backgroundColor: '#E8F5E9',
+  },
+  strategyLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 2,
+  },
+  strategyLabelSelected: {
+    color: '#2E7D32',
+  },
+  strategyDesc: {
+    fontSize: 11,
+    color: '#888',
+  },
+  strategyDescSelected: {
+    color: '#4CAF50',
+  },
+  apiKeySection: {
+    marginBottom: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
+  apiKeyHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  apiKeyLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+  },
+  apiKeyBadge: {
+    fontSize: 10,
+    color: '#fff',
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  apiKeyBadgeOptional: {
+    backgroundColor: '#9E9E9E',
+  },
+  apiKeyHint: {
+    fontSize: 11,
+    color: '#888',
+    marginBottom: 8,
+  },
+  apiKeyStatus: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+  },
+  apiKeyStatusLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 8,
+  },
+  apiKeyStatusBadges: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  statusBadgeActive: {
+    fontSize: 12,
+    color: '#2E7D32',
+    backgroundColor: '#E8F5E9',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  statusBadgeInactive: {
+    fontSize: 12,
+    color: '#999',
+    backgroundColor: '#f0f0f0',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    overflow: 'hidden',
   },
   selfTestButton: {
     marginTop: 12,

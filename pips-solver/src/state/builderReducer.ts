@@ -240,6 +240,13 @@ export function builderReducer(
       return { ...state, aiStatus: 'extracting', aiError: undefined };
 
     case 'AI_SUCCESS': {
+      console.log('[DEBUG] builderReducer AI_SUCCESS:', {
+        gridData: action.grid,
+        regionsData: action.regions,
+        constraintsData: action.constraints,
+        dominoCount: action.dominoes.length,
+      });
+
       // Merge AI results into state
       // Calculate optimal bounds for the new grid if we have image dimensions
       let gridBounds = action.grid.bounds || state.grid.bounds;
@@ -249,11 +256,21 @@ export function builderReducer(
           width: state.image.width,
           height: state.image.height,
         });
+        console.log('[DEBUG] Calculated optimal bounds:', gridBounds);
       }
 
       const newGrid = { ...state.grid, ...action.grid, bounds: gridBounds };
       const newRegions = { ...state.regions, ...action.regions };
       const newConstraints = { ...state.constraints, ...action.constraints };
+
+      console.log('[DEBUG] New state after AI_SUCCESS:', {
+        gridRows: newGrid.rows,
+        gridCols: newGrid.cols,
+        regionGridSize: newRegions.regionGrid?.length,
+        constraintCount: Object.keys(newConstraints.regionConstraints || {}).length,
+        dominoCount: action.dominoes.length,
+      });
+
       return {
         ...state,
         grid: newGrid,
@@ -262,6 +279,7 @@ export function builderReducer(
         dominoes: { ...state.dominoes, dominoes: action.dominoes },
         aiStatus: 'done',
         aiReasoning: action.reasoning,
+        aiConfidence: action.confidence,
       };
     }
 
