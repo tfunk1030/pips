@@ -30,6 +30,16 @@ export function explainUnsatisfiable(
     });
   }
 
+  // Check for orphaned cells (cells with no adjacent unfilled cells)
+  const orphanedCells = findOrphanedCells(puzzle, state);
+  if (orphanedCells.length > 0) {
+    conflicts.push({
+      type: 'no_valid_placement',
+      description: `${orphanedCells.length} cell(s) cannot form domino edges (all neighbors are filled or holes)`,
+      affectedCells: orphanedCells,
+    });
+  }
+
   // Check for impossible region constraints
   const regionConflicts = findRegionConflicts(puzzle, state);
   conflicts.push(...regionConflicts);
@@ -75,6 +85,75 @@ function findEmptyDomains(state: SolverState): Cell[] {
   }
 
   return cells;
+}
+
+/**
+ * Find cells that are unfilled but have no unfilled neighbors (orphaned)
+ * These cells cannot form domino edges and indicate a dead-end path
+ */
+function findOrphanedCells(puzzle: NormalizedPuzzle, state: SolverState): Cell[] {
+  const orphaned: Cell[] = [];
+
+  for (let row = 0; row < puzzle.spec.rows; row++) {
+    for (let col = 0; col < puzzle.spec.cols; col++) {
+      // Skip holes
+      if (puzzle.spec.regions[row]?.[col] === -1) {
+        continue;
+      }
+
+      // Skip already filled cells
+      if (state.gridPips[row][col] !== null) {
+        continue;
+      }
+
+      // Check if any adjacent cell is also unfilled
+      const hasUnfilledNeighbor = hasAdjacentUnfilledCell(puzzle, state, row, col);
+      if (!hasUnfilledNeighbor) {
+        orphaned.push({ row, col });
+      }
+    }
+  }
+
+  return orphaned;
+}
+
+/**
+ * Check if a cell has at least one adjacent unfilled cell
+ */
+function hasAdjacentUnfilledCell(
+  puzzle: NormalizedPuzzle,
+  state: SolverState,
+  row: number,
+  col: number
+): boolean {
+  const directions = [
+    { dr: -1, dc: 0 }, // up
+    { dr: 1, dc: 0 },  // down
+    { dr: 0, dc: -1 }, // left
+    { dr: 0, dc: 1 },  // right
+  ];
+
+  for (const { dr, dc } of directions) {
+    const newRow = row + dr;
+    const newCol = col + dc;
+
+    // Check bounds
+    if (newRow < 0 || newRow >= puzzle.spec.rows || newCol < 0 || newCol >= puzzle.spec.cols) {
+      continue;
+    }
+
+    // Skip holes
+    if (puzzle.spec.regions[newRow]?.[newCol] === -1) {
+      continue;
+    }
+
+    // Check if neighbor is unfilled
+    if (state.gridPips[newRow][newCol] === null) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /**

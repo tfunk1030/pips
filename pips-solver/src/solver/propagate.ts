@@ -135,6 +135,72 @@ export function propagateConstraints(
     }
   }
 
+  // Check for orphaned cells (cells with no adjacent unfilled cells)
+  // This helps detect dead-ends early and prune the search space
+  if (!checkNoOrphanedCells(puzzle, state)) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Check that no unfilled cell is orphaned (has no adjacent unfilled cells)
+ * Returns false if any orphaned cell is found
+ */
+function checkNoOrphanedCells(
+  puzzle: NormalizedPuzzle,
+  state: SolverState
+): boolean {
+  for (let row = 0; row < puzzle.spec.rows; row++) {
+    for (let col = 0; col < puzzle.spec.cols; col++) {
+      // Skip holes
+      if (puzzle.spec.regions[row]?.[col] === -1) {
+        continue;
+      }
+
+      // Skip already filled cells
+      if (state.gridPips[row][col] !== null) {
+        continue;
+      }
+
+      // Check if this cell has at least one adjacent unfilled cell
+      let hasUnfilledNeighbor = false;
+      const directions = [
+        { dr: -1, dc: 0 }, // up
+        { dr: 1, dc: 0 },  // down
+        { dr: 0, dc: -1 }, // left
+        { dr: 0, dc: 1 },  // right
+      ];
+
+      for (const { dr, dc } of directions) {
+        const newRow = row + dr;
+        const newCol = col + dc;
+
+        // Check bounds
+        if (newRow < 0 || newRow >= puzzle.spec.rows || newCol < 0 || newCol >= puzzle.spec.cols) {
+          continue;
+        }
+
+        // Skip holes
+        if (puzzle.spec.regions[newRow]?.[newCol] === -1) {
+          continue;
+        }
+
+        // Check if neighbor is unfilled
+        if (state.gridPips[newRow][newCol] === null) {
+          hasUnfilledNeighbor = true;
+          break;
+        }
+      }
+
+      // If no unfilled neighbor, this cell is orphaned - dead end
+      if (!hasUnfilledNeighbor) {
+        return false;
+      }
+    }
+  }
+
   return true;
 }
 

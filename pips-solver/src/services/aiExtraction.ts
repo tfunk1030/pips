@@ -1272,21 +1272,45 @@ export function convertAIResultToBuilderState(result: AIExtractionResult): {
 } {
   const { board, dominoes } = result;
 
-  // Parse shape to create holes array
-  const shapeLines = board.shape
-    .trim()
-    .split('\n')
-    .map(line => line.trim());
-  const rows = shapeLines.length;
-  const cols = shapeLines[0]?.length || 0;
+  // Helper to normalize line breaks - AI may return \\n (escaped) or \n (actual newlines)
+  const normalizeLineBreaks = (str: string): string => {
+    // First replace literal backslash-n with newline, then normalize
+    return str.replace(/\\n/g, '\n').trim();
+  };
 
-  const holes: boolean[][] = shapeLines.map(line => Array.from(line).map(char => char === '#'));
+  // Parse shape to create holes array
+  const normalizedShape = normalizeLineBreaks(board.shape);
+  const shapeLines = normalizedShape
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line.length > 0);
+  const rows = shapeLines.length;
+  const cols = Math.max(...shapeLines.map(line => line.length), 0);
+
+  console.log('[DEBUG] convertAIResultToBuilderState: parsed shape', {
+    originalShape: board.shape.substring(0, 100),
+    normalizedShape: normalizedShape.substring(0, 100),
+    rows,
+    cols,
+    shapeLines,
+  });
+
+  // Ensure each row has consistent column count (pad with '#' if needed)
+  const holes: boolean[][] = shapeLines.map(line => {
+    const chars = Array.from(line);
+    // Pad short rows with '#' (holes)
+    while (chars.length < cols) {
+      chars.push('#');
+    }
+    return chars.map(char => char === '#');
+  });
 
   // Parse regions
-  const regionLines = board.regions
-    .trim()
+  const normalizedRegions = normalizeLineBreaks(board.regions);
+  const regionLines = normalizedRegions
     .split('\n')
-    .map(line => line.trim());
+    .map(line => line.trim())
+    .filter(line => line.length > 0);
 
   const labelToIndex: Record<string, number> = {};
   let nextIndex = 0;

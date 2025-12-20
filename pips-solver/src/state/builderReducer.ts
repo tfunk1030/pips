@@ -40,7 +40,8 @@ export function builderReducer(
       return { ...state, grid: { ...state.grid, bounds: action.bounds } };
 
     case 'SET_ROWS': {
-      const newRows = Math.max(2, Math.min(8, action.rows));
+      // Allow up to 12 rows to match AI extraction capability
+      const newRows = Math.max(2, Math.min(12, action.rows));
       return {
         ...state,
         grid: {
@@ -56,7 +57,8 @@ export function builderReducer(
     }
 
     case 'SET_COLS': {
-      const newCols = Math.max(2, Math.min(8, action.cols));
+      // Allow up to 12 cols to match AI extraction capability
+      const newCols = Math.max(2, Math.min(12, action.cols));
       return {
         ...state,
         grid: {
@@ -72,8 +74,9 @@ export function builderReducer(
     }
 
     case 'RESIZE_GRID': {
-      const rows = Math.max(2, Math.min(8, action.rows));
-      const cols = Math.max(2, Math.min(8, action.cols));
+      // Allow up to 12x12 to match AI extraction capability
+      const rows = Math.max(2, Math.min(12, action.rows));
+      const cols = Math.max(2, Math.min(12, action.cols));
       return {
         ...state,
         grid: {
