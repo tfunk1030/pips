@@ -22,6 +22,21 @@ export {
   type ExtractionProgress as EnsembleProgress,
 } from './ensembleExtraction';
 
+// CV Extraction (hybrid approach)
+export {
+  checkCVServiceHealth,
+  createGeometryConstrainedPrompt,
+  cropDominoRegion,
+  cropPuzzleRegion,
+  extractGeometryWithCV,
+  getCVServiceURL,
+  setCVServiceURL,
+  validateRegionsMatchShape,
+  type CVExtractionResult,
+  type CellBounds,
+  type CropResult,
+} from './cvExtraction';
+
 // Model Clients (for direct API access)
 export {
   callMultipleModels,

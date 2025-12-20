@@ -2,8 +2,9 @@
  * Model Configuration
  * Multi-model configuration for maximum accuracy extraction
  *
- * Based on December 2025 benchmarks:
- * - Gemini 2.5 Pro: Best mAP (13.3) for object/bounding box detection
+ * Updated December 2025:
+ * - Gemini 3 Flash: Latest model, 3x faster than 2.5 Pro, top benchmarks (GPQA 90.4%)
+ * - Gemini 2.5 Pro/Flash: Stable fallbacks
  * - Claude Sonnet 4: Best structured JSON accuracy (85%)
  * - GPT-4o: Good for verification, struggles with spatial tasks
  */
@@ -33,13 +34,25 @@ export interface ModelConfig {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// Available Models (December 2025)
+// Available Models (Updated December 20, 2025)
 // ════════════════════════════════════════════════════════════════════════════
 
 export const MODELS: Record<string, ModelConfig> = {
-  // Gemini models - Best for object detection and bounding boxes
+  // Gemini 3 Flash - Latest model (Dec 2025), 3x faster than 2.5 Pro
+  'gemini-3-flash': {
+    id: 'gemini-3-flash-preview',
+    provider: 'google',
+    displayName: 'Gemini 3 Flash',
+    spatialScore: 0.96, // Enhanced multimodal, top benchmark scores
+    jsonScore: 0.88,
+    ocrScore: 0.92,
+    inputCostPer1M: 0.5,
+    outputCostPer1M: 3.0,
+    typicalLatency: 6.0, // 3x faster than 2.5 Pro
+  },
+  // Gemini 2.5 models - Stable versions
   'gemini-2.5-pro': {
-    id: 'gemini-2.5-pro-preview-06-05',
+    id: 'gemini-2.5-pro',
     provider: 'google',
     displayName: 'Gemini 2.5 Pro',
     spatialScore: 0.95, // Best mAP (13.3) among LLMs
@@ -50,7 +63,7 @@ export const MODELS: Record<string, ModelConfig> = {
     typicalLatency: 18.6,
   },
   'gemini-2.5-flash': {
-    id: 'gemini-2.5-flash-preview-05-20',
+    id: 'gemini-2.5-flash',
     provider: 'google',
     displayName: 'Gemini 2.5 Flash',
     spatialScore: 0.85,
@@ -115,24 +128,24 @@ export type ExtractionTask =
  * Optimal model for each task based on benchmarks
  */
 export const TASK_OPTIMAL_MODELS: Record<ExtractionTask, keyof typeof MODELS> = {
-  grid_detection: 'gemini-2.5-pro', // Best spatial/bounding box
-  region_colors: 'gemini-2.5-pro', // Good at color segmentation
-  pip_counting: 'gemini-2.5-pro', // Best object detection
+  grid_detection: 'gemini-3-flash', // Latest, best multimodal + speed
+  region_colors: 'gemini-3-flash', // Enhanced image understanding
+  pip_counting: 'gemini-3-flash', // Best object detection
   constraint_ocr: 'claude-sonnet-4', // Best text interpretation
   verification: 'claude-sonnet-4', // Best reasoning
-  domino_detection: 'gemini-2.5-pro', // Best object detection
+  domino_detection: 'gemini-3-flash', // Best object detection
 };
 
 /**
  * Fallback chain for each task if primary fails
  */
 export const TASK_FALLBACK_CHAIN: Record<ExtractionTask, (keyof typeof MODELS)[]> = {
-  grid_detection: ['gemini-2.5-pro', 'gemini-2.5-flash', 'claude-sonnet-4'],
-  region_colors: ['gemini-2.5-pro', 'claude-sonnet-4', 'gemini-2.5-flash'],
-  pip_counting: ['gemini-2.5-pro', 'gemini-2.5-flash', 'claude-sonnet-4'],
-  constraint_ocr: ['claude-sonnet-4', 'gemini-2.5-pro', 'claude-3.5-sonnet'],
-  verification: ['claude-sonnet-4', 'gemini-2.5-pro', 'claude-3.5-sonnet'],
-  domino_detection: ['gemini-2.5-pro', 'gemini-2.5-flash', 'claude-sonnet-4'],
+  grid_detection: ['gemini-3-flash', 'gemini-2.5-pro', 'gemini-2.5-flash', 'claude-sonnet-4'],
+  region_colors: ['gemini-3-flash', 'gemini-2.5-pro', 'claude-sonnet-4', 'gemini-2.5-flash'],
+  pip_counting: ['gemini-3-flash', 'gemini-2.5-pro', 'gemini-2.5-flash', 'claude-sonnet-4'],
+  constraint_ocr: ['claude-sonnet-4', 'gemini-3-flash', 'gemini-2.5-pro', 'claude-3.5-sonnet'],
+  verification: ['claude-sonnet-4', 'gemini-3-flash', 'gemini-2.5-pro', 'claude-3.5-sonnet'],
+  domino_detection: ['gemini-3-flash', 'gemini-2.5-pro', 'gemini-2.5-flash', 'claude-sonnet-4'],
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -162,7 +175,7 @@ export interface StrategyConfig {
 
 export const STRATEGIES: Record<ExtractionStrategy, StrategyConfig> = {
   fast: {
-    primaryModels: ['gemini-2.5-flash'],
+    primaryModels: ['gemini-3-flash'],
     enableVerification: false,
     confidenceThreshold: 0.7,
     useEnsemble: false,
@@ -170,7 +183,7 @@ export const STRATEGIES: Record<ExtractionStrategy, StrategyConfig> = {
     maxRetries: 1,
   },
   balanced: {
-    primaryModels: ['gemini-2.5-pro'],
+    primaryModels: ['gemini-3-flash'],
     enableVerification: true,
     confidenceThreshold: 0.85,
     useEnsemble: false,
@@ -178,7 +191,7 @@ export const STRATEGIES: Record<ExtractionStrategy, StrategyConfig> = {
     maxRetries: 2,
   },
   accurate: {
-    primaryModels: ['gemini-2.5-pro', 'claude-sonnet-4'],
+    primaryModels: ['gemini-3-flash', 'claude-sonnet-4'],
     enableVerification: true,
     confidenceThreshold: 0.9,
     useEnsemble: false,
@@ -186,7 +199,7 @@ export const STRATEGIES: Record<ExtractionStrategy, StrategyConfig> = {
     maxRetries: 3,
   },
   ensemble: {
-    primaryModels: ['gemini-2.5-pro', 'claude-sonnet-4', 'gemini-2.5-flash'],
+    primaryModels: ['gemini-3-flash', 'claude-sonnet-4', 'gemini-2.5-flash'],
     enableVerification: true,
     confidenceThreshold: 0.95,
     useEnsemble: true,

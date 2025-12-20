@@ -47,95 +47,70 @@ Be conservative with confidence scores - lower is better than overconfident.`;
 /**
  * Optimized board extraction prompt (Gemini-tuned)
  */
-const BOARD_EXTRACTION_PROMPT_V2 = `Analyze this NYT Pips puzzle screenshot. Extract the grid structure.
+const BOARD_EXTRACTION_PROMPT_V2 = `Analyze this Pips puzzle image. This is a CROPPED image showing just the puzzle grid.
 
-TASK 1: GRID DIMENSIONS
-- Count rows (horizontal lines of cells, top to bottom)
-- Count columns (cells per row, left to right)
-- Note: Some corners may have MISSING cells (holes)
+CRITICAL STEPS:
 
-TASK 2: GRID LOCATION (pixel coordinates)
-Identify exact pixel boundaries:
-- left: leftmost cell edge X
-- top: topmost cell edge Y
-- right: rightmost cell edge X
-- bottom: bottommost cell edge Y
-Also provide full imageWidth and imageHeight.
+1. GRID SIZE: Count rows and columns carefully. Common sizes: 4x4, 5x5, 6x6.
 
-TASK 3: SHAPE MAP
-For each cell position, mark:
-- "." if cell EXISTS
-- "#" if cell is MISSING (hole)
-Join rows with \\n
+2. HOLES: Check ALL 4 CORNERS for missing cells. Mark holes as "#" in both shape AND regions.
+   Example 4x4 with corner holes: "...#\\n....\\n....\\n...#"
 
-TASK 4: REGION MAP
-For each existing cell, identify its colored region:
-- Use letters A-J for different colors
-- Use "#" for holes
-- Use "." if no color visible
-Join rows with \\n
+3. REGIONS - IMPORTANT:
+   - Look at the BACKGROUND COLOR of each cell (not the dotted border color)
+   - Cells with the SAME background color = same region = same letter
+   - Assign letters A, B, C, D... to distinct colors
+   - Be CONSISTENT: if two cells look the same color, they MUST have the same letter
+   - Common colors: orange, green, blue, purple, pink, yellow
+   - Put "#" for holes in both shape and regions strings
 
-TASK 5: CONSTRAINTS
-Read numbers/symbols near colored regions:
-- "=12" or "12" → sum equals 12
-- "<10" → sum less than 10
-- ">5" → sum greater than 5
-- "≠" or "all different" → all_different constraint
-- "=" with no number → all_equal constraint
+4. CONSTRAINTS: Look for numbers/symbols near or on regions:
+   - Number like "12" or "=12" → type: "sum", op: "==", value: 12
+   - "<10" → type: "sum", op: "<", value: 10
+   - "=" symbol only → type: "all_equal"
+   - "≠" or different symbol → type: "all_different"
 
-OUTPUT (JSON only, no markdown):
+OUTPUT JSON only (no explanation outside JSON):
 {
-  "rows": 5,
-  "cols": 5,
-  "gridLocation": {
-    "left": 95,
-    "top": 611,
-    "right": 625,
-    "bottom": 1141,
-    "imageWidth": 720,
-    "imageHeight": 1560
-  },
-  "shape": "....#\\n.....\\n.....\\n.....\\n#....",
-  "regions": "AAAB#\\nAABBC\\nDDBCC\\nDDEEE\\n#FEEE",
-  "constraints": {
-    "A": {"type": "sum", "op": "==", "value": 8},
-    "B": {"type": "sum", "op": "<", "value": 12}
-  },
-  "confidence": {"grid": 0.95, "regions": 0.88, "constraints": 0.92},
-  "reasoning": "5x5 grid with holes at corners..."
+  "rows": 4,
+  "cols": 4,
+  "shape": "...#\\n....\\n....\\n...#",
+  "regions": "AAB#\\nAABC\\nDDBC\\nDD.#",
+  "constraints": {"A": {"type": "sum", "op": "==", "value": 8}, "B": {"type": "all_different"}},
+  "confidence": {"grid": 0.9, "regions": 0.85, "constraints": 0.9},
+  "reasoning": "4x4, holes at (0,3) and (3,3), 4 regions by color"
 }`;
 
 /**
  * Optimized domino extraction prompt
  */
-const DOMINO_EXTRACTION_PROMPT_V2 = `Analyze the DOMINO TRAY in this Pips puzzle screenshot.
+const DOMINO_EXTRACTION_PROMPT_V2 = `This image shows the DOMINO TRAY from a Pips puzzle.
 
-The dominoes are shown in a separate area (usually below or beside the main grid).
-Each domino has TWO halves, each with 0-6 pips (dots).
+Find all dominoes in this image. Each domino has TWO halves with 0-6 pips (dots) each.
 
-COUNTING GUIDE:
-- 0 pips: Blank/empty
-- 1 pip: Single center dot
-- 2 pips: Diagonal pair
-- 3 pips: Diagonal line
-- 4 pips: Four corners
-- 5 pips: Four corners + center
-- 6 pips: Two columns of 3
+PIP COUNTING (be precise!):
+- 0: Blank/empty half
+- 1: Single dot in center
+- 2: Two dots diagonally
+- 3: Three dots in diagonal line
+- 4: Four dots in corners
+- 5: Four corners + one center
+- 6: Six dots (2 columns of 3)
 
-Count EACH domino carefully. Scan left-to-right, top-to-bottom.
+PROCESS:
+1. Locate each domino (rectangular with dividing line)
+2. Count pips on LEFT/TOP half
+3. Count pips on RIGHT/BOTTOM half
+4. Record as [first, second]
 
-OUTPUT (JSON only):
+Dominoes may be horizontal or vertical. There are typically 7-8 dominoes.
+
+OUTPUT JSON only:
 {
-  "dominoes": [[6, 4], [5, 3], [2, 1], [0, 0]],
-  "confidence": 0.92,
-  "reasoning": "Found 4 dominoes in tray. Clear pip counts."
-}
-
-IMPORTANT:
-- Only count dominoes in the TRAY area, not on the grid
-- Each domino is [leftPips, rightPips] or [topPips, bottomPips]
-- Double-check your pip counts
-- Set confidence < 0.8 if any pips are unclear`;
+  "dominoes": [[0, 1], [2, 3], [4, 5], [6, 6], [1, 2], [3, 4], [5, 6]],
+  "confidence": 0.95,
+  "reasoning": "7 dominoes found, all pips clearly visible"
+}`;
 
 /**
  * Verification prompt for cross-checking results
@@ -183,10 +158,26 @@ OR if corrections needed:
 // Zod Schemas
 // ════════════════════════════════════════════════════════════════════════════
 
+// Lenient constraint schema - normalizes variations in model output
 const ConstraintSchema = z.object({
-  type: z.enum(['sum', 'all_equal', 'all_different']),
-  op: z.enum(['==', '<', '>', '!=']).optional(),
-  value: z.number().optional(),
+  // Accept various type formats that models might return
+  type: z.string().transform(t => {
+    const normalized = t.toLowerCase().replace(/[_\s]/g, '');
+    if (normalized === 'sum' || normalized === 'total') return 'sum';
+    if (normalized.includes('equal') && !normalized.includes('diff')) return 'all_equal';
+    if (normalized.includes('diff') || normalized.includes('unique')) return 'all_different';
+    return t; // Keep original if unknown - will be handled downstream
+  }),
+  op: z
+    .enum(['==', '<', '>', '!='])
+    .optional()
+    .nullable()
+    .transform(v => v ?? undefined),
+  value: z
+    .number()
+    .optional()
+    .nullable()
+    .transform(v => v ?? undefined),
 });
 
 const BoardExtractionSchema = z.object({
@@ -503,7 +494,7 @@ async function extractBoardEnsemble(
         ],
       },
     ],
-    { temperature: 0.1, jsonMode: true }
+    { temperature: 0.1, jsonMode: true, maxTokens: 16384 }
   );
 
   // Process results
@@ -660,7 +651,7 @@ ${DOMINO_EXTRACTION_PROMPT_V2}`;
         ],
       },
     ],
-    { temperature: 0.1, jsonMode: true }
+    { temperature: 0.1, jsonMode: true, maxTokens: 8192 }
   );
 
   for (const resp of responses) {
@@ -711,11 +702,17 @@ export interface EnsembleExtractionResult {
 
 /**
  * Extract puzzle from image using ensemble of models for maximum accuracy
+ *
+ * @param base64Image - Image for board extraction (may be cropped to puzzle region)
+ * @param keys - API keys for models
+ * @param options - Extraction options
+ * @param dominoImage - Optional image for domino extraction (cropped to domino tray, or full image)
  */
 export async function extractPuzzleEnsemble(
   base64Image: string,
   keys: APIKeys,
-  options: EnsembleExtractionOptions
+  options: EnsembleExtractionOptions,
+  dominoImage?: string
 ): Promise<EnsembleExtractionResult> {
   const { strategy, onProgress } = options;
   const startTime = Date.now();
@@ -723,7 +720,7 @@ export async function extractPuzzleEnsemble(
 
   onProgress?.({ step: 'initializing', message: 'Starting extraction...' });
 
-  // Extract board
+  // Extract board (using potentially cropped image for better accuracy)
   const boardStart = Date.now();
   const boardResult = await extractBoardEnsemble(base64Image, keys, strategy, onProgress);
   const boardMs = Date.now() - boardStart;
@@ -738,10 +735,11 @@ export async function extractPuzzleEnsemble(
     };
   }
 
-  // Extract dominoes
+  // Extract dominoes - use dedicated domino image if provided (cropped to tray)
+  const imageForDominoes = dominoImage || base64Image;
   const dominoStart = Date.now();
   const dominoResult = await extractDominoesEnsemble(
-    base64Image,
+    imageForDominoes,
     keys,
     boardResult.data,
     strategy,

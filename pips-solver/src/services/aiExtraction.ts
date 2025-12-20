@@ -39,10 +39,26 @@ import { APIKeys } from './modelClients';
 // Zod Schemas for AI Response Validation
 // ════════════════════════════════════════════════════════════════════════════
 
+// Lenient constraint schema - normalizes variations in model output
 const ConstraintSchema = z.object({
-  type: z.enum(['sum', 'all_equal', 'all_different']),
-  op: z.enum(['==', '<', '>', '!=']).optional(),
-  value: z.number().optional(),
+  // Accept various type formats that models might return
+  type: z.string().transform(t => {
+    const normalized = t.toLowerCase().replace(/[_\s]/g, '');
+    if (normalized === 'sum' || normalized === 'total') return 'sum';
+    if (normalized.includes('equal') && !normalized.includes('diff')) return 'all_equal';
+    if (normalized.includes('diff') || normalized.includes('unique')) return 'all_different';
+    return t; // Keep original if unknown - will be handled downstream
+  }),
+  op: z
+    .enum(['==', '<', '>', '!='])
+    .optional()
+    .nullable()
+    .transform(v => v ?? undefined),
+  value: z
+    .number()
+    .optional()
+    .nullable()
+    .transform(v => v ?? undefined),
 });
 
 const ConfidenceScoresSchema = z
@@ -121,6 +137,19 @@ export interface MultiModelExtractionOptions {
 
   /** Progress callback */
   onProgress?: (progress: EnsembleProgress) => void;
+
+  /**
+   * Use hybrid CV + AI extraction (recommended for best accuracy)
+   * When enabled:
+   * 1. CV service crops image to puzzle region only (faster, cleaner)
+   * 2. AI analyzes the cropped image (more accurate)
+   *
+   * Requires CV service running at cvServiceUrl
+   */
+  useHybridCV?: boolean;
+
+  /** CV service URL (default: http://localhost:8080) */
+  cvServiceUrl?: string;
 }
 
 export interface MultiModelExtractionResult {
@@ -163,7 +192,7 @@ export async function extractPuzzleMultiModel(
   base64Image: string,
   options: MultiModelExtractionOptions
 ): Promise<MultiModelExtractionResult> {
-  const { strategy, apiKeys, onProgress } = options;
+  const { strategy, apiKeys, onProgress, useHybridCV = false, cvServiceUrl } = options;
 
   // Validate we have at least one API key
   const availableProviders = getAvailableProviders(apiKeys);
@@ -180,29 +209,162 @@ export async function extractPuzzleMultiModel(
   // Log available providers
   console.log(`[MultiModel] Available providers: ${availableProviders.join(', ')}`);
   console.log(`[MultiModel] Strategy: ${strategy}`);
+  console.log(`[MultiModel] Hybrid CV: ${useHybridCV ? 'enabled' : 'disabled'}`);
 
-  // Use ensemble extraction
-  const result = await extractPuzzleEnsemble(base64Image, apiKeys, {
-    strategy,
-    onProgress,
-  });
+  let imageForAI = base64Image;
+  let cvCropMs = 0;
+
+  // If hybrid mode is enabled, try to crop puzzle region first
+  // We keep both full image (for dominoes) and cropped image (for board)
+  let usedCropping = false;
+  let cropBounds:
+    | {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+        originalWidth: number;
+        originalHeight: number;
+      }
+    | undefined;
+
+  // Actual grid bounds (without padding) for overlay alignment
+  let gridBoundsForOverlay:
+    | {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+        originalWidth: number;
+        originalHeight: number;
+      }
+    | undefined;
+
+  let dominoImage: string | undefined;
+
+  if (useHybridCV) {
+    try {
+      // Import CV extraction dynamically to avoid circular deps
+      const { cropPuzzleRegion, cropDominoRegion, setCVServiceURL } = await import(
+        './cvExtraction'
+      );
+
+      // Set CV service URL if provided
+      if (cvServiceUrl) {
+        setCVServiceURL(cvServiceUrl);
+      }
+
+      onProgress?.({
+        step: 'initializing',
+        message: 'Using CV to crop puzzle region...',
+        confidence: 0,
+      });
+
+      // Crop puzzle region for board extraction
+      const cropResult = await cropPuzzleRegion(base64Image);
+      cvCropMs = cropResult.extractionMs;
+
+      if (cropResult.success && cropResult.croppedImage && cropResult.bounds) {
+        console.log(
+          `[MultiModel] Puzzle crop successful: ${cropResult.bounds.width}x${cropResult.bounds.height} in ${cvCropMs}ms`
+        );
+        imageForAI = cropResult.croppedImage;
+        usedCropping = true;
+        cropBounds = cropResult.bounds;
+        gridBoundsForOverlay = cropResult.gridBounds; // Use actual grid bounds for overlay
+
+        onProgress?.({
+          step: 'initializing',
+          message: `Cropped puzzle region (${cropResult.bounds.width}x${cropResult.bounds.height})`,
+          confidence: 0.1,
+        });
+
+        // Crop domino region for domino extraction
+        // Use the puzzle bottom Y coordinate to know where dominoes start
+        const puzzleBottomY = cropResult.bounds.y + cropResult.bounds.height;
+        const dominoCropResult = await cropDominoRegion(base64Image, puzzleBottomY);
+        cvCropMs += dominoCropResult.extractionMs;
+
+        if (dominoCropResult.success && dominoCropResult.croppedImage) {
+          console.log(
+            `[MultiModel] Domino crop successful: ${dominoCropResult.bounds?.width}x${dominoCropResult.bounds?.height}`
+          );
+          dominoImage = dominoCropResult.croppedImage;
+
+          onProgress?.({
+            step: 'initializing',
+            message: `Cropped domino region (${dominoCropResult.bounds?.width}x${dominoCropResult.bounds?.height})`,
+            confidence: 0.15,
+          });
+        } else {
+          console.warn(
+            `[MultiModel] Domino crop failed: ${dominoCropResult.error}, using full image`
+          );
+          dominoImage = base64Image; // Fallback to full image
+        }
+      } else {
+        console.warn(`[MultiModel] CV crop failed: ${cropResult.error}, using full image`);
+        // Continue with full image if crop fails
+      }
+    } catch (error) {
+      console.warn('[MultiModel] CV service unavailable, using full image:', error);
+      // Continue with full image if CV service is unavailable
+    }
+  }
+
+  // Use ensemble extraction:
+  // - Cropped puzzle image for board extraction (better accuracy on grid/regions)
+  // - Cropped domino image for domino extraction (focused on just the dominoes)
+  const result = await extractPuzzleEnsemble(
+    imageForAI,
+    apiKeys,
+    { strategy, onProgress },
+    dominoImage // Use cropped domino image if available
+  );
+
+  // Add CV crop time to total timing
+  if (cvCropMs > 0 && result.timing) {
+    result.timing.totalMs += cvCropMs;
+  }
+
+  // Use CV's actual grid bounds (without padding) for precise overlay alignment
+  if (usedCropping && gridBoundsForOverlay && result.success && result.result?.board) {
+    const cvBasedLocation = {
+      left: gridBoundsForOverlay.x,
+      top: gridBoundsForOverlay.y,
+      right: gridBoundsForOverlay.x + gridBoundsForOverlay.width,
+      bottom: gridBoundsForOverlay.y + gridBoundsForOverlay.height,
+      imageWidth: gridBoundsForOverlay.originalWidth,
+      imageHeight: gridBoundsForOverlay.originalHeight,
+    };
+
+    console.log(
+      `[MultiModel] Using CV grid bounds for overlay: (${cvBasedLocation.left},${cvBasedLocation.top})-(${cvBasedLocation.right},${cvBasedLocation.bottom})`
+    );
+
+    result.result.board.gridLocation = cvBasedLocation;
+  }
 
   return result;
 }
 
 /**
  * Convenience function for maximum accuracy extraction
- * Uses ensemble strategy with all available models
+ * Uses ensemble strategy with all available models + hybrid CV preprocessing
+ *
+ * @param useHybridCV - Enable CV preprocessing (requires CV service running)
  */
 export async function extractPuzzleMaxAccuracy(
   base64Image: string,
   apiKeys: APIKeys,
-  onProgress?: (progress: EnsembleProgress) => void
+  onProgress?: (progress: EnsembleProgress) => void,
+  useHybridCV: boolean = false
 ): Promise<MultiModelExtractionResult> {
   return extractPuzzleMultiModel(base64Image, {
     strategy: 'ensemble',
     apiKeys,
     onProgress,
+    useHybridCV,
   });
 }
 

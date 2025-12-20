@@ -269,6 +269,7 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
     setAIProgress(`Starting ${strategyNames[strategy]} extraction...`);
 
     // Use new multi-model extraction for maximum accuracy
+    // Enable hybrid CV mode for better accuracy (crops puzzle region first)
     const result = await extractPuzzleMultiModel(state.image.base64, {
       strategy,
       apiKeys: {
@@ -276,6 +277,9 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
         anthropic: settings.anthropicApiKey,
         openai: settings.openaiApiKey,
       },
+      useHybridCV: true, // Enable CV preprocessing for better accuracy
+      // Use machine IP for iOS simulator (localhost doesn't work on iOS)
+      cvServiceUrl: settings.cvServiceUrl || 'http://192.168.4.29:8080',
       onProgress: (progress: EnsembleProgress) => {
         // Show more detailed progress for ensemble mode
         const modelInfo = progress.modelsUsed?.length ? ` (${progress.modelsUsed.join(', ')})` : '';

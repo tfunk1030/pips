@@ -175,6 +175,10 @@ async function callGemini(
     },
   };
 
+  // Note: thinkingConfig/thinkingBudget are not currently supported in the
+  // generateContent REST API. They may be available in future SDK versions.
+  // For now, we rely on the model's default behavior.
+
   if (systemInstruction) {
     requestBody.systemInstruction = systemInstruction;
   }
@@ -201,6 +205,12 @@ async function callGemini(
 
   const data = await response.json();
   const latencyMs = Date.now() - startTime;
+
+  // Check for truncation due to max tokens
+  const finishReason = data.candidates?.[0]?.finishReason;
+  if (finishReason === 'MAX_TOKENS') {
+    console.warn(`[Gemini] Response truncated due to MAX_TOKENS limit`);
+  }
 
   // Extract text from response
   const text =

@@ -35,6 +35,9 @@ export interface AppSettings {
 
   // Extraction configuration
   extractionStrategy?: ExtractionStrategy;
+
+  // CV Service URL for hybrid extraction (default: http://localhost:8080)
+  cvServiceUrl?: string;
 }
 
 /**
