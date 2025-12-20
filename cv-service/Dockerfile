@@ -12,14 +12,15 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Install Python dependencies
-COPY requirements.txt .
+COPY cv-service/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy CV extraction code from parent
-COPY ../extract_board_cells_gridlines.py .
+# Copy CV extraction code from parent (needed for /extract-geometry endpoint)
+COPY extract_board_cells_gridlines.py .
 
 # Copy service code
-COPY main.py .
+COPY cv-service/main.py .
+COPY cv-service/hybrid_extraction.py .
 
 # Run service
 EXPOSE 8080

@@ -32,6 +32,9 @@ const STRATEGY_OPTIONS: { value: ExtractionStrategy; label: string; description:
   { value: 'ensemble', label: '🏆 Maximum', description: 'Ensemble consensus (~45s)' },
 ];
 
+// CV Service URL placeholder - when empty, pure AI mode is used
+const CV_SERVICE_PLACEHOLDER = 'http://your-cv-service:8080';
+
 export default function SettingsScreen({ navigation }: any) {
   const [settings, setSettings] = useState({
     defaultMaxPip: 6,
@@ -43,6 +46,7 @@ export default function SettingsScreen({ navigation }: any) {
     googleApiKey: '',
     openaiApiKey: '',
     extractionStrategy: 'accurate' as ExtractionStrategy,
+    cvServiceUrl: '',
   });
 
   useEffect(() => {
@@ -57,6 +61,7 @@ export default function SettingsScreen({ navigation }: any) {
       googleApiKey: loaded.googleApiKey || '',
       openaiApiKey: loaded.openaiApiKey || '',
       extractionStrategy: loaded.extractionStrategy || 'accurate',
+      cvServiceUrl: loaded.cvServiceUrl || '',
     });
   };
 
@@ -404,6 +409,46 @@ export default function SettingsScreen({ navigation }: any) {
             </View>
           </View>
 
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>CV Service (Optional)</Text>
+            <Text style={styles.sectionSubtitle}>
+              For improved accuracy, you can run a CV service that crops images before AI analysis.
+              Leave empty to use pure AI mode (works great without CV).
+            </Text>
+
+            <View style={styles.apiKeySection}>
+              <View style={styles.apiKeyHeader}>
+                <Text style={styles.apiKeyLabel}>🖼️ CV Service URL</Text>
+                {settings.cvServiceUrl ? (
+                  <Text style={styles.statusBadgeActive}>✓ Configured</Text>
+                ) : (
+                  <Text style={[styles.apiKeyBadge, styles.apiKeyBadgeOptional]}>Optional</Text>
+                )}
+              </View>
+              <Text style={styles.apiKeyHint}>
+                {settings.cvServiceUrl
+                  ? 'Hybrid CV+AI mode enabled for better accuracy'
+                  : 'Pure AI mode (no CV service needed)'}
+              </Text>
+              <TextInput
+                style={styles.apiKeyInput}
+                value={settings.cvServiceUrl}
+                onChangeText={value => updateSetting('cvServiceUrl', value)}
+                placeholder={CV_SERVICE_PLACEHOLDER}
+                placeholderTextColor="#666"
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+                returnKeyType="done"
+                blurOnSubmit
+                onSubmitEditing={Keyboard.dismiss}
+              />
+              <Text style={styles.cvServiceNote}>
+                Deploy cv-service/ to Railway, Render, or Cloud Run for remote access.
+              </Text>
+            </View>
+          </View>
+
           <View style={styles.infoSection}>
             <Text style={styles.infoTitle}>About</Text>
             <Text style={styles.infoText}>Pips Solver v1.0.0</Text>
@@ -680,5 +725,11 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
+  },
+  cvServiceNote: {
+    fontSize: 11,
+    color: '#666',
+    marginTop: 8,
+    fontStyle: 'italic',
   },
 });
