@@ -246,6 +246,7 @@ async def crop_puzzle(request: ExtractRequest):
         "error": result.error,
         "cropped_image": result.cropped_image,
         "bounds": result.bounds,
+        "grid_bounds": result.grid_bounds,  # Actual grid bounds for overlay alignment
         "extraction_ms": result.extraction_ms
     }
 

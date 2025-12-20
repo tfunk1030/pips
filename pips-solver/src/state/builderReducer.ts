@@ -226,6 +226,22 @@ export function builderReducer(
     case 'AUTO_FILL_DOMINOES': {
       const cellCount = countValidCells(state.grid.holes);
       const needed = Math.floor(cellCount / 2);
+
+      // Only auto-fill if we don't already have extracted dominoes
+      // Check if existing dominoes are "real" (not all [0,0])
+      const existingDominoes = state.dominoes.dominoes;
+      const hasRealDominoes =
+        existingDominoes.length > 0 && existingDominoes.some(([a, b]) => a !== 0 || b !== 0);
+
+      if (hasRealDominoes && existingDominoes.length === needed) {
+        // Keep existing dominoes, just update expected count
+        return {
+          ...state,
+          dominoes: { ...state.dominoes, expectedCount: needed },
+        };
+      }
+
+      // Fill with empty dominoes only if we don't have real ones
       const dominoes: DominoPair[] = Array(needed)
         .fill(null)
         .map(() => [0, 0]);

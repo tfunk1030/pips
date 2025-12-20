@@ -3,17 +3,17 @@
  */
 
 import {
+  DominoPlacement,
+  Explanation,
   NormalizedPuzzle,
   Solution,
   SolverConfig,
-  SolverState,
   SolverProgress,
-  DominoPlacement,
-  Explanation,
+  SolverState,
 } from '../model/types';
-import { initializeDomains, propagateConstraints, copyDomains, isConsistent } from './propagate';
-import { selectNextEdge, getCandidateDominoes } from './heuristics';
-import { explainUnsatisfiable, explainSuccess } from './explain';
+import { explainSuccess, explainUnsatisfiable } from './explain';
+import { getCandidateDominoes, selectNextEdge } from './heuristics';
+import { copyDomains, initializeDomains, isConsistent, propagateConstraints } from './propagate';
 
 export interface SolverResult {
   success: boolean;
@@ -30,10 +30,7 @@ export interface SolverResult {
 /**
  * Solve a puzzle using CSP backtracking
  */
-export function solvePuzzle(
-  puzzle: NormalizedPuzzle,
-  config: SolverConfig
-): SolverResult {
+export function solvePuzzle(puzzle: NormalizedPuzzle, config: SolverConfig): SolverResult {
   const startTime = Date.now();
 
   // Initialize solver state
@@ -69,9 +66,10 @@ export function solvePuzzle(
     return {
       success: true,
       solutions,
-      explanation: explainSuccess(puzzle, solutions[0].dominoes.length > 0
-        ? stateFromSolution(solutions[0], puzzle)
-        : initialState),
+      explanation: explainSuccess(
+        puzzle,
+        solutions[0].dominoes.length > 0 ? stateFromSolution(solutions[0], puzzle) : initialState
+      ),
       stats,
     };
   } else {
@@ -100,7 +98,7 @@ function backtrack(
   if (isComplete(state, puzzle)) {
     if (isConsistent(puzzle, state)) {
       const solution: Solution = {
-        gridPips: state.gridPips.map((row) => [...row]),
+        gridPips: state.gridPips.map(row => [...row]),
         dominoes: [...state.placements],
         stats: {
           nodes: stats.nodes,
@@ -234,7 +232,7 @@ function stateFromSolution(solution: Solution, puzzle: NormalizedPuzzle): Solver
     used.set(d.domino.id, (used.get(d.domino.id) || 0) + 1);
   }
   return {
-    gridPips: solution.gridPips.map((row) => [...row]),
+    gridPips: solution.gridPips.map(row => [...row]),
     usedDominoes: used,
     placements: [...solution.dominoes],
     domains: new Map(),
@@ -270,6 +268,14 @@ export async function solvePuzzleAsync(
   };
 
   const solutions: Solution[] = [];
+
+  // Debug: Log initial state
+  console.log('[SOLVER DEBUG] Initial domains:');
+  for (const [key, domain] of initialState.domains) {
+    console.log(`  ${key}: [${domain.join(',')}]`);
+  }
+  console.log('[SOLVER DEBUG] Edges count:', puzzle.edges.length);
+  console.log('[SOLVER DEBUG] Domino tray:', JSON.stringify(puzzle.spec.dominoes));
 
   // Run backtracking with periodic yields
   await backtrackAsync(puzzle, initialState, config, stats, solutions, onProgress, signal);
@@ -317,7 +323,7 @@ async function backtrackAsync(
 
   // Yield to UI periodically
   if (stats.nodes % config.maxIterationsPerTick === 0) {
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise(resolve => setTimeout(resolve, 0));
 
     if (onProgress) {
       onProgress({
@@ -336,7 +342,7 @@ async function backtrackAsync(
   if (isComplete(state, puzzle)) {
     if (isConsistent(puzzle, state)) {
       const solution: Solution = {
-        gridPips: state.gridPips.map((row) => [...row]),
+        gridPips: state.gridPips.map(row => [...row]),
         dominoes: [...state.placements],
         stats: {
           nodes: stats.nodes,
@@ -347,17 +353,39 @@ async function backtrackAsync(
         },
       };
 
+      console.log('[SOLVER] *** SOLUTION FOUND! ***');
       solutions.push(solution);
       return !config.findAll;
+    } else {
+      console.log('[SOLVER] Complete but inconsistent!');
     }
   }
 
   const edge = selectNextEdge(puzzle, state);
   if (!edge) {
+    console.log('[SOLVER] No more edges to select');
     return false;
   }
 
-  const candidates = getCandidateDominoes(puzzle, edge, state, config.maxPip, config.allowDuplicates);
+  const candidates = getCandidateDominoes(
+    puzzle,
+    edge,
+    state,
+    config.maxPip,
+    config.allowDuplicates
+  );
+
+  if (depth === 0) {
+    console.log(
+      `[SOLVER DEBUG] First edge: (${edge.cell1.row},${edge.cell1.col})-(${edge.cell2.row},${edge.cell2.col})`
+    );
+    console.log(
+      `[SOLVER DEBUG] First edge domains: [${state.domains
+        .get(`${edge.cell1.row},${edge.cell1.col}`)
+        ?.join(',')}] x [${state.domains.get(`${edge.cell2.row},${edge.cell2.col}`)?.join(',')}]`
+    );
+    console.log(`[SOLVER DEBUG] Candidates: ${candidates.map(c => c.id).join(', ') || 'NONE'}`);
+  }
 
   if (candidates.length === 0) {
     stats.prunes++;
@@ -385,6 +413,12 @@ async function backtrackAsync(
 
     const prop1 = propagateConstraints(puzzle, state, edge.cell1, domino.pip1);
     const prop2 = prop1 && propagateConstraints(puzzle, state, edge.cell2, domino.pip2);
+
+    if (depth < 8) {
+      console.log(
+        `[SOLVER] Depth ${depth}: Placed ${domino.id} at (${edge.cell1.row},${edge.cell1.col})-(${edge.cell2.row},${edge.cell2.col}) -> prop1=${prop1}, prop2=${prop2}`
+      );
+    }
 
     if (prop1 && prop2) {
       const result = await backtrackAsync(

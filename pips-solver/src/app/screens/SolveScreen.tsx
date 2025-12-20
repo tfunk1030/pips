@@ -84,10 +84,29 @@ export default function SolveScreen({ route, navigation }: any) {
 
       const normalized = normalizePuzzle(specForSolve);
 
+      // Debug: Log what's being sent to solver
+      console.log(
+        '[SOLVE] Puzzle spec:',
+        JSON.stringify(
+          {
+            rows: specForSolve.rows,
+            cols: specForSolve.cols,
+            regions: specForSolve.regions,
+            constraints: specForSolve.constraints,
+            dominoes: specForSolve.dominoes,
+          },
+          null,
+          2
+        )
+      );
+      console.log('[SOLVE] Normalized regions:', normalized.regionCells.size, 'regions');
+      console.log('[SOLVE] Normalized edges:', normalized.edges.length, 'edges');
+
       const config = {
         maxPip: puzzle.spec.maxPip || settings.defaultMaxPip,
         allowDuplicates:
-          (opts?.ignoreTray ? true : puzzle.spec.allowDuplicates) || settings.defaultAllowDuplicates,
+          (opts?.ignoreTray ? true : puzzle.spec.allowDuplicates) ||
+          settings.defaultAllowDuplicates,
         findAll: settings.defaultFindAll,
         maxIterationsPerTick: settings.maxIterationsPerTick,
         debugLevel: settings.defaultDebugLevel as 0 | 1 | 2,
