@@ -64,8 +64,8 @@ export const MODELS: Record<string, ModelConfig> = {
   },
 
   // Claude Opus 4.5 - Latest Anthropic flagship (Nov 2025)
-  'claude-opus-4-5': {
-    id: 'anthropic/claude-opus-4-5',
+  'claude-opus-4.5': {
+    id: 'anthropic/claude-opus-4.5',
     provider: 'anthropic',
     displayName: 'Claude Opus 4.5',
     spatialScore: 0.85,
@@ -102,7 +102,7 @@ export const TASK_OPTIMAL_MODELS: Record<ExtractionTask, keyof typeof MODELS> = 
   region_colors: 'gemini-3-pro-preview', // Best image understanding
   pip_counting: 'gpt-5.2', // Best OCR for counting dots
   constraint_ocr: 'gpt-5.2', // Best text reading
-  verification: 'claude-opus-4-5', // Best reasoning and JSON
+  verification: 'claude-opus-4.5', // Best reasoning and JSON
   domino_detection: 'gpt-5.2', // Best object detection/OCR
 };
 
@@ -110,12 +110,12 @@ export const TASK_OPTIMAL_MODELS: Record<ExtractionTask, keyof typeof MODELS> = 
  * Fallback chain for each task if primary fails
  */
 export const TASK_FALLBACK_CHAIN: Record<ExtractionTask, (keyof typeof MODELS)[]> = {
-  grid_detection: ['gemini-3-pro-preview', 'gpt-5.2', 'claude-opus-4-5'],
-  region_colors: ['gemini-3-pro-preview', 'gpt-5.2', 'claude-opus-4-5'],
-  pip_counting: ['gpt-5.2', 'gemini-3-pro-preview', 'claude-opus-4-5'],
-  constraint_ocr: ['gpt-5.2', 'claude-opus-4-5', 'gemini-3-pro-preview'],
-  verification: ['claude-opus-4-5', 'gpt-5.2', 'gemini-3-pro-preview'],
-  domino_detection: ['gpt-5.2', 'gemini-3-pro-preview', 'claude-opus-4-5'],
+  grid_detection: ['gemini-3-pro-preview', 'gpt-5.2', 'claude-opus-4.5'],
+  region_colors: ['gemini-3-pro-preview', 'gpt-5.2', 'claude-opus-4.5'],
+  pip_counting: ['gpt-5.2', 'gemini-3-pro-preview', 'claude-opus-4.5'],
+  constraint_ocr: ['gpt-5.2', 'claude-opus-4.5', 'gemini-3-pro-preview'],
+  verification: ['claude-opus-4.5', 'gpt-5.2', 'gemini-3-pro-preview'],
+  domino_detection: ['gpt-5.2', 'gemini-3-pro-preview', 'claude-opus-4.5'],
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -161,7 +161,7 @@ export const STRATEGIES: Record<ExtractionStrategy, StrategyConfig> = {
     maxRetries: 2,
   },
   accurate: {
-    primaryModels: ['gemini-3-pro-preview', 'claude-opus-4-5'],
+    primaryModels: ['gemini-3-pro-preview', 'claude-opus-4.5'],
     enableVerification: true,
     confidenceThreshold: 0.9,
     useEnsemble: false,
@@ -169,7 +169,7 @@ export const STRATEGIES: Record<ExtractionStrategy, StrategyConfig> = {
     maxRetries: 3,
   },
   ensemble: {
-    primaryModels: ['gemini-3-pro-preview', 'gpt-5.2', 'claude-opus-4-5'],
+    primaryModels: ['gemini-3-pro-preview', 'gpt-5.2', 'claude-opus-4.5'],
     enableVerification: true,
     confidenceThreshold: 0.95,
     useEnsemble: true,

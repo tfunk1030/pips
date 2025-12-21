@@ -15,7 +15,7 @@ export const DEFAULT_MODELS = {
   // Sources: ai.google.dev, platform.openai.com, platform.claude.com
   gemini: 'google/gemini-3-pro-preview',
   gpt: 'openai/gpt-5.2',
-  claude: 'anthropic/claude-opus-4-5',
+  claude: 'anthropic/claude-opus-4.5',
 } as const;
 
 // =============================================================================

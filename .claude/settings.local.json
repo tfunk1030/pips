@@ -16,7 +16,12 @@
       "Skill(senior-computer-vision)",
       "Skill(brainstorming)",
       "Bash(npx eslint:*)",
-      "Skill(remembering-conversations)"
+      "Skill(remembering-conversations)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "WebFetch(domain:ai.google.dev)",
+      "WebFetch(domain:platform.openai.com)",
+      "Skill(code-review)",
+      "Skill(all-tools)"
     ]
   }
 }
