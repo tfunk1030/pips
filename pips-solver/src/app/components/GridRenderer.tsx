@@ -1,45 +1,107 @@
 /**
- * Grid renderer with zoom/pan support using react-native-svg
+ * GridRenderer - Tactile Game Table Aesthetic
+ *
+ * Features:
+ * - Ivory domino tiles with subtle 3D effect
+ * - Pip dots rendered as circles (like real dominoes)
+ * - Felt texture background with noise overlay
+ * - Refined earth-tone region palette
+ * - Smooth zoom/pan with gesture support
  */
 
-import React, { useCallback, useState } from 'react';
-import { LayoutChangeEvent, StyleSheet } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { LayoutChangeEvent, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
-import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
-import Svg, { G, Line, Rect, Text as SvgText } from 'react-native-svg';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
+import Svg, {
+  Circle,
+  Defs,
+  G,
+  LinearGradient,
+  Pattern,
+  Rect,
+  Stop,
+  Text as SvgText,
+} from 'react-native-svg';
 import { Cell, NormalizedPuzzle, Solution } from '../../model/types';
+import { colors, grid as gridTokens, radii, animation } from '../../theme';
+
+// ════════════════════════════════════════════════════════════════════════════
+// Types & Constants
+// ════════════════════════════════════════════════════════════════════════════
 
 interface GridRendererProps {
   puzzle: NormalizedPuzzle;
   solution?: Solution;
   onCellPress?: (cell: Cell) => void;
   highlightCell?: Cell;
+  showPipDots?: boolean; // Use dot pattern instead of numbers
 }
 
-const CELL_SIZE = 60;
-const GRID_PADDING = 20;
+const CELL_SIZE = gridTokens.cellSize;
+const GRID_PADDING = gridTokens.gridPadding;
+const DOMINO_BORDER = gridTokens.dominoBorderWidth;
+const PIP_SIZE = gridTokens.pipSize;
+const PIP_SPACING = gridTokens.pipSpacing;
+const CELL_INNER_PADDING = gridTokens.cellPadding;
 
-// Region colors (cycling palette)
-const REGION_COLORS = [
-  '#FFE5E5',
-  '#E5F3FF',
-  '#E5FFE5',
-  '#FFF3E5',
-  '#FFE5FF',
-  '#E5FFFF',
-  '#FFE5F3',
-  '#F3FFE5',
-  '#E5E5FF',
-  '#FFFFE5',
-  '#FFE5E5',
-  '#E5FFE5',
-];
+// ════════════════════════════════════════════════════════════════════════════
+// Pip Dot Patterns
+// ════════════════════════════════════════════════════════════════════════════
+
+// Pip positions for each value (0-6) relative to cell center
+// Normalized to -1 to 1 range, multiplied by spacing at render time
+const PIP_PATTERNS: Record<number, Array<{ x: number; y: number }>> = {
+  0: [],
+  1: [{ x: 0, y: 0 }],
+  2: [
+    { x: -0.7, y: -0.7 },
+    { x: 0.7, y: 0.7 },
+  ],
+  3: [
+    { x: -0.7, y: -0.7 },
+    { x: 0, y: 0 },
+    { x: 0.7, y: 0.7 },
+  ],
+  4: [
+    { x: -0.7, y: -0.7 },
+    { x: 0.7, y: -0.7 },
+    { x: -0.7, y: 0.7 },
+    { x: 0.7, y: 0.7 },
+  ],
+  5: [
+    { x: -0.7, y: -0.7 },
+    { x: 0.7, y: -0.7 },
+    { x: 0, y: 0 },
+    { x: -0.7, y: 0.7 },
+    { x: 0.7, y: 0.7 },
+  ],
+  6: [
+    { x: -0.7, y: -0.7 },
+    { x: -0.7, y: 0 },
+    { x: -0.7, y: 0.7 },
+    { x: 0.7, y: -0.7 },
+    { x: 0.7, y: 0 },
+    { x: 0.7, y: 0.7 },
+  ],
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// Main Component
+// ════════════════════════════════════════════════════════════════════════════
 
 export default function GridRenderer({
   puzzle,
   solution,
   onCellPress,
   highlightCell,
+  showPipDots = true,
 }: GridRendererProps) {
   // Guard against undefined puzzle or spec
   if (!puzzle || !puzzle.spec) {
@@ -68,12 +130,11 @@ export default function GridRenderer({
       scale.value = savedScale.value * e.scale;
     })
     .onEnd(() => {
-      // Clamp scale
       if (scale.value < 0.5) {
-        scale.value = withSpring(0.5);
+        scale.value = withSpring(0.5, { damping: 15 });
         savedScale.value = 0.5;
       } else if (scale.value > 3) {
-        scale.value = withSpring(3);
+        scale.value = withSpring(3, { damping: 15 });
         savedScale.value = 3;
       } else {
         savedScale.value = scale.value;
@@ -97,11 +158,9 @@ export default function GridRenderer({
       if (!onCellPress) return;
       if (containerSize.width <= 0 || containerSize.height <= 0) return;
 
-      // Invert current transform to map touch -> SVG space
       const localX = (e.x - translateX.value) / scale.value;
       const localY = (e.y - translateY.value) / scale.value;
 
-      // Account for centering of the <Svg> within the container
       const offsetX = (containerSize.width - gridWidth) / 2;
       const offsetY = (containerSize.height - gridHeight) / 2;
 
@@ -112,7 +171,7 @@ export default function GridRenderer({
       const row = Math.floor((svgY - GRID_PADDING) / CELL_SIZE);
 
       if (row < 0 || row >= puzzle.spec.rows || col < 0 || col >= puzzle.spec.cols) return;
-      if (puzzle.spec.regions[row]?.[col] === -1) return; // hole
+      if (puzzle.spec.regions[row]?.[col] === -1) return;
 
       onCellPress({ row, col });
     });
@@ -127,23 +186,37 @@ export default function GridRenderer({
     ],
   }));
 
+  // Memoize SVG patterns to avoid re-renders
+  const svgDefs = useMemo(() => <SvgDefinitions />, []);
+
   return (
     <GestureHandlerRootView style={styles.container} onLayout={handleLayout}>
       <GestureDetector gesture={composed}>
         <Animated.View style={[styles.svgContainer, animatedStyle]}>
           <Svg width={gridWidth} height={gridHeight}>
+            {svgDefs}
             <G>
+              {/* Felt background */}
+              <Rect
+                x={0}
+                y={0}
+                width={gridWidth}
+                height={gridHeight}
+                fill="url(#feltPattern)"
+                rx={radii.lg}
+              />
+
               {/* Draw regions (colored backgrounds) */}
               {renderRegions(puzzle)}
 
-              {/* Draw grid lines */}
+              {/* Draw subtle grid lines */}
               {renderGridLines(puzzle)}
 
-              {/* Draw domino borders if solution exists */}
-              {solution && renderDominoBorders(puzzle, solution)}
+              {/* Draw ivory domino tiles if solution exists */}
+              {solution && renderDominoTiles(puzzle, solution)}
 
-              {/* Draw pip values */}
-              {solution && renderPipValues(puzzle, solution, highlightCell)}
+              {/* Draw pip values (dots or numbers) */}
+              {solution && renderPipValues(puzzle, solution, highlightCell, showPipDots)}
 
               {/* Draw highlight */}
               {highlightCell && renderHighlight(highlightCell)}
@@ -155,27 +228,102 @@ export default function GridRenderer({
   );
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// SVG Definitions (Patterns, Gradients)
+// ════════════════════════════════════════════════════════════════════════════
+
+function SvgDefinitions() {
+  return (
+    <Defs>
+      {/* Felt texture pattern */}
+      <Pattern
+        id="feltPattern"
+        patternUnits="userSpaceOnUse"
+        width={100}
+        height={100}
+      >
+        <Rect width={100} height={100} fill={colors.surface.charcoal} />
+        {/* Subtle noise dots for felt texture */}
+        {Array.from({ length: 50 }).map((_, i) => (
+          <Circle
+            key={`noise-${i}`}
+            cx={Math.random() * 100}
+            cy={Math.random() * 100}
+            r={0.5 + Math.random() * 0.5}
+            fill={colors.surface.slate}
+            opacity={0.3 + Math.random() * 0.2}
+          />
+        ))}
+      </Pattern>
+
+      {/* Domino tile gradient (ivory with subtle 3D effect) */}
+      <LinearGradient id="dominoGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+        <Stop offset="0%" stopColor={colors.domino.ivory} />
+        <Stop offset="85%" stopColor={colors.domino.ivory} />
+        <Stop offset="100%" stopColor={colors.domino.ivoryDark} />
+      </LinearGradient>
+
+      {/* Highlight glow gradient */}
+      <LinearGradient id="highlightGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+        <Stop offset="0%" stopColor={colors.accent.brass} stopOpacity={0.8} />
+        <Stop offset="100%" stopColor={colors.accent.brassLight} stopOpacity={0.6} />
+      </LinearGradient>
+
+      {/* Success glow gradient */}
+      <LinearGradient id="successGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+        <Stop offset="0%" stopColor={colors.semantic.jade} stopOpacity={0.8} />
+        <Stop offset="100%" stopColor={colors.semantic.jadeLight} stopOpacity={0.6} />
+      </LinearGradient>
+    </Defs>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Render Functions
+// ════════════════════════════════════════════════════════════════════════════
+
 function renderRegions(puzzle: NormalizedPuzzle) {
   const elements: React.ReactElement[] = [];
+  const regionColors = colors.regions;
 
   for (let row = 0; row < puzzle.spec.rows; row++) {
     for (let col = 0; col < puzzle.spec.cols; col++) {
       const regionId = puzzle.spec.regions[row][col];
       const isHole = regionId === -1;
-      const color = isHole ? '#111' : REGION_COLORS[regionId % REGION_COLORS.length];
 
+      if (isHole) {
+        // Render hole as dark void
+        const x = GRID_PADDING + col * CELL_SIZE;
+        const y = GRID_PADDING + row * CELL_SIZE;
+        elements.push(
+          <Rect
+            key={`hole-${row}-${col}`}
+            x={x + 2}
+            y={y + 2}
+            width={CELL_SIZE - 4}
+            height={CELL_SIZE - 4}
+            fill={colors.surface.obsidian}
+            rx={radii.sm}
+            opacity={0.9}
+          />
+        );
+        continue;
+      }
+
+      const color = regionColors[regionId % regionColors.length];
       const x = GRID_PADDING + col * CELL_SIZE;
       const y = GRID_PADDING + row * CELL_SIZE;
 
       elements.push(
         <Rect
           key={`region-${row}-${col}`}
-          x={x}
-          y={y}
-          width={CELL_SIZE}
-          height={CELL_SIZE}
+          x={x + 1}
+          y={y + 1}
+          width={CELL_SIZE - 2}
+          height={CELL_SIZE - 2}
           fill={color}
-          opacity={isHole ? 0.9 : 1}
+          rx={radii.sm}
+          opacity={0.85}
         />
       );
     }
@@ -186,35 +334,35 @@ function renderRegions(puzzle: NormalizedPuzzle) {
 
 function renderGridLines(puzzle: NormalizedPuzzle) {
   const elements: React.ReactElement[] = [];
+  const strokeColor = colors.surface.ash;
 
-  // Horizontal lines
+  // Draw subtle internal grid lines
   for (let row = 0; row <= puzzle.spec.rows; row++) {
     const y = GRID_PADDING + row * CELL_SIZE;
     elements.push(
-      <Line
+      <Rect
         key={`h-line-${row}`}
-        x1={GRID_PADDING}
-        y1={y}
-        x2={GRID_PADDING + puzzle.spec.cols * CELL_SIZE}
-        y2={y}
-        stroke="#999"
-        strokeWidth={1}
+        x={GRID_PADDING}
+        y={y - 0.5}
+        width={puzzle.spec.cols * CELL_SIZE}
+        height={1}
+        fill={strokeColor}
+        opacity={0.4}
       />
     );
   }
 
-  // Vertical lines
   for (let col = 0; col <= puzzle.spec.cols; col++) {
     const x = GRID_PADDING + col * CELL_SIZE;
     elements.push(
-      <Line
+      <Rect
         key={`v-line-${col}`}
-        x1={x}
-        y1={GRID_PADDING}
-        x2={x}
-        y2={GRID_PADDING + puzzle.spec.rows * CELL_SIZE}
-        stroke="#999"
-        strokeWidth={1}
+        x={x - 0.5}
+        y={GRID_PADDING}
+        width={1}
+        height={puzzle.spec.rows * CELL_SIZE}
+        fill={strokeColor}
+        opacity={0.4}
       />
     );
   }
@@ -222,71 +370,79 @@ function renderGridLines(puzzle: NormalizedPuzzle) {
   return elements;
 }
 
-function renderDominoBorders(puzzle: NormalizedPuzzle, solution: Solution) {
+function renderDominoTiles(puzzle: NormalizedPuzzle, solution: Solution) {
   const elements: React.ReactElement[] = [];
 
   for (let i = 0; i < solution.dominoes.length; i++) {
     const domino = solution.dominoes[i];
     const { cell1, cell2 } = domino;
 
-    // Get bounding box
     const minRow = Math.min(cell1.row, cell2.row);
     const maxRow = Math.max(cell1.row, cell2.row);
     const minCol = Math.min(cell1.col, cell2.col);
     const maxCol = Math.max(cell1.col, cell2.col);
 
-    const x = GRID_PADDING + minCol * CELL_SIZE;
-    const y = GRID_PADDING + minRow * CELL_SIZE;
-    const width = (maxCol - minCol + 1) * CELL_SIZE;
-    const height = (maxRow - minRow + 1) * CELL_SIZE;
+    const x = GRID_PADDING + minCol * CELL_SIZE + CELL_INNER_PADDING;
+    const y = GRID_PADDING + minRow * CELL_SIZE + CELL_INNER_PADDING;
+    const width = (maxCol - minCol + 1) * CELL_SIZE - CELL_INNER_PADDING * 2;
+    const height = (maxRow - minRow + 1) * CELL_SIZE - CELL_INNER_PADDING * 2;
 
+    // Outer shadow for depth
     elements.push(
       <Rect
-        key={`domino-border-${i}`}
+        key={`domino-shadow-${i}`}
+        x={x + 2}
+        y={y + 2}
+        width={width}
+        height={height}
+        fill={colors.surface.obsidian}
+        rx={radii.md}
+        opacity={0.3}
+      />
+    );
+
+    // Main domino tile with ivory gradient
+    elements.push(
+      <Rect
+        key={`domino-tile-${i}`}
         x={x}
         y={y}
         width={width}
         height={height}
-        fill="none"
-        stroke="#000"
-        strokeWidth={3}
+        fill="url(#dominoGradient)"
+        rx={radii.md}
+        stroke={colors.domino.border}
+        strokeWidth={DOMINO_BORDER}
       />
     );
-  }
 
-  return elements;
-}
-
-function renderPipValues(puzzle: NormalizedPuzzle, solution: Solution, highlightCell?: Cell) {
-  const elements: React.ReactElement[] = [];
-
-  for (let row = 0; row < puzzle.spec.rows; row++) {
-    for (let col = 0; col < puzzle.spec.cols; col++) {
-      if (puzzle.spec.regions[row]?.[col] === -1) {
-        continue; // hole
-      }
-      const value = solution.gridPips[row][col];
-      if (value === null || value === undefined) {
-        continue;
-      }
-      const x = GRID_PADDING + col * CELL_SIZE + CELL_SIZE / 2;
-      const y = GRID_PADDING + row * CELL_SIZE + CELL_SIZE / 2;
-
-      const isHighlighted = highlightCell && highlightCell.row === row && highlightCell.col === col;
-
+    // Divider line between the two halves
+    const isHorizontal = cell1.row === cell2.row;
+    if (isHorizontal) {
+      const dividerX = x + CELL_SIZE - CELL_INNER_PADDING;
       elements.push(
-        <SvgText
-          key={`pip-${row}-${col}`}
-          x={x}
-          y={y}
-          fontSize={isHighlighted ? 28 : 24}
-          fontWeight={isHighlighted ? 700 : 400}
-          fill={isHighlighted ? '#FF0000' : '#000'}
-          textAnchor="middle"
-          alignmentBaseline="central"
-        >
-          {value}
-        </SvgText>
+        <Rect
+          key={`domino-divider-${i}`}
+          x={dividerX - 0.5}
+          y={y + 8}
+          width={1}
+          height={height - 16}
+          fill={colors.domino.ivoryDark}
+          opacity={0.6}
+        />
+      );
+    } else {
+      const dividerY = y + CELL_SIZE - CELL_INNER_PADDING;
+      elements.push(
+        <Rect
+          key={`domino-divider-${i}`}
+          x={x + 8}
+          y={dividerY - 0.5}
+          width={width - 16}
+          height={1}
+          fill={colors.domino.ivoryDark}
+          opacity={0.6}
+        />
       );
     }
   }
@@ -294,28 +450,110 @@ function renderPipValues(puzzle: NormalizedPuzzle, solution: Solution, highlight
   return elements;
 }
 
+function renderPipValues(
+  puzzle: NormalizedPuzzle,
+  solution: Solution,
+  highlightCell?: Cell,
+  showPipDots: boolean = true
+) {
+  const elements: React.ReactElement[] = [];
+
+  for (let row = 0; row < puzzle.spec.rows; row++) {
+    for (let col = 0; col < puzzle.spec.cols; col++) {
+      if (puzzle.spec.regions[row]?.[col] === -1) {
+        continue;
+      }
+      const value = solution.gridPips[row][col];
+      if (value === null || value === undefined) {
+        continue;
+      }
+
+      const centerX = GRID_PADDING + col * CELL_SIZE + CELL_SIZE / 2;
+      const centerY = GRID_PADDING + row * CELL_SIZE + CELL_SIZE / 2;
+      const isHighlighted = highlightCell && highlightCell.row === row && highlightCell.col === col;
+
+      if (showPipDots) {
+        // Render pip dots
+        const pattern = PIP_PATTERNS[value] || [];
+        const pipColor = isHighlighted ? colors.semantic.coral : colors.domino.pip;
+        const pipRadius = isHighlighted ? PIP_SIZE + 1 : PIP_SIZE;
+
+        pattern.forEach((pos, idx) => {
+          elements.push(
+            <Circle
+              key={`pip-${row}-${col}-${idx}`}
+              cx={centerX + pos.x * PIP_SPACING}
+              cy={centerY + pos.y * PIP_SPACING}
+              r={pipRadius / 2}
+              fill={pipColor}
+            />
+          );
+        });
+      } else {
+        // Render as text number (fallback)
+        elements.push(
+          <SvgText
+            key={`pip-text-${row}-${col}`}
+            x={centerX}
+            y={centerY}
+            fontSize={isHighlighted ? 26 : 22}
+            fontWeight={isHighlighted ? '700' : '600'}
+            fill={isHighlighted ? colors.semantic.coral : colors.domino.pip}
+            textAnchor="middle"
+            alignmentBaseline="central"
+          >
+            {value}
+          </SvgText>
+        );
+      }
+    }
+  }
+
+  return elements;
+}
+
 function renderHighlight(cell: Cell) {
-  const x = GRID_PADDING + cell.col * CELL_SIZE;
-  const y = GRID_PADDING + cell.row * CELL_SIZE;
+  const x = GRID_PADDING + cell.col * CELL_SIZE + CELL_INNER_PADDING;
+  const y = GRID_PADDING + cell.row * CELL_SIZE + CELL_INNER_PADDING;
+  const size = CELL_SIZE - CELL_INNER_PADDING * 2;
 
   return (
-    <Rect
-      key="highlight"
-      x={x}
-      y={y}
-      width={CELL_SIZE}
-      height={CELL_SIZE}
-      fill="none"
-      stroke="#FF0000"
-      strokeWidth={4}
-    />
+    <G key="highlight-group">
+      {/* Outer glow */}
+      <Rect
+        x={x - 3}
+        y={y - 3}
+        width={size + 6}
+        height={size + 6}
+        fill="none"
+        stroke={colors.accent.brass}
+        strokeWidth={2}
+        rx={radii.md + 2}
+        opacity={0.5}
+      />
+      {/* Inner highlight border */}
+      <Rect
+        x={x}
+        y={y}
+        width={size}
+        height={size}
+        fill="none"
+        stroke={colors.accent.brass}
+        strokeWidth={3}
+        rx={radii.md}
+      />
+    </G>
   );
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// Styles
+// ════════════════════════════════════════════════════════════════════════════
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface.obsidian,
   },
   svgContainer: {
     flex: 1,

@@ -1,12 +1,13 @@
 /**
  * Home / Library Screen
  * Lists saved puzzles and allows importing new ones
+ *
+ * Redesigned with "Tactile Game Table" aesthetic
  */
 
 import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   FlatList,
   TouchableOpacity,
@@ -14,8 +15,21 @@ import {
   Modal,
   ScrollView,
   Alert,
+  Pressable,
 } from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withDelay,
+  withTiming,
+  FadeIn,
+  FadeInDown,
+  FadeInUp,
+  Layout,
+} from 'react-native-reanimated';
 import { useFocusEffect } from '@react-navigation/native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { StoredPuzzle } from '../../model/types';
 import {
   getAllPuzzles,
@@ -27,6 +41,34 @@ import { validatePuzzleSpec } from '../../validator/validateSpec';
 import { SAMPLE_PUZZLES } from '../../samples';
 import { listDrafts, deleteDraft, cleanExpiredDrafts } from '../../storage/drafts';
 import { DraftMeta } from '../../model/overlayTypes';
+
+// Theme imports
+import { colors, spacing, radii, shadows } from '../../theme';
+import { fontFamilies, textStyles } from '../../theme/fonts';
+import { springConfigs, timingConfigs } from '../../theme/animations';
+import {
+  Button,
+  Card,
+  CardFooter,
+  Badge,
+  Text,
+  DisplayText,
+  Heading,
+  Body,
+  Label,
+  Mono,
+  Divider,
+} from '../components/ui';
+
+// ════════════════════════════════════════════════════════════════════════════
+// Animated Components
+// ════════════════════════════════════════════════════════════════════════════
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+// ════════════════════════════════════════════════════════════════════════════
+// Main Component
+// ════════════════════════════════════════════════════════════════════════════
 
 export default function HomeScreen({ navigation }: any) {
   const [puzzles, setPuzzles] = useState<StoredPuzzle[]>([]);
@@ -42,7 +84,6 @@ export default function HomeScreen({ navigation }: any) {
     }, [])
   );
 
-  // Clean expired drafts on mount
   useEffect(() => {
     cleanExpiredDrafts();
   }, []);
@@ -57,21 +98,17 @@ export default function HomeScreen({ navigation }: any) {
   };
 
   const handleDeleteDraft = async (draft: DraftMeta) => {
-    Alert.alert(
-      'Delete Draft',
-      'Are you sure you want to delete this draft?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            await deleteDraft(draft.draftId);
-            loadDrafts();
-          },
+    Alert.alert('Delete Draft', 'Are you sure you want to delete this draft?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          await deleteDraft(draft.draftId);
+          loadDrafts();
         },
-      ]
-    );
+      },
+    ]);
   };
 
   const handleCreateFromPhoto = () => {
@@ -164,101 +201,125 @@ export default function HomeScreen({ navigation }: any) {
     );
   };
 
-  const renderPuzzle = ({ item }: { item: StoredPuzzle }) => (
-    <TouchableOpacity
-      style={styles.puzzleCard}
-      onPress={() => navigation.navigate('Viewer', { puzzleId: item.id })}
+  // ══════════════════════════════════════════════════════════════════════════
+  // Render Functions
+  // ══════════════════════════════════════════════════════════════════════════
+
+  const renderPuzzleCard = ({ item, index }: { item: StoredPuzzle; index: number }) => (
+    <Animated.View
+      entering={FadeInDown.delay(index * 50).springify()}
+      layout={Layout.springify()}
     >
-      <View style={styles.puzzleInfo}>
-        <Text style={styles.puzzleName}>{item.name}</Text>
-        <Text style={styles.puzzleMeta}>
-          {item.spec.rows}x{item.spec.cols} • {item.solved ? 'Solved ✓' : 'Unsolved'}
-        </Text>
-        <Text style={styles.puzzleDate}>
-          {new Date(item.updatedAt).toLocaleDateString()}
-        </Text>
-      </View>
-      <TouchableOpacity
-        style={styles.deleteButton}
-        onPress={() => handleDelete(item)}
-      >
-        <Text style={styles.deleteButtonText}>Delete</Text>
-      </TouchableOpacity>
-    </TouchableOpacity>
+      <PuzzleCard
+        puzzle={item}
+        onPress={() => navigation.navigate('Viewer', { puzzleId: item.id })}
+        onDelete={() => handleDelete(item)}
+      />
+    </Animated.View>
   );
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Pips Puzzles</Text>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Header */}
+      <Animated.View entering={FadeInDown.delay(0)} style={styles.header}>
+        <View>
+          <Label size="small" style={styles.headerLabel}>
+            PUZZLE SOLVER
+          </Label>
+          <DisplayText size="medium">Pips</DisplayText>
+        </View>
         <TouchableOpacity
           style={styles.settingsButton}
           onPress={() => navigation.navigate('Settings')}
         >
-          <Text style={styles.settingsButtonText}>⚙</Text>
+          <Text style={styles.settingsIcon}>⚙</Text>
         </TouchableOpacity>
-      </View>
+      </Animated.View>
 
       {/* Draft Recovery Banner */}
       {drafts.length > 0 && (
-        <View style={styles.draftBanner}>
-          <View style={styles.draftBannerContent}>
-            <Text style={styles.draftBannerTitle}>Continue Draft?</Text>
-            <Text style={styles.draftBannerMeta}>
-              Step {drafts[0].step}/4 • {drafts[0].rows}×{drafts[0].cols} grid
-            </Text>
-          </View>
-          <TouchableOpacity
-            style={styles.draftResumeButton}
-            onPress={() => handleResumeDraft(drafts[0])}
-          >
-            <Text style={styles.draftResumeButtonText}>Resume</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.draftDeleteButton}
-            onPress={() => handleDeleteDraft(drafts[0])}
-          >
-            <Text style={styles.draftDeleteButtonText}>✕</Text>
-          </TouchableOpacity>
-        </View>
+        <Animated.View entering={FadeIn.delay(200)}>
+          <Card variant="accent" style={styles.draftBanner}>
+            <View style={styles.draftContent}>
+              <Badge label="DRAFT" variant="warning" size="small" />
+              <Heading size="small" style={styles.draftTitle}>
+                Continue where you left off?
+              </Heading>
+              <Body size="small" color="secondary">
+                Step {drafts[0].step}/4 • {drafts[0].rows}×{drafts[0].cols} grid
+              </Body>
+            </View>
+            <View style={styles.draftActions}>
+              <Button
+                title="Resume"
+                variant="primary"
+                size="small"
+                onPress={() => handleResumeDraft(drafts[0])}
+              />
+              <TouchableOpacity
+                style={styles.draftDeleteButton}
+                onPress={() => handleDeleteDraft(drafts[0])}
+              >
+                <Text style={styles.draftDeleteIcon}>✕</Text>
+              </TouchableOpacity>
+            </View>
+          </Card>
+        </Animated.View>
       )}
 
-      <View style={styles.actions}>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.actionButtonPrimary]}
+      {/* Action Buttons */}
+      <Animated.View entering={FadeInUp.delay(100)} style={styles.actions}>
+        <Button
+          title="From Photo"
+          variant="primary"
+          size="large"
+          fullWidth
           onPress={handleCreateFromPhoto}
-        >
-          <Text style={styles.actionButtonText}>📷 From Photo</Text>
-        </TouchableOpacity>
+          leftIcon={<Text style={styles.buttonIcon}>📷</Text>}
+        />
 
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => setShowImportModal(true)}
-        >
-          <Text style={styles.actionButtonText}>Import YAML</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => setShowSamplesModal(true)}
-        >
-          <Text style={styles.actionButtonText}>Load Sample</Text>
-        </TouchableOpacity>
-      </View>
-
-      {puzzles.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyText}>No puzzles yet</Text>
-          <Text style={styles.emptySubtext}>
-            Import a puzzle or load a sample to get started
-          </Text>
+        <View style={styles.actionRow}>
+          <View style={styles.actionHalf}>
+            <Button
+              title="Import YAML"
+              variant="secondary"
+              size="medium"
+              fullWidth
+              onPress={() => setShowImportModal(true)}
+            />
+          </View>
+          <View style={styles.actionHalf}>
+            <Button
+              title="Load Sample"
+              variant="secondary"
+              size="medium"
+              fullWidth
+              onPress={() => setShowSamplesModal(true)}
+            />
+          </View>
         </View>
+      </Animated.View>
+
+      <Divider spacing={4} />
+
+      {/* Puzzle List */}
+      {puzzles.length === 0 ? (
+        <Animated.View entering={FadeIn.delay(300)} style={styles.emptyState}>
+          <Text style={styles.emptyIcon}>🎲</Text>
+          <Heading size="medium" color="secondary">
+            No puzzles yet
+          </Heading>
+          <Body size="small" color="tertiary" align="center">
+            Import a puzzle or load a sample to get started
+          </Body>
+        </Animated.View>
       ) : (
         <FlatList
           data={puzzles}
-          renderItem={renderPuzzle}
+          renderItem={renderPuzzleCard}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
         />
       )}
 
@@ -266,11 +327,12 @@ export default function HomeScreen({ navigation }: any) {
       <Modal
         visible={showImportModal}
         animationType="slide"
+        presentationStyle="pageSheet"
         onRequestClose={() => setShowImportModal(false)}
       >
-        <View style={styles.modalContainer}>
+        <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Import YAML</Text>
+            <Heading size="large">Import YAML</Heading>
             <TouchableOpacity onPress={() => setShowImportModal(false)}>
               <Text style={styles.modalClose}>✕</Text>
             </TouchableOpacity>
@@ -280,261 +342,299 @@ export default function HomeScreen({ navigation }: any) {
             style={styles.yamlInput}
             multiline
             placeholder="Paste YAML puzzle here..."
+            placeholderTextColor={colors.text.tertiary}
             value={yamlInput}
             onChangeText={setYamlInput}
             autoCapitalize="none"
             autoCorrect={false}
           />
 
-          <TouchableOpacity style={styles.importButton} onPress={handleImport}>
-            <Text style={styles.importButtonText}>Import</Text>
-          </TouchableOpacity>
-        </View>
+          <View style={styles.modalFooter}>
+            <Button title="Import Puzzle" variant="primary" size="large" fullWidth onPress={handleImport} />
+          </View>
+        </SafeAreaView>
       </Modal>
 
       {/* Samples Modal */}
       <Modal
         visible={showSamplesModal}
         animationType="slide"
+        presentationStyle="pageSheet"
         onRequestClose={() => setShowSamplesModal(false)}
       >
-        <View style={styles.modalContainer}>
+        <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Sample Puzzles</Text>
+            <Heading size="large">Sample Puzzles</Heading>
             <TouchableOpacity onPress={() => setShowSamplesModal(false)}>
               <Text style={styles.modalClose}>✕</Text>
             </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.samplesList}>
-            {SAMPLE_PUZZLES.map((sample) => (
-              <TouchableOpacity
+            {SAMPLE_PUZZLES.map((sample, index) => (
+              <Animated.View
                 key={sample.id}
-                style={styles.sampleCard}
-                onPress={() => handleLoadSample(sample)}
+                entering={FadeInDown.delay(index * 30)}
               >
-                <Text style={styles.sampleName}>{sample.name}</Text>
-                <Text style={styles.sampleId}>{sample.id}</Text>
-              </TouchableOpacity>
+                <Card
+                  variant="default"
+                  onPress={() => handleLoadSample(sample)}
+                  style={styles.sampleCard}
+                >
+                  <Heading size="small">{sample.name}</Heading>
+                  <Mono small>{sample.id}</Mono>
+                </Card>
+              </Animated.View>
             ))}
           </ScrollView>
-        </View>
+        </SafeAreaView>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// Puzzle Card Component
+// ════════════════════════════════════════════════════════════════════════════
+
+interface PuzzleCardProps {
+  puzzle: StoredPuzzle;
+  onPress: () => void;
+  onDelete: () => void;
+}
+
+function PuzzleCard({ puzzle, onPress, onDelete }: PuzzleCardProps) {
+  const scale = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const handlePressIn = () => {
+    scale.value = withTiming(0.98, timingConfigs.fast);
+  };
+
+  const handlePressOut = () => {
+    scale.value = withSpring(1, springConfigs.snappy);
+  };
+
+  return (
+    <AnimatedPressable
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      style={[styles.puzzleCard, animatedStyle]}
+    >
+      <View style={styles.puzzleCardInner}>
+        {/* Mini grid preview */}
+        <View style={styles.puzzlePreview}>
+          <View style={styles.puzzlePreviewGrid}>
+            {Array.from({ length: 4 }).map((_, i) => (
+              <View
+                key={i}
+                style={[
+                  styles.puzzlePreviewCell,
+                  { backgroundColor: colors.regions[i % colors.regions.length] },
+                ]}
+              />
+            ))}
+          </View>
+        </View>
+
+        {/* Info */}
+        <View style={styles.puzzleInfo}>
+          <Heading size="small" numberOfLines={1}>
+            {puzzle.name}
+          </Heading>
+          <View style={styles.puzzleMeta}>
+            <Mono small>
+              {puzzle.spec.rows}×{puzzle.spec.cols}
+            </Mono>
+            <Badge
+              label={puzzle.solved ? 'Solved' : 'Unsolved'}
+              variant={puzzle.solved ? 'success' : 'default'}
+              size="small"
+            />
+          </View>
+          <Label size="small" color="tertiary">
+            {new Date(puzzle.updatedAt).toLocaleDateString()}
+          </Label>
+        </View>
+
+        {/* Delete button */}
+        <TouchableOpacity style={styles.deleteButton} onPress={onDelete}>
+          <Text style={styles.deleteIcon}>🗑</Text>
+        </TouchableOpacity>
+      </View>
+    </AnimatedPressable>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Styles
+// ════════════════════════════════════════════════════════════════════════════
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: colors.surface.obsidian,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    paddingTop: 60,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
+    alignItems: 'flex-start',
+    paddingHorizontal: spacing[4],
+    paddingTop: spacing[4],
+    paddingBottom: spacing[3],
   },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
+  headerLabel: {
+    color: colors.accent.brass,
+    marginBottom: spacing[1],
   },
   settingsButton: {
-    padding: 8,
+    padding: spacing[2],
   },
-  settingsButtonText: {
+  settingsIcon: {
     fontSize: 24,
+    color: colors.text.secondary,
   },
   draftBanner: {
+    marginHorizontal: spacing[4],
+    marginBottom: spacing[3],
+  },
+  draftContent: {
+    gap: spacing[1],
+  },
+  draftTitle: {
+    marginTop: spacing[2],
+  },
+  draftActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF3E0',
-    marginHorizontal: 16,
-    marginTop: 12,
-    padding: 12,
-    borderRadius: 8,
-    borderLeftWidth: 4,
-    borderLeftColor: '#FF9800',
-  },
-  draftBannerContent: {
-    flex: 1,
-  },
-  draftBannerTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-  },
-  draftBannerMeta: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 2,
-  },
-  draftResumeButton: {
-    backgroundColor: '#FF9800',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 6,
-    marginLeft: 8,
-  },
-  draftResumeButtonText: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '600',
+    marginTop: spacing[3],
+    gap: spacing[2],
   },
   draftDeleteButton: {
-    padding: 8,
-    marginLeft: 4,
+    padding: spacing[2],
   },
-  draftDeleteButtonText: {
-    color: '#999',
-    fontSize: 16,
+  draftDeleteIcon: {
+    color: colors.text.tertiary,
+    fontSize: 18,
   },
   actions: {
+    paddingHorizontal: spacing[4],
+    gap: spacing[3],
+  },
+  actionRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    padding: 16,
-    gap: 12,
+    gap: spacing[3],
   },
-  actionButton: {
-    flex: 1,
-    minWidth: 100,
-    backgroundColor: '#007AFF',
-    padding: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  actionButtonPrimary: {
-    backgroundColor: '#34C759',
-    flexBasis: '100%',
-  },
-  actionButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  list: {
-    padding: 16,
-  },
-  puzzleCard: {
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  puzzleInfo: {
+  actionHalf: {
     flex: 1,
   },
-  puzzleName: {
+  buttonIcon: {
     fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  puzzleMeta: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 2,
-  },
-  puzzleDate: {
-    fontSize: 12,
-    color: '#999',
-  },
-  deleteButton: {
-    padding: 8,
-    paddingHorizontal: 12,
-  },
-  deleteButtonText: {
-    color: '#FF3B30',
-    fontSize: 14,
-    fontWeight: '600',
   },
   emptyState: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 40,
+    padding: spacing[10],
+    gap: spacing[2],
   },
-  emptyText: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#999',
-    marginBottom: 8,
+  emptyIcon: {
+    fontSize: 48,
+    marginBottom: spacing[2],
   },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#999',
-    textAlign: 'center',
+  list: {
+    padding: spacing[4],
+    gap: spacing[3],
+  },
+  puzzleCard: {
+    backgroundColor: colors.surface.slate,
+    borderRadius: radii.lg,
+    ...shadows.md,
+    marginBottom: spacing[3],
+  },
+  puzzleCardInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing[4],
+    gap: spacing[4],
+  },
+  puzzlePreview: {
+    width: 56,
+    height: 56,
+    backgroundColor: colors.surface.charcoal,
+    borderRadius: radii.md,
+    padding: spacing[1],
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  puzzlePreviewGrid: {
+    width: 40,
+    height: 40,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  puzzlePreviewCell: {
+    width: 18,
+    height: 18,
+    margin: 1,
+    borderRadius: 2,
+  },
+  puzzleInfo: {
+    flex: 1,
+    gap: spacing[1],
+  },
+  puzzleMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
+  deleteButton: {
+    padding: spacing[2],
+  },
+  deleteIcon: {
+    fontSize: 18,
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface.charcoal,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
-    paddingTop: 60,
+    padding: spacing[4],
     borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
-  },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    borderBottomColor: colors.surface.ash,
   },
   modalClose: {
     fontSize: 28,
-    color: '#666',
+    color: colors.text.secondary,
   },
   yamlInput: {
     flex: 1,
-    padding: 16,
+    padding: spacing[4],
     fontSize: 14,
-    fontFamily: 'monospace',
+    fontFamily: fontFamilies.monoRegular,
+    color: colors.text.primary,
+    backgroundColor: colors.surface.slate,
+    margin: spacing[4],
+    borderRadius: radii.lg,
     textAlignVertical: 'top',
   },
-  importButton: {
-    backgroundColor: '#007AFF',
-    padding: 16,
-    margin: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  importButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+  modalFooter: {
+    padding: spacing[4],
+    borderTopWidth: 1,
+    borderTopColor: colors.surface.ash,
   },
   samplesList: {
     flex: 1,
-    padding: 16,
+    padding: spacing[4],
   },
   sampleCard: {
-    backgroundColor: '#f9f9f9',
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#ddd',
-  },
-  sampleName: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  sampleId: {
-    fontSize: 12,
-    color: '#666',
+    marginBottom: spacing[3],
   },
 });

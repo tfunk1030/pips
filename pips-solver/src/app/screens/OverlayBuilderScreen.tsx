@@ -7,7 +7,8 @@ import * as FileSystem from 'expo-file-system';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useCallback, useEffect, useReducer, useRef, useState } from 'react';
-import { Alert, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import Animated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   AIExtractionResult,
@@ -24,6 +25,9 @@ import { deleteDraft, loadDraft, saveDraft } from '../../storage/drafts';
 import { getSettings, savePuzzle } from '../../storage/puzzles';
 import { buildPuzzleSpec, getBuilderStats, validateBuilderState } from '../../utils/specBuilder';
 import { validatePuzzleSpec } from '../../validator/validateSpec';
+import { colors, spacing, radii } from '../../theme';
+import { fontFamilies } from '../../theme/fonts';
+import { Button, Heading, Body, Label, Mono } from '../components/ui';
 import AIVerificationModal from '../components/AIVerificationModal';
 
 // Step components
@@ -70,7 +74,7 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
 
   // Auto-save on state changes (debounced)
   useEffect(() => {
-    if (!state.image) return; // Don't save until image is selected
+    if (!state.image) return;
 
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
@@ -97,23 +101,17 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
   const pickImage = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        // Avoid deprecated MediaTypeOptions; use new mediaTypes shape.
-        // Some expo-image-picker typings lag behind runtime, so we cast.
         mediaTypes: ['images'] as any,
         allowsEditing: false,
-        // Keep picker base64 reasonably sized; we may still downscale further below.
         quality: 0.7,
         base64: true,
       });
 
       if (!result.canceled && result.assets[0]) {
         const asset = result.assets[0];
-        // Normalize to a predictable JPEG base64 so the vision API can decode reliably.
-        // Also downscale to avoid memory spikes / iOS "Image context has been lost".
         let manipulated: { uri: string; width: number; height: number; base64?: string } | null =
           null;
 
-        // Prefer reading base64 from the file system (more robust than GPU-backed render paths).
         let base64FromFile: string | undefined = asset.base64 || undefined;
         if (!base64FromFile) {
           try {
@@ -121,12 +119,10 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
               encoding: 'base64' as any,
             });
           } catch (e) {
-            // We'll try manipulator below; if that fails too, the picker base64 is required.
             console.warn('Failed to read image base64 from file system:', e);
           }
         }
 
-        // Check if the image might be in HEIC format (common on iOS)
         const isLikelyHEIC =
           asset.uri.toLowerCase().includes('.heic') || asset.uri.toLowerCase().includes('.heif');
 
@@ -147,20 +143,14 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
         };
 
         try {
-          // First try: reasonable vision input size
           manipulated = await tryManipulate(1600);
         } catch (e1) {
           try {
-            // Fallback: smaller (more likely to succeed on memory-constrained contexts)
             manipulated = await tryManipulate(1024);
           } catch (e2) {
-            // Last resort: use base64 from picker or file system, even if we can't re-encode.
-            // This keeps the app usable; aiExtraction.ts will normalize the base64 string.
             console.warn('Image manipulation failed, falling back to picker base64:', e2);
             manipulated = null;
 
-            // If we have no usable base64 OR image is HEIC, show error and bail
-            // HEIC cannot be sent to Claude API - must be converted to JPEG/PNG
             if (!base64FromFile || isLikelyHEIC) {
               const reason = isLikelyHEIC
                 ? 'This image is in HEIC format which must be converted to JPEG for AI processing, but the conversion failed.'
@@ -184,7 +174,6 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
         const finalHeight = manipulated?.height || asset.height;
         const finalBase64 = manipulated?.base64 || base64FromFile || undefined;
 
-        // Validate base64 exists and looks valid
         if (!finalBase64 || finalBase64.length < 100) {
           Alert.alert(
             'Image Data Error',
@@ -212,7 +201,6 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
         });
         hasImageRef.current = true;
       } else if (!hasImageRef.current) {
-        // User cancelled without selecting - go back
         navigation.goBack();
       }
     } catch (error) {
@@ -230,10 +218,8 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
       return;
     }
 
-    // Get API keys from settings
     const settings = await getSettings();
 
-    // Check if we have at least one API key configured
     const hasGoogleKey = !!settings.googleApiKey?.trim();
     const hasAnthropicKey = !!settings.anthropicApiKey?.trim();
     const hasOpenAIKey = !!settings.openaiApiKey?.trim();
@@ -242,9 +228,9 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
       Alert.alert(
         'API Key Required',
         'Please add at least one API key in Settings to use AI extraction.\n\n' +
-          '🔵 Google (Gemini) - Best for grid detection\n' +
-          '🟠 Anthropic (Claude) - Best for structured output\n' +
-          '🟢 OpenAI (GPT-4o) - General fallback',
+          'Google (Gemini) - Best for grid detection\n' +
+          'Anthropic (Claude) - Best for structured output\n' +
+          'OpenAI (GPT-4o) - General fallback',
         [
           { text: 'Cancel', style: 'cancel' },
           {
@@ -258,18 +244,15 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
 
     dispatch({ type: 'AI_START' });
 
-    // Get configured strategy
     const strategy = settings.extractionStrategy || 'accurate';
     const strategyNames: Record<string, string> = {
-      fast: '⚡ Fast',
-      balanced: '⚖️ Balanced',
-      accurate: '🎯 Accurate',
-      ensemble: '🏆 Maximum Accuracy',
+      fast: 'Fast',
+      balanced: 'Balanced',
+      accurate: 'Accurate',
+      ensemble: 'Maximum Accuracy',
     };
     setAIProgress(`Starting ${strategyNames[strategy]} extraction...`);
 
-    // Use new multi-model extraction for maximum accuracy
-    // Enable hybrid CV mode only if a CV service URL is configured
     const hasCVService = !!settings.cvServiceUrl?.trim();
     const result = await extractPuzzleMultiModel(state.image.base64, {
       strategy,
@@ -278,10 +261,9 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
         anthropic: settings.anthropicApiKey,
         openai: settings.openaiApiKey,
       },
-      useHybridCV: hasCVService, // Only use CV if configured
+      useHybridCV: hasCVService,
       cvServiceUrl: settings.cvServiceUrl || undefined,
       onProgress: (progress: EnsembleProgress) => {
-        // Show more detailed progress for ensemble mode
         const modelInfo = progress.modelsUsed?.length ? ` (${progress.modelsUsed.join(', ')})` : '';
         setAIProgress(`${progress.message}${modelInfo}`);
       },
@@ -311,7 +293,6 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
         dominoCount: converted.dominoes.length,
       });
 
-      // Log timing info
       if (result.timing) {
         console.log(
           `[DEBUG] Extraction timing: board=${result.timing.boardMs}ms, dominoes=${result.timing.dominoesMs}ms, total=${result.timing.totalMs}ms`
@@ -319,14 +300,11 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
       }
 
       setAIProgress(null);
-
-      // Show verification modal instead of immediately applying
       setPendingAIResult(result.result);
     } else {
       dispatch({ type: 'AI_ERROR', error: result.error || 'Unknown error' });
       setAIProgress(null);
 
-      // Provide more helpful error message
       let errorMsg = result.error || 'Failed to extract puzzle data';
       let helpText = '';
 
@@ -372,8 +350,6 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
 
     console.log('[DEBUG] Accepted and applied AI result');
     setPendingAIResult(null);
-
-    // Auto-navigate to Step 2 to review regions
     dispatch({ type: 'SET_STEP', step: 2 });
   }, [pendingAIResult]);
 
@@ -392,7 +368,6 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
 
   const handleNext = () => {
     if (state.step < 4) {
-      // Update expected domino count when moving to step 4
       if (state.step === 3) {
         const cellCount = countValidCells(state.grid.holes);
         dispatch({ type: 'AUTO_FILL_DOMINOES' });
@@ -405,7 +380,6 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
     if (state.step > 1) {
       goToStep((state.step - 1) as BuilderStep);
     } else {
-      // Prompt to save draft before leaving
       Alert.alert('Save Progress?', 'Do you want to save your progress?', [
         {
           text: 'Discard',
@@ -428,7 +402,6 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
   };
 
   const handleFinish = useCallback(() => {
-    // Validate before finishing
     const validation = validateBuilderState(state);
 
     if (!validation.valid) {
@@ -447,14 +420,11 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
       return;
     }
 
-    // Show name prompt
     setShowNameModal(true);
   }, [state]);
 
   const handleSavePuzzle = useCallback(async () => {
     const name = puzzleName.trim() || `Puzzle ${new Date().toLocaleDateString()}`;
-
-    // Build the puzzle spec
     const result = buildPuzzleSpec(state, name);
 
     if (!result.success || !result.spec) {
@@ -462,7 +432,6 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
       return;
     }
 
-    // Validate the spec
     const specValidation = validatePuzzleSpec(result.spec);
     if (!specValidation.valid) {
       Alert.alert('Invalid Puzzle Spec', specValidation.errors.join('\n'), [{ text: 'OK' }]);
@@ -470,17 +439,10 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
     }
 
     try {
-      // Save the puzzle
       const savedPuzzle = await savePuzzle(result.spec, result.yaml || '');
-
-      // Delete the draft
       await deleteDraft(state.draftId);
-
-      // Close modal
       setShowNameModal(false);
       setPuzzleName('');
-
-      // Navigate to the puzzle viewer
       navigation.replace('Viewer', { puzzleId: savedPuzzle.id });
     } catch (error) {
       Alert.alert('Error', `Failed to save puzzle: ${error}`);
@@ -515,16 +477,16 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <Animated.View entering={FadeInDown.duration(400)} style={styles.header}>
         <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-          <Text style={styles.backButtonText}>{state.step === 1 ? '✕' : '←'}</Text>
+          <Mono style={styles.backButtonText}>{state.step === 1 ? '×' : '←'}</Mono>
         </TouchableOpacity>
-        <Text style={styles.title}>{stepTitles[state.step - 1]}</Text>
-        <Text style={styles.stepIndicator}>{state.step}/4</Text>
-      </View>
+        <Heading size="small" style={styles.title}>{stepTitles[state.step - 1]}</Heading>
+        <Label size="small" color="secondary">{state.step}/4</Label>
+      </Animated.View>
 
       {/* Step Progress */}
-      <View style={styles.progressContainer}>
+      <Animated.View entering={FadeIn.duration(400)} style={styles.progressContainer}>
         {[1, 2, 3, 4].map(step => (
           <View
             key={step}
@@ -535,38 +497,41 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
             ]}
           />
         ))}
-      </View>
+      </Animated.View>
 
       {/* Step Content */}
       <View style={styles.content}>{renderStepContent()}</View>
 
       {/* Footer */}
-      <View style={styles.footer}>
+      <Animated.View entering={FadeInUp.duration(400)} style={styles.footer}>
         {state.step > 1 && (
-          <TouchableOpacity
-            style={[styles.footerButton, styles.footerButtonSecondary]}
+          <Button
+            variant="secondary"
+            size="medium"
+            title="Back"
             onPress={() => goToStep((state.step - 1) as BuilderStep)}
-          >
-            <Text style={styles.footerButtonTextSecondary}>← Back</Text>
-          </TouchableOpacity>
+            style={styles.footerButton}
+          />
         )}
 
         {state.step < 4 ? (
-          <TouchableOpacity
-            style={[styles.footerButton, styles.footerButtonPrimary]}
+          <Button
+            variant="primary"
+            size="medium"
+            title="Next"
             onPress={handleNext}
-          >
-            <Text style={styles.footerButtonText}>Next →</Text>
-          </TouchableOpacity>
+            style={state.step === 1 ? styles.footerButtonFull : styles.footerButton}
+          />
         ) : (
-          <TouchableOpacity
-            style={[styles.footerButton, styles.footerButtonSuccess]}
+          <Button
+            variant="success"
+            size="medium"
+            title="Create Puzzle"
             onPress={handleFinish}
-          >
-            <Text style={styles.footerButtonText}>Create Puzzle</Text>
-          </TouchableOpacity>
+            style={styles.footerButton}
+          />
         )}
-      </View>
+      </Animated.View>
 
       {/* Name Prompt Modal */}
       <Modal
@@ -576,14 +541,14 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
         onRequestClose={() => setShowNameModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Name Your Puzzle</Text>
+          <Animated.View entering={FadeIn.duration(300)} style={styles.modalContent}>
+            <Heading size="medium" style={styles.modalTitle}>Name Your Puzzle</Heading>
             <TextInput
               style={styles.modalInput}
               value={puzzleName}
               onChangeText={setPuzzleName}
               placeholder="Enter puzzle name..."
-              placeholderTextColor="#666"
+              placeholderTextColor={colors.text.tertiary}
               autoFocus
               onSubmitEditing={handleSavePuzzle}
             />
@@ -591,31 +556,32 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
               {(() => {
                 const stats = getBuilderStats(state);
                 return (
-                  <Text style={styles.modalStatsText}>
-                    {stats.cellCount} cells • {stats.regionCount} regions • {stats.dominoCount}{' '}
-                    dominoes
-                  </Text>
+                  <Body size="small" color="secondary" style={styles.modalStatsText}>
+                    {stats.cellCount} cells • {stats.regionCount} regions • {stats.dominoCount} dominoes
+                  </Body>
                 );
               })()}
             </View>
             <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonCancel]}
+              <Button
+                variant="secondary"
+                size="medium"
+                title="Cancel"
                 onPress={() => {
                   setShowNameModal(false);
                   setPuzzleName('');
                 }}
-              >
-                <Text style={styles.modalButtonTextCancel}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonSave]}
+                style={styles.modalButton}
+              />
+              <Button
+                variant="success"
+                size="medium"
+                title="Save"
                 onPress={handleSavePuzzle}
-              >
-                <Text style={styles.modalButtonText}>Save</Text>
-              </TouchableOpacity>
+                style={styles.modalButton}
+              />
             </View>
-          </View>
+          </Animated.View>
         </View>
       </Modal>
 
@@ -636,151 +602,108 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.surface.obsidian,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
     borderBottomWidth: 1,
-    borderBottomColor: '#333',
+    borderBottomColor: colors.surface.slate,
   },
   backButton: {
-    padding: 8,
+    padding: spacing[2],
   },
   backButtonText: {
     fontSize: 20,
-    color: '#fff',
+    color: colors.text.primary,
   },
   title: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  stepIndicator: {
-    fontSize: 14,
-    color: '#888',
+    flex: 1,
+    textAlign: 'center',
   },
   progressContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 12,
-    gap: 8,
+    paddingVertical: spacing[3],
+    gap: spacing[2],
   },
   progressDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#444',
+    backgroundColor: colors.surface.graphite,
   },
   progressDotActive: {
-    backgroundColor: '#007AFF',
+    backgroundColor: colors.accent.brass,
     width: 24,
   },
   progressDotComplete: {
-    backgroundColor: '#34C759',
+    backgroundColor: colors.semantic.jade,
   },
   content: {
     flex: 1,
   },
   footer: {
     flexDirection: 'row',
-    padding: 16,
-    gap: 12,
+    padding: spacing[4],
+    gap: spacing[3],
     borderTopWidth: 1,
-    borderTopColor: '#333',
+    borderTopColor: colors.surface.slate,
   },
   footerButton: {
     flex: 1,
-    paddingVertical: 14,
-    borderRadius: 8,
-    alignItems: 'center',
   },
-  footerButtonPrimary: {
-    backgroundColor: '#007AFF',
-  },
-  footerButtonSecondary: {
-    backgroundColor: '#333',
-  },
-  footerButtonSuccess: {
-    backgroundColor: '#34C759',
-  },
-  footerButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  footerButtonTextSecondary: {
-    color: '#ccc',
-    fontSize: 16,
-    fontWeight: '600',
+  footerButtonFull: {
+    flex: 1,
   },
   // Modal styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: 'rgba(0,0,0,0.8)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: spacing[5],
   },
   modalContent: {
-    backgroundColor: '#1a1a2e',
-    borderRadius: 16,
-    padding: 24,
+    backgroundColor: colors.surface.charcoal,
+    borderRadius: radii.xl,
+    padding: spacing[6],
     width: '100%',
     maxWidth: 360,
+    borderWidth: 1,
+    borderColor: colors.surface.slate,
   },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#fff',
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: spacing[5],
   },
   modalInput: {
-    backgroundColor: '#222',
-    color: '#fff',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: 8,
+    backgroundColor: colors.surface.obsidian,
+    color: colors.text.primary,
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[4],
+    borderRadius: radii.md,
     fontSize: 16,
-    marginBottom: 12,
+    fontFamily: fontFamilies.bodyRegular,
+    marginBottom: spacing[3],
+    borderWidth: 1,
+    borderColor: colors.surface.slate,
   },
   modalStats: {
-    marginBottom: 20,
+    marginBottom: spacing[5],
   },
   modalStatsText: {
-    color: '#888',
-    fontSize: 13,
     textAlign: 'center',
   },
   modalButtons: {
     flexDirection: 'row',
-    gap: 12,
+    gap: spacing[3],
   },
   modalButton: {
     flex: 1,
-    paddingVertical: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  modalButtonCancel: {
-    backgroundColor: '#333',
-  },
-  modalButtonSave: {
-    backgroundColor: '#34C759',
-  },
-  modalButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  modalButtonTextCancel: {
-    color: '#ccc',
-    fontSize: 16,
-    fontWeight: '600',
   },
 });

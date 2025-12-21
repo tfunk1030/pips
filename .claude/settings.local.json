@@ -6,7 +6,15 @@
       "Bash(python -c \"import sys; sys.path.insert\\(0, ''..''\\); from claude_agent_sdk import ClaudeSDKClient; print\\(''✓ Claude SDK imported successfully''\\)\")",
       "Bash(python -c \"import sys; sys.path.insert\\(0, ''..''\\); from claude_agent_sdk import ClaudeSDKClient; print\\(''Claude SDK imported successfully''\\)\")",
       "Bash(python:*)",
-      "Bash(npx eas-cli:*)"
+      "Bash(npx eas-cli:*)",
+      "Skill(receiving-code-review)",
+      "Skill(using-superpowers)",
+      "Skill(ui-design-system)",
+      "Skill(frontend-design)",
+      "Skill(senior-architect)",
+      "Skill(ux-researcher-designer)",
+      "Skill(senior-computer-vision)",
+      "Skill(brainstorming)"
     ]
   }
 }

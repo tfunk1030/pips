@@ -12,27 +12,34 @@ import {
   ScrollView,
   StyleSheet,
   Switch,
-  Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { normalizePuzzle } from '../../model/normalize';
 import { parsePuzzle } from '../../model/parser';
 import { SAMPLE_PUZZLES } from '../../samples';
 import { solvePuzzle } from '../../solver/solver';
-import { ExtractionStrategy, getSettings, saveSettings } from '../../storage/puzzles';
+import { ApiKeyMode, ExtractionStrategy, getSettings, saveSettings } from '../../storage/puzzles';
 import { validateSolution } from '../../validator/validateSolution';
 import { validatePuzzleSpec } from '../../validator/validateSpec';
+import { colors, spacing, radii } from '../../theme';
+import { fontFamilies } from '../../theme/fonts';
+import { Button, Card, Badge, Heading, Body, Label, Mono, Screen } from '../components/ui';
 
 const STRATEGY_OPTIONS: { value: ExtractionStrategy; label: string; description: string }[] = [
-  { value: 'fast', label: '⚡ Fast', description: 'Single model (~3s)' },
-  { value: 'balanced', label: '⚖️ Balanced', description: 'With verification (~20s)' },
-  { value: 'accurate', label: '🎯 Accurate', description: 'Multi-model (~35s)' },
-  { value: 'ensemble', label: '🏆 Maximum', description: 'Ensemble consensus (~45s)' },
+  { value: 'fast', label: 'Fast', description: 'Single model (~5s)' },
+  { value: 'balanced', label: 'Balanced', description: 'With verification (~15s)' },
+  { value: 'accurate', label: 'Accurate', description: 'Multi-stage (~25s)' },
+  { value: 'ensemble', label: 'Maximum', description: '3-model consensus (~45s)' },
 ];
 
-// CV Service URL placeholder - when empty, pure AI mode is used
+const API_MODE_OPTIONS: { value: ApiKeyMode; label: string; description: string }[] = [
+  { value: 'openrouter', label: 'OpenRouter', description: 'One key for all models' },
+  { value: 'individual', label: 'Individual', description: 'Separate provider keys' },
+];
+
 const CV_SERVICE_PLACEHOLDER = 'http://your-cv-service:8080';
 
 export default function SettingsScreen({ navigation }: any) {
@@ -42,10 +49,14 @@ export default function SettingsScreen({ navigation }: any) {
     defaultFindAll: false,
     defaultDebugLevel: 0,
     maxIterationsPerTick: 100,
+    apiKeyMode: 'openrouter' as ApiKeyMode,
+    openrouterApiKey: '',
     anthropicApiKey: '',
     googleApiKey: '',
     openaiApiKey: '',
-    extractionStrategy: 'accurate' as ExtractionStrategy,
+    extractionStrategy: 'ensemble' as ExtractionStrategy,
+    useMultiStagePipeline: true,
+    saveDebugResponses: false,
     cvServiceUrl: '',
   });
 
@@ -57,10 +68,14 @@ export default function SettingsScreen({ navigation }: any) {
     const loaded = await getSettings();
     setSettings({
       ...loaded,
+      apiKeyMode: loaded.apiKeyMode || 'openrouter',
+      openrouterApiKey: loaded.openrouterApiKey || '',
       anthropicApiKey: loaded.anthropicApiKey || '',
       googleApiKey: loaded.googleApiKey || '',
       openaiApiKey: loaded.openaiApiKey || '',
-      extractionStrategy: loaded.extractionStrategy || 'accurate',
+      extractionStrategy: loaded.extractionStrategy || 'ensemble',
+      useMultiStagePipeline: loaded.useMultiStagePipeline !== false,
+      saveDebugResponses: loaded.saveDebugResponses || false,
       cvServiceUrl: loaded.cvServiceUrl || '',
     });
   };
@@ -131,17 +146,21 @@ export default function SettingsScreen({ navigation }: any) {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Text style={styles.backButtonText}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>Settings</Text>
+    <Screen>
+      {/* Header */}
+      <Animated.View entering={FadeInDown.duration(400)} style={styles.header}>
+        <Button
+          variant="ghost"
+          size="small"
+          title="Back"
+          onPress={() => navigation.goBack()}
+        />
+        <Heading size="medium" style={styles.title}>Settings</Heading>
         <View style={styles.placeholder} />
-      </View>
+      </Animated.View>
 
       <KeyboardAvoidingView
-        style={styles.content}
+        style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScrollView
@@ -149,393 +168,481 @@ export default function SettingsScreen({ navigation }: any) {
           keyboardShouldPersistTaps="handled"
           onScrollBeginDrag={Keyboard.dismiss}
           contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
         >
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Solver Defaults</Text>
+          {/* Solver Defaults Section */}
+          <Animated.View entering={FadeInUp.delay(100).duration(400)}>
+            <Card variant="elevated" style={styles.section}>
+              <Heading size="small" style={styles.sectionTitle}>Solver Defaults</Heading>
 
-            <View style={styles.setting}>
-              <View style={styles.settingInfo}>
-                <Text style={styles.settingLabel}>Max Pip Value</Text>
-                <Text style={styles.settingDescription}>Maximum pip value for dominoes (0-N)</Text>
+              <View style={styles.setting}>
+                <View style={styles.settingInfo}>
+                  <Label size="medium">Max Pip Value</Label>
+                  <Body size="small" color="tertiary">Maximum pip value for dominoes (0-N)</Body>
+                </View>
+                <View style={styles.settingControl}>
+                  <TouchableOpacity
+                    style={styles.incrementButton}
+                    onPress={() =>
+                      updateSetting('defaultMaxPip', Math.max(0, settings.defaultMaxPip - 1))
+                    }
+                  >
+                    <Mono style={styles.incrementText}>-</Mono>
+                  </TouchableOpacity>
+                  <Mono style={styles.settingValue}>{settings.defaultMaxPip}</Mono>
+                  <TouchableOpacity
+                    style={styles.incrementButton}
+                    onPress={() => updateSetting('defaultMaxPip', settings.defaultMaxPip + 1)}
+                  >
+                    <Mono style={styles.incrementText}>+</Mono>
+                  </TouchableOpacity>
+                </View>
               </View>
-              <View style={styles.settingControl}>
-                <TouchableOpacity
-                  style={styles.incrementButton}
-                  onPress={() =>
-                    updateSetting('defaultMaxPip', Math.max(0, settings.defaultMaxPip - 1))
-                  }
-                >
-                  <Text style={styles.incrementButtonText}>-</Text>
-                </TouchableOpacity>
-                <Text style={styles.settingValue}>{settings.defaultMaxPip}</Text>
-                <TouchableOpacity
-                  style={styles.incrementButton}
-                  onPress={() => updateSetting('defaultMaxPip', settings.defaultMaxPip + 1)}
-                >
-                  <Text style={styles.incrementButtonText}>+</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
 
-            <View style={styles.setting}>
-              <View style={styles.settingInfo}>
-                <Text style={styles.settingLabel}>Allow Duplicate Dominoes</Text>
-                <Text style={styles.settingDescription}>
-                  Allow same domino to be used multiple times
-                </Text>
+              <View style={styles.setting}>
+                <View style={styles.settingInfo}>
+                  <Label size="medium">Allow Duplicate Dominoes</Label>
+                  <Body size="small" color="tertiary">Allow same domino to be used multiple times</Body>
+                </View>
+                <Switch
+                  value={settings.defaultAllowDuplicates}
+                  onValueChange={value => updateSetting('defaultAllowDuplicates', value)}
+                  trackColor={{ false: colors.surface.graphite, true: colors.accent.brass }}
+                  thumbColor={settings.defaultAllowDuplicates ? colors.accent.brassLight : colors.surface.ash}
+                />
               </View>
-              <Switch
-                value={settings.defaultAllowDuplicates}
-                onValueChange={value => updateSetting('defaultAllowDuplicates', value)}
+
+              <View style={styles.setting}>
+                <View style={styles.settingInfo}>
+                  <Label size="medium">Find All Solutions</Label>
+                  <Body size="small" color="tertiary">Find all solutions vs first solution only</Body>
+                </View>
+                <Switch
+                  value={settings.defaultFindAll}
+                  onValueChange={value => updateSetting('defaultFindAll', value)}
+                  trackColor={{ false: colors.surface.graphite, true: colors.accent.brass }}
+                  thumbColor={settings.defaultFindAll ? colors.accent.brassLight : colors.surface.ash}
+                />
+              </View>
+            </Card>
+          </Animated.View>
+
+          {/* Performance Section */}
+          <Animated.View entering={FadeInUp.delay(200).duration(400)}>
+            <Card variant="elevated" style={styles.section}>
+              <Heading size="small" style={styles.sectionTitle}>Performance</Heading>
+
+              <View style={styles.setting}>
+                <View style={styles.settingInfo}>
+                  <Label size="medium">Iterations Per Tick</Label>
+                  <Body size="small" color="tertiary">Higher = faster but UI may lag</Body>
+                </View>
+                <View style={styles.settingControl}>
+                  <TouchableOpacity
+                    style={styles.incrementButton}
+                    onPress={() =>
+                      updateSetting(
+                        'maxIterationsPerTick',
+                        Math.max(10, settings.maxIterationsPerTick - 50)
+                      )
+                    }
+                  >
+                    <Mono style={styles.incrementText}>-</Mono>
+                  </TouchableOpacity>
+                  <Mono style={styles.settingValue}>{settings.maxIterationsPerTick}</Mono>
+                  <TouchableOpacity
+                    style={styles.incrementButton}
+                    onPress={() =>
+                      updateSetting('maxIterationsPerTick', settings.maxIterationsPerTick + 50)
+                    }
+                  >
+                    <Mono style={styles.incrementText}>+</Mono>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </Card>
+          </Animated.View>
+
+          {/* Debug Section */}
+          <Animated.View entering={FadeInUp.delay(300).duration(400)}>
+            <Card variant="elevated" style={styles.section}>
+              <Heading size="small" style={styles.sectionTitle}>Debug</Heading>
+
+              <View style={styles.setting}>
+                <View style={styles.settingInfo}>
+                  <Label size="medium">Debug Level</Label>
+                  <Body size="small" color="tertiary">0=Off, 1=Basic, 2=Verbose</Body>
+                </View>
+                <View style={styles.settingControl}>
+                  <TouchableOpacity
+                    style={styles.incrementButton}
+                    onPress={() =>
+                      updateSetting('defaultDebugLevel', Math.max(0, settings.defaultDebugLevel - 1))
+                    }
+                  >
+                    <Mono style={styles.incrementText}>-</Mono>
+                  </TouchableOpacity>
+                  <Mono style={styles.settingValue}>{settings.defaultDebugLevel}</Mono>
+                  <TouchableOpacity
+                    style={styles.incrementButton}
+                    onPress={() =>
+                      updateSetting('defaultDebugLevel', Math.min(2, settings.defaultDebugLevel + 1))
+                    }
+                  >
+                    <Mono style={styles.incrementText}>+</Mono>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <Button
+                variant="secondary"
+                size="medium"
+                title="Run Solver Self-Test"
+                onPress={handleSelfTest}
+                style={styles.selfTestButton}
               />
-            </View>
+            </Card>
+          </Animated.View>
 
-            <View style={styles.setting}>
-              <View style={styles.settingInfo}>
-                <Text style={styles.settingLabel}>Find All Solutions</Text>
-                <Text style={styles.settingDescription}>
-                  Find all solutions vs first solution only
-                </Text>
+          {/* AI Extraction Section */}
+          <Animated.View entering={FadeInUp.delay(400).duration(400)}>
+            <Card variant="elevated" style={styles.section}>
+              <Heading size="small" style={styles.sectionTitle}>AI Extraction</Heading>
+              <Body size="small" color="secondary" style={styles.sectionSubtitle}>
+                5-stage multi-model extraction with Gemini 3 Pro, GPT-5.2, and Claude Opus 4.5.
+              </Body>
+
+              {/* Strategy Selector */}
+              <Label size="medium" style={styles.strategyLabel}>Extraction Strategy</Label>
+              <View style={styles.strategySelector}>
+                {STRATEGY_OPTIONS.map(option => (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={[
+                      styles.strategyOption,
+                      settings.extractionStrategy === option.value && styles.strategyOptionSelected,
+                    ]}
+                    onPress={() => updateSetting('extractionStrategy', option.value)}
+                  >
+                    <Label
+                      size="small"
+                      style={[
+                        styles.strategyOptionLabel,
+                        settings.extractionStrategy === option.value && styles.strategyOptionLabelSelected,
+                      ]}
+                    >
+                      {option.label}
+                    </Label>
+                    <Body
+                      size="small"
+                      style={[
+                        styles.strategyOptionDesc,
+                        settings.extractionStrategy === option.value && styles.strategyOptionDescSelected,
+                      ]}
+                    >
+                      {option.description}
+                    </Body>
+                  </TouchableOpacity>
+                ))}
               </View>
-              <Switch
-                value={settings.defaultFindAll}
-                onValueChange={value => updateSetting('defaultFindAll', value)}
-              />
-            </View>
-          </View>
 
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Performance</Text>
-
-            <View style={styles.setting}>
-              <View style={styles.settingInfo}>
-                <Text style={styles.settingLabel}>Iterations Per Tick</Text>
-                <Text style={styles.settingDescription}>Higher = faster but UI may lag</Text>
+              {/* API Key Mode Selector */}
+              <Label size="medium" style={styles.strategyLabel}>API Key Mode</Label>
+              <View style={styles.strategySelector}>
+                {API_MODE_OPTIONS.map(option => (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={[
+                      styles.strategyOption,
+                      settings.apiKeyMode === option.value && styles.strategyOptionSelected,
+                    ]}
+                    onPress={() => updateSetting('apiKeyMode', option.value)}
+                  >
+                    <Label
+                      size="small"
+                      style={[
+                        styles.strategyOptionLabel,
+                        settings.apiKeyMode === option.value && styles.strategyOptionLabelSelected,
+                      ]}
+                    >
+                      {option.label}
+                    </Label>
+                    <Body
+                      size="small"
+                      style={[
+                        styles.strategyOptionDesc,
+                        settings.apiKeyMode === option.value && styles.strategyOptionDescSelected,
+                      ]}
+                    >
+                      {option.description}
+                    </Body>
+                  </TouchableOpacity>
+                ))}
               </View>
-              <View style={styles.settingControl}>
-                <TouchableOpacity
-                  style={styles.incrementButton}
-                  onPress={() =>
-                    updateSetting(
-                      'maxIterationsPerTick',
-                      Math.max(10, settings.maxIterationsPerTick - 50)
+
+              {/* OpenRouter API Key */}
+              {settings.apiKeyMode === 'openrouter' && (
+                <View style={styles.apiKeySection}>
+                  <View style={styles.apiKeyHeader}>
+                    <Label size="medium">OpenRouter API Key</Label>
+                    <Badge variant="accent" label="Recommended" size="small" />
+                  </View>
+                  <Body size="small" color="tertiary" style={styles.apiKeyHint}>
+                    Single key for Gemini 3 Pro, GPT-5.2, and Claude Opus 4.5
+                  </Body>
+                  <TextInput
+                    style={styles.apiKeyInput}
+                    value={settings.openrouterApiKey}
+                    onChangeText={value => updateSetting('openrouterApiKey', value)}
+                    placeholder="sk-or-v1-..."
+                    placeholderTextColor={colors.text.tertiary}
+                    secureTextEntry
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    returnKeyType="done"
+                    blurOnSubmit
+                    onSubmitEditing={Keyboard.dismiss}
+                  />
+                </View>
+              )}
+
+              {/* Individual API Keys */}
+              {settings.apiKeyMode === 'individual' && (
+                <>
+                  <View style={styles.apiKeySection}>
+                    <View style={styles.apiKeyHeader}>
+                      <Label size="medium">Google API Key (Gemini 3 Pro)</Label>
+                      <Badge variant="info" label="Spatial" size="small" />
+                    </View>
+                    <Body size="small" color="tertiary" style={styles.apiKeyHint}>
+                      Best for grid geometry and spatial understanding
+                    </Body>
+                    <TextInput
+                      style={styles.apiKeyInput}
+                      value={settings.googleApiKey}
+                      onChangeText={value => updateSetting('googleApiKey', value)}
+                      placeholder="AIza..."
+                      placeholderTextColor={colors.text.tertiary}
+                      secureTextEntry
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      returnKeyType="done"
+                      blurOnSubmit
+                      onSubmitEditing={Keyboard.dismiss}
+                    />
+                  </View>
+
+                  <View style={styles.apiKeySection}>
+                    <View style={styles.apiKeyHeader}>
+                      <Label size="medium">OpenAI API Key (GPT-5.2)</Label>
+                      <Badge variant="info" label="Detail" size="small" />
+                    </View>
+                    <Body size="small" color="tertiary" style={styles.apiKeyHint}>
+                      Best for OCR, pip counting, and fine visual detail
+                    </Body>
+                    <TextInput
+                      style={styles.apiKeyInput}
+                      value={settings.openaiApiKey}
+                      onChangeText={value => updateSetting('openaiApiKey', value)}
+                      placeholder="sk-..."
+                      placeholderTextColor={colors.text.tertiary}
+                      secureTextEntry
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      returnKeyType="done"
+                      blurOnSubmit
+                      onSubmitEditing={Keyboard.dismiss}
+                    />
+                  </View>
+
+                  <View style={styles.apiKeySection}>
+                    <View style={styles.apiKeyHeader}>
+                      <Label size="medium">Anthropic API Key (Claude Opus 4.5)</Label>
+                      <Badge variant="accent" label="Validation" size="small" />
+                    </View>
+                    <Body size="small" color="tertiary" style={styles.apiKeyHint}>
+                      Best for instruction following and structured output
+                    </Body>
+                    <TextInput
+                      style={styles.apiKeyInput}
+                      value={settings.anthropicApiKey}
+                      onChangeText={value => updateSetting('anthropicApiKey', value)}
+                      placeholder="sk-ant-..."
+                      placeholderTextColor={colors.text.tertiary}
+                      secureTextEntry
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      returnKeyType="done"
+                      blurOnSubmit
+                      onSubmitEditing={Keyboard.dismiss}
+                    />
+                  </View>
+                </>
+              )}
+
+              {/* Status */}
+              <View style={styles.apiStatus}>
+                <Label size="small" color="secondary">API Status:</Label>
+                <View style={styles.statusBadges}>
+                  {settings.apiKeyMode === 'openrouter' ? (
+                    settings.openrouterApiKey ? (
+                      <Badge variant="success" label="OpenRouter Ready" size="small" />
+                    ) : (
+                      <Badge variant="warning" label="Add OpenRouter Key" size="small" />
                     )
-                  }
-                >
-                  <Text style={styles.incrementButtonText}>-</Text>
-                </TouchableOpacity>
-                <Text style={styles.settingValue}>{settings.maxIterationsPerTick}</Text>
-                <TouchableOpacity
-                  style={styles.incrementButton}
-                  onPress={() =>
-                    updateSetting('maxIterationsPerTick', settings.maxIterationsPerTick + 50)
-                  }
-                >
-                  <Text style={styles.incrementButtonText}>+</Text>
-                </TouchableOpacity>
+                  ) : (
+                    <>
+                      {settings.googleApiKey ? (
+                        <Badge variant="success" label="Gemini" size="small" />
+                      ) : (
+                        <Badge variant="info" label="Gemini" size="small" />
+                      )}
+                      {settings.openaiApiKey ? (
+                        <Badge variant="success" label="GPT-5.2" size="small" />
+                      ) : (
+                        <Badge variant="info" label="GPT-5.2" size="small" />
+                      )}
+                      {settings.anthropicApiKey ? (
+                        <Badge variant="success" label="Claude" size="small" />
+                      ) : (
+                        <Badge variant="info" label="Claude" size="small" />
+                      )}
+                    </>
+                  )}
+                </View>
               </View>
-            </View>
-          </View>
 
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Debug</Text>
-
-            <View style={styles.setting}>
-              <View style={styles.settingInfo}>
-                <Text style={styles.settingLabel}>Debug Level</Text>
-                <Text style={styles.settingDescription}>0=Off, 1=Basic, 2=Verbose</Text>
+              {/* Advanced Options */}
+              <View style={[styles.setting, { marginTop: spacing[4] }]}>
+                <View style={styles.settingInfo}>
+                  <Label size="medium">Save Debug Responses</Label>
+                  <Body size="small" color="tertiary">Store raw AI responses for troubleshooting</Body>
+                </View>
+                <Switch
+                  value={settings.saveDebugResponses}
+                  onValueChange={value => updateSetting('saveDebugResponses', value)}
+                  trackColor={{ false: colors.surface.graphite, true: colors.accent.brass }}
+                  thumbColor={settings.saveDebugResponses ? colors.accent.brassLight : colors.surface.ash}
+                />
               </View>
-              <View style={styles.settingControl}>
-                <TouchableOpacity
-                  style={styles.incrementButton}
-                  onPress={() =>
-                    updateSetting('defaultDebugLevel', Math.max(0, settings.defaultDebugLevel - 1))
-                  }
-                >
-                  <Text style={styles.incrementButtonText}>-</Text>
-                </TouchableOpacity>
-                <Text style={styles.settingValue}>{settings.defaultDebugLevel}</Text>
-                <TouchableOpacity
-                  style={styles.incrementButton}
-                  onPress={() =>
-                    updateSetting('defaultDebugLevel', Math.min(2, settings.defaultDebugLevel + 1))
-                  }
-                >
-                  <Text style={styles.incrementButtonText}>+</Text>
-                </TouchableOpacity>
+            </Card>
+          </Animated.View>
+
+          {/* CV Service Section */}
+          <Animated.View entering={FadeInUp.delay(500).duration(400)}>
+            <Card variant="elevated" style={styles.section}>
+              <Heading size="small" style={styles.sectionTitle}>CV Service (Optional)</Heading>
+              <Body size="small" color="secondary" style={styles.sectionSubtitle}>
+                For improved accuracy, you can run a CV service that crops images before AI analysis.
+                Leave empty to use pure AI mode.
+              </Body>
+
+              <View style={styles.apiKeySection}>
+                <View style={styles.apiKeyHeader}>
+                  <Label size="medium">CV Service URL</Label>
+                  {settings.cvServiceUrl ? (
+                    <Badge variant="success" label="Configured" size="small" />
+                  ) : (
+                    <Badge variant="warning" label="Optional" size="small" />
+                  )}
+                </View>
+                <Body size="small" color="tertiary" style={styles.apiKeyHint}>
+                  {settings.cvServiceUrl
+                    ? 'Hybrid CV+AI mode enabled for better accuracy'
+                    : 'Pure AI mode (no CV service needed)'}
+                </Body>
+                <TextInput
+                  style={styles.apiKeyInput}
+                  value={settings.cvServiceUrl}
+                  onChangeText={value => updateSetting('cvServiceUrl', value)}
+                  placeholder={CV_SERVICE_PLACEHOLDER}
+                  placeholderTextColor={colors.text.tertiary}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                  returnKeyType="done"
+                  blurOnSubmit
+                  onSubmitEditing={Keyboard.dismiss}
+                />
               </View>
-            </View>
+            </Card>
+          </Animated.View>
 
-            <TouchableOpacity style={styles.selfTestButton} onPress={handleSelfTest}>
-              <Text style={styles.selfTestButtonText}>Run Solver Self-Test</Text>
-            </TouchableOpacity>
-          </View>
+          {/* About Section */}
+          <Animated.View entering={FadeInUp.delay(600).duration(400)}>
+            <Card variant="default" style={styles.section}>
+              <Heading size="small" style={styles.sectionTitle}>About</Heading>
+              <Body size="small" color="secondary">Pips Solver v1.0.0</Body>
+              <Body size="small" color="tertiary">
+                NYT Pips puzzle solver using constraint satisfaction
+              </Body>
+            </Card>
+          </Animated.View>
 
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>AI Extraction</Text>
-            <Text style={styles.sectionSubtitle}>
-              Multi-model extraction for maximum accuracy. Add API keys for each provider.
-            </Text>
-
-            {/* Extraction Strategy Selector */}
-            <View style={styles.setting}>
-              <View style={styles.settingInfo}>
-                <Text style={styles.settingLabel}>Extraction Strategy</Text>
-                <Text style={styles.settingDescription}>
-                  Higher accuracy = more time & API calls
-                </Text>
-              </View>
-            </View>
-            <View style={styles.strategySelector}>
-              {STRATEGY_OPTIONS.map(option => (
-                <TouchableOpacity
-                  key={option.value}
-                  style={[
-                    styles.strategyOption,
-                    settings.extractionStrategy === option.value && styles.strategyOptionSelected,
-                  ]}
-                  onPress={() => updateSetting('extractionStrategy', option.value)}
-                >
-                  <Text
-                    style={[
-                      styles.strategyLabel,
-                      settings.extractionStrategy === option.value && styles.strategyLabelSelected,
-                    ]}
-                  >
-                    {option.label}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.strategyDesc,
-                      settings.extractionStrategy === option.value && styles.strategyDescSelected,
-                    ]}
-                  >
-                    {option.description}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {/* Google API Key (Gemini) */}
-            <View style={styles.apiKeySection}>
-              <View style={styles.apiKeyHeader}>
-                <Text style={styles.apiKeyLabel}>🔵 Google API Key (Gemini)</Text>
-                <Text style={styles.apiKeyBadge}>Best for grid detection</Text>
-              </View>
-              <Text style={styles.apiKeyHint}>
-                Best mAP (13.3) for object/bounding box detection
-              </Text>
-              <TextInput
-                style={styles.apiKeyInput}
-                value={settings.googleApiKey}
-                onChangeText={value => updateSetting('googleApiKey', value)}
-                placeholder="AIza..."
-                placeholderTextColor="#999"
-                secureTextEntry
-                autoCapitalize="none"
-                autoCorrect={false}
-                returnKeyType="done"
-                blurOnSubmit
-                onSubmitEditing={Keyboard.dismiss}
-              />
-            </View>
-
-            {/* Anthropic API Key (Claude) */}
-            <View style={styles.apiKeySection}>
-              <View style={styles.apiKeyHeader}>
-                <Text style={styles.apiKeyLabel}>🟠 Anthropic API Key (Claude)</Text>
-                <Text style={styles.apiKeyBadge}>Best for JSON output</Text>
-              </View>
-              <Text style={styles.apiKeyHint}>85% structured JSON accuracy, best reasoning</Text>
-              <TextInput
-                style={styles.apiKeyInput}
-                value={settings.anthropicApiKey}
-                onChangeText={value => updateSetting('anthropicApiKey', value)}
-                placeholder="sk-ant-..."
-                placeholderTextColor="#999"
-                secureTextEntry
-                autoCapitalize="none"
-                autoCorrect={false}
-                returnKeyType="done"
-                blurOnSubmit
-                onSubmitEditing={Keyboard.dismiss}
-              />
-            </View>
-
-            {/* OpenAI API Key (GPT-4o) */}
-            <View style={styles.apiKeySection}>
-              <View style={styles.apiKeyHeader}>
-                <Text style={styles.apiKeyLabel}>🟢 OpenAI API Key (GPT-4o)</Text>
-                <Text style={[styles.apiKeyBadge, styles.apiKeyBadgeOptional]}>
-                  Optional fallback
-                </Text>
-              </View>
-              <Text style={styles.apiKeyHint}>Good general purpose, weaker on spatial tasks</Text>
-              <TextInput
-                style={styles.apiKeyInput}
-                value={settings.openaiApiKey}
-                onChangeText={value => updateSetting('openaiApiKey', value)}
-                placeholder="sk-..."
-                placeholderTextColor="#999"
-                secureTextEntry
-                autoCapitalize="none"
-                autoCorrect={false}
-                returnKeyType="done"
-                blurOnSubmit
-                onSubmitEditing={Keyboard.dismiss}
-              />
-            </View>
-
-            {/* Status indicator */}
-            <View style={styles.apiKeyStatus}>
-              <Text style={styles.apiKeyStatusLabel}>Configured providers:</Text>
-              <View style={styles.apiKeyStatusBadges}>
-                {settings.googleApiKey ? (
-                  <Text style={styles.statusBadgeActive}>✓ Gemini</Text>
-                ) : (
-                  <Text style={styles.statusBadgeInactive}>○ Gemini</Text>
-                )}
-                {settings.anthropicApiKey ? (
-                  <Text style={styles.statusBadgeActive}>✓ Claude</Text>
-                ) : (
-                  <Text style={styles.statusBadgeInactive}>○ Claude</Text>
-                )}
-                {settings.openaiApiKey ? (
-                  <Text style={styles.statusBadgeActive}>✓ GPT-4o</Text>
-                ) : (
-                  <Text style={styles.statusBadgeInactive}>○ GPT-4o</Text>
-                )}
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>CV Service (Optional)</Text>
-            <Text style={styles.sectionSubtitle}>
-              For improved accuracy, you can run a CV service that crops images before AI analysis.
-              Leave empty to use pure AI mode (works great without CV).
-            </Text>
-
-            <View style={styles.apiKeySection}>
-              <View style={styles.apiKeyHeader}>
-                <Text style={styles.apiKeyLabel}>🖼️ CV Service URL</Text>
-                {settings.cvServiceUrl ? (
-                  <Text style={styles.statusBadgeActive}>✓ Configured</Text>
-                ) : (
-                  <Text style={[styles.apiKeyBadge, styles.apiKeyBadgeOptional]}>Optional</Text>
-                )}
-              </View>
-              <Text style={styles.apiKeyHint}>
-                {settings.cvServiceUrl
-                  ? 'Hybrid CV+AI mode enabled for better accuracy'
-                  : 'Pure AI mode (no CV service needed)'}
-              </Text>
-              <TextInput
-                style={styles.apiKeyInput}
-                value={settings.cvServiceUrl}
-                onChangeText={value => updateSetting('cvServiceUrl', value)}
-                placeholder={CV_SERVICE_PLACEHOLDER}
-                placeholderTextColor="#666"
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="url"
-                returnKeyType="done"
-                blurOnSubmit
-                onSubmitEditing={Keyboard.dismiss}
-              />
-              <Text style={styles.cvServiceNote}>
-                Deploy cv-service/ to Railway, Render, or Cloud Run for remote access.
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.infoSection}>
-            <Text style={styles.infoTitle}>About</Text>
-            <Text style={styles.infoText}>Pips Solver v1.0.0</Text>
-            <Text style={styles.infoText}>
-              NYT Pips puzzle solver using constraint satisfaction
-            </Text>
-          </View>
+          {/* Bottom spacing */}
+          <View style={{ height: spacing[6] }} />
         </ScrollView>
 
-        <View style={styles.footer}>
-          <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-            <Text style={styles.saveButtonText}>Save Settings</Text>
-          </TouchableOpacity>
-        </View>
+        {/* Footer */}
+        <Animated.View entering={FadeInUp.delay(700).duration(400)} style={styles.footer}>
+          <Button
+            variant="success"
+            size="large"
+            title="Save Settings"
+            onPress={handleSave}
+            style={styles.saveButton}
+          />
+        </Animated.View>
       </KeyboardAvoidingView>
-    </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
-    paddingTop: 60,
-    backgroundColor: '#fff',
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
     borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
-  },
-  backButton: {
-    padding: 8,
-  },
-  backButtonText: {
-    fontSize: 16,
-    color: '#007AFF',
+    borderBottomColor: colors.surface.slate,
   },
   title: {
-    fontSize: 20,
-    fontWeight: 'bold',
     flex: 1,
     textAlign: 'center',
   },
   placeholder: {
     width: 70,
   },
-  content: {
+  container: {
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 140,
+    paddingHorizontal: spacing[4],
+    paddingBottom: spacing[20],
   },
   section: {
-    backgroundColor: '#fff',
-    marginTop: 16,
-    padding: 16,
+    marginTop: spacing[4],
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 16,
-    color: '#333',
+    marginBottom: spacing[4],
+  },
+  sectionSubtitle: {
+    marginBottom: spacing[4],
+    marginTop: -spacing[2],
   },
   setting: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: spacing[3],
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: colors.surface.slate,
   },
   settingInfo: {
     flex: 1,
-    marginRight: 16,
-  },
-  settingLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  settingDescription: {
-    fontSize: 12,
-    color: '#666',
+    marginRight: spacing[4],
   },
   settingControl: {
     flexDirection: 'row',
@@ -545,191 +652,103 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#007AFF',
+    backgroundColor: colors.accent.brass,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  incrementButtonText: {
-    color: '#fff',
+  incrementText: {
     fontSize: 20,
-    fontWeight: 'bold',
+    color: colors.text.inverse,
   },
   settingValue: {
     fontSize: 18,
-    fontWeight: 'bold',
-    marginHorizontal: 16,
+    color: colors.text.primary,
+    marginHorizontal: spacing[4],
     minWidth: 40,
     textAlign: 'center',
   },
-  infoSection: {
-    backgroundColor: '#fff',
-    marginTop: 16,
-    marginBottom: 16,
-    padding: 16,
+  selfTestButton: {
+    marginTop: spacing[4],
   },
-  infoTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 12,
-  },
-  infoText: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 4,
-  },
-  footer: {
-    padding: 16,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#ddd',
-  },
-  saveButton: {
-    backgroundColor: '#4CAF50',
-    padding: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  saveButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  apiKeyInput: {
-    backgroundColor: '#f9f9f9',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    fontFamily: 'monospace',
-    marginTop: 8,
-  },
-  sectionSubtitle: {
-    fontSize: 13,
-    color: '#666',
-    marginBottom: 16,
-    lineHeight: 18,
+  strategyLabel: {
+    marginBottom: spacing[3],
   },
   strategySelector: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 20,
+    gap: spacing[2],
+    marginBottom: spacing[4],
   },
   strategyOption: {
     flex: 1,
     minWidth: '45%',
-    padding: 12,
-    borderRadius: 8,
+    padding: spacing[3],
+    borderRadius: radii.md,
     borderWidth: 2,
-    borderColor: '#e0e0e0',
-    backgroundColor: '#f9f9f9',
+    borderColor: colors.surface.slate,
+    backgroundColor: colors.surface.charcoal,
   },
   strategyOptionSelected: {
-    borderColor: '#4CAF50',
-    backgroundColor: '#E8F5E9',
+    borderColor: colors.accent.brass,
+    backgroundColor: colors.surface.slate,
   },
-  strategyLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 2,
+  strategyOptionLabel: {
+    color: colors.text.secondary,
   },
-  strategyLabelSelected: {
-    color: '#2E7D32',
+  strategyOptionLabelSelected: {
+    color: colors.accent.brass,
   },
-  strategyDesc: {
-    fontSize: 11,
-    color: '#888',
+  strategyOptionDesc: {
+    color: colors.text.tertiary,
+    marginTop: spacing[1],
   },
-  strategyDescSelected: {
-    color: '#4CAF50',
+  strategyOptionDescSelected: {
+    color: colors.text.secondary,
   },
   apiKeySection: {
-    marginBottom: 16,
-    paddingTop: 12,
+    marginBottom: spacing[4],
+    paddingTop: spacing[3],
     borderTopWidth: 1,
-    borderTopColor: '#eee',
+    borderTopColor: colors.surface.slate,
   },
   apiKeyHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
-  },
-  apiKeyLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-  },
-  apiKeyBadge: {
-    fontSize: 10,
-    color: '#fff',
-    backgroundColor: '#4CAF50',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  apiKeyBadgeOptional: {
-    backgroundColor: '#9E9E9E',
+    marginBottom: spacing[1],
   },
   apiKeyHint: {
-    fontSize: 11,
-    color: '#888',
-    marginBottom: 8,
+    marginBottom: spacing[2],
   },
-  apiKeyStatus: {
-    marginTop: 12,
-    padding: 12,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
-  },
-  apiKeyStatusLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#666',
-    marginBottom: 8,
-  },
-  apiKeyStatusBadges: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  statusBadgeActive: {
-    fontSize: 12,
-    color: '#2E7D32',
-    backgroundColor: '#E8F5E9',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  statusBadgeInactive: {
-    fontSize: 12,
-    color: '#999',
-    backgroundColor: '#f0f0f0',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  selfTestButton: {
-    marginTop: 12,
-    backgroundColor: '#222',
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  selfTestButtonText: {
-    color: '#fff',
+  apiKeyInput: {
+    backgroundColor: colors.surface.charcoal,
+    borderWidth: 1,
+    borderColor: colors.surface.slate,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[3],
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: fontFamilies.monoRegular,
+    color: colors.text.primary,
   },
-  cvServiceNote: {
-    fontSize: 11,
-    color: '#666',
-    marginTop: 8,
-    fontStyle: 'italic',
+  apiStatus: {
+    marginTop: spacing[4],
+    padding: spacing[3],
+    backgroundColor: colors.surface.charcoal,
+    borderRadius: radii.md,
+  },
+  statusBadges: {
+    flexDirection: 'row',
+    gap: spacing[2],
+    marginTop: spacing[2],
+  },
+  footer: {
+    padding: spacing[4],
+    borderTopWidth: 1,
+    borderTopColor: colors.surface.slate,
+    backgroundColor: colors.surface.charcoal,
+  },
+  saveButton: {
+    width: '100%',
   },
 });

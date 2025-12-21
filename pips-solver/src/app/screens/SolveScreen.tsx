@@ -10,15 +10,18 @@ import {
   ScrollView,
   StyleSheet,
   Switch,
-  Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import Animated, { FadeInDown, FadeInUp, FadeIn } from 'react-native-reanimated';
 import { normalizePuzzle } from '../../model/normalize';
 import { Cell, SolverProgress, StoredPuzzle, ValidationResult } from '../../model/types';
 import { solvePuzzleAsync } from '../../solver/solver';
 import { getPuzzle, getSettings, updatePuzzleSolution } from '../../storage/puzzles';
 import { validateSolution } from '../../validator/validateSolution';
+import { colors, spacing, radii } from '../../theme';
+import { fontFamilies } from '../../theme/fonts';
+import { Button, Card, Badge, Heading, Body, Label, Mono, Screen } from '../components/ui';
 import GridRenderer from '../components/GridRenderer';
 
 export default function SolveScreen({ route, navigation }: any) {
@@ -53,7 +56,6 @@ export default function SolveScreen({ route, navigation }: any) {
       setPuzzle(loaded);
       initRevealState(loaded);
       if (loaded.solution) {
-        // Validate existing solution
         const normalized = normalizePuzzle(loaded.spec);
         const result = validateSolution(normalized, loaded.solution);
         setValidation(result);
@@ -84,7 +86,6 @@ export default function SolveScreen({ route, navigation }: any) {
 
       const normalized = normalizePuzzle(specForSolve);
 
-      // Debug: Log what's being sent to solver
       console.log(
         '[SOLVE] Puzzle spec:',
         JSON.stringify(
@@ -121,16 +122,11 @@ export default function SolveScreen({ route, navigation }: any) {
 
       if (result.success && result.solutions.length > 0) {
         const solution = result.solutions[0];
-
-        // Validate solution
         const validationResult = validateSolution(normalized, solution);
         setValidation(validationResult);
 
         if (validationResult.valid) {
-          // Save solution
           await updatePuzzleSolution(puzzle.id, solution);
-
-          // Update local state
           const updated = { ...puzzle, solution, solved: true };
           setPuzzle(updated);
           initRevealState(updated);
@@ -142,18 +138,14 @@ export default function SolveScreen({ route, navigation }: any) {
         } else {
           Alert.alert(
             'Validation Failed',
-            `Solver returned an invalid solution!\n\nErrors:\n${validationResult.errors.join(
-              '\n'
-            )}`,
+            `Solver returned an invalid solution!\n\nErrors:\n${validationResult.errors.join('\n')}`,
             [{ text: 'OK' }]
           );
         }
       } else {
         Alert.alert(
           'No Solution',
-          `Puzzle is unsatisfiable.\n\n${
-            result.explanation.message
-          }\n\n${result.explanation.details.join('\n')}`,
+          `Puzzle is unsatisfiable.\n\n${result.explanation.message}\n\n${result.explanation.details.join('\n')}`,
           [{ text: 'OK' }]
         );
       }
@@ -195,9 +187,11 @@ export default function SolveScreen({ route, navigation }: any) {
 
   if (!puzzle || !puzzle.spec) {
     return (
-      <View style={styles.container}>
-        <Text>Loading...</Text>
-      </View>
+      <Screen>
+        <View style={styles.loadingContainer}>
+          <Body>Loading...</Body>
+        </View>
+      </Screen>
     );
   }
 
@@ -266,166 +260,226 @@ export default function SolveScreen({ route, navigation }: any) {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Text style={styles.backButtonText}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>Solve: {puzzle.name}</Text>
+    <Screen>
+      {/* Header */}
+      <Animated.View entering={FadeInDown.duration(400)} style={styles.header}>
+        <Button
+          variant="ghost"
+          size="small"
+          title="Back"
+          onPress={() => navigation.goBack()}
+        />
+        <Heading size="small" style={styles.title}>Solve: {puzzle.name}</Heading>
         <View style={styles.placeholder} />
-      </View>
+      </Animated.View>
 
-      <ScrollView style={styles.content}>
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Grid View */}
-        <View style={styles.gridContainer}>
-          <GridRenderer
-            puzzle={normalized}
-            solution={effectiveSolution}
-            onCellPress={stepByStep ? revealCell : undefined}
-            highlightCell={highlightCell || undefined}
-          />
-        </View>
-
-        {puzzle.solution && (
-          <View style={styles.stepByStepCard}>
-            <View style={styles.stepByStepRow}>
-              <Text style={styles.stepByStepLabel}>Step-by-step reveal</Text>
-              <Switch value={stepByStep} onValueChange={setStepByStep} />
+        <Animated.View entering={FadeInUp.delay(100).duration(400)}>
+          <Card variant="default" style={styles.gridCard}>
+            <View style={styles.gridContainer}>
+              <GridRenderer
+                puzzle={normalized}
+                solution={effectiveSolution}
+                onCellPress={stepByStep ? revealCell : undefined}
+                highlightCell={highlightCell || undefined}
+              />
             </View>
+          </Card>
+        </Animated.View>
 
-            {stepByStep && (
-              <>
-                <View style={styles.stepButtonsRow}>
-                  <TouchableOpacity style={styles.stepButton} onPress={revealNext}>
-                    <Text style={styles.stepButtonText}>Reveal next</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.stepButton} onPress={revealAll}>
-                    <Text style={styles.stepButtonText}>Reveal all</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.stepButton} onPress={resetReveal}>
-                    <Text style={styles.stepButtonText}>Reset</Text>
-                  </TouchableOpacity>
-                </View>
-                <Text style={styles.stepHint}>Tap a cell to reveal/hide its value.</Text>
-              </>
-            )}
-          </View>
+        {/* Step by Step Controls */}
+        {puzzle.solution && (
+          <Animated.View entering={FadeInUp.delay(200).duration(400)}>
+            <Card variant="outlined" style={styles.stepCard}>
+              <View style={styles.stepRow}>
+                <Label size="medium">Step-by-step reveal</Label>
+                <Switch
+                  value={stepByStep}
+                  onValueChange={setStepByStep}
+                  trackColor={{ false: colors.surface.graphite, true: colors.accent.brass }}
+                  thumbColor={stepByStep ? colors.accent.brassLight : colors.surface.ash}
+                />
+              </View>
+
+              {stepByStep && (
+                <Animated.View entering={FadeIn.duration(300)}>
+                  <View style={styles.stepButtons}>
+                    <Button
+                      variant="secondary"
+                      size="small"
+                      title="Reveal Next"
+                      onPress={revealNext}
+                      style={styles.stepButton}
+                    />
+                    <Button
+                      variant="secondary"
+                      size="small"
+                      title="Reveal All"
+                      onPress={revealAll}
+                      style={styles.stepButton}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="small"
+                      title="Reset"
+                      onPress={resetReveal}
+                      style={styles.stepButton}
+                    />
+                  </View>
+                  <Body size="small" color="tertiary" style={styles.stepHint}>
+                    Tap a cell to reveal/hide its value
+                  </Body>
+                </Animated.View>
+              )}
+            </Card>
+          </Animated.View>
         )}
 
         {/* Progress Display */}
         {solving && progress && (
-          <View style={styles.progressCard}>
-            <Text style={styles.progressTitle}>Solving...</Text>
-            <Text style={styles.progressText}>Nodes: {progress.nodes}</Text>
-            <Text style={styles.progressText}>Backtracks: {progress.backtracks}</Text>
-            <Text style={styles.progressText}>Prunes: {progress.prunes}</Text>
-            <Text style={styles.progressText}>Depth: {progress.currentDepth}</Text>
-            <ActivityIndicator size="large" color="#007AFF" style={styles.spinner} />
-          </View>
+          <Animated.View entering={FadeIn.duration(300)}>
+            <Card variant="accent" style={styles.progressCard}>
+              <View style={styles.progressHeader}>
+                <Heading size="small" style={styles.progressTitle}>Solving...</Heading>
+                <ActivityIndicator size="small" color={colors.accent.brass} />
+              </View>
+              <View style={styles.progressStats}>
+                <View style={styles.progressStat}>
+                  <Mono style={styles.progressValue}>{progress.nodes}</Mono>
+                  <Label size="small">Nodes</Label>
+                </View>
+                <View style={styles.progressStat}>
+                  <Mono style={styles.progressValue}>{progress.backtracks}</Mono>
+                  <Label size="small">Backtracks</Label>
+                </View>
+                <View style={styles.progressStat}>
+                  <Mono style={styles.progressValue}>{progress.prunes}</Mono>
+                  <Label size="small">Prunes</Label>
+                </View>
+                <View style={styles.progressStat}>
+                  <Mono style={styles.progressValue}>{progress.currentDepth}</Mono>
+                  <Label size="small">Depth</Label>
+                </View>
+              </View>
+            </Card>
+          </Animated.View>
         )}
 
         {/* Validation Report */}
         {validation && (
-          <View style={styles.validationCard}>
-            <TouchableOpacity
-              style={styles.validationHeader}
-              onPress={() => setShowValidation(!showValidation)}
-            >
-              <Text style={styles.validationTitle}>
-                Validation Report {validation.valid ? '✓' : '✗'}
-              </Text>
-              <Text style={styles.expandIcon}>{showValidation ? '▼' : '▶'}</Text>
-            </TouchableOpacity>
+          <Animated.View entering={FadeInUp.delay(300).duration(400)}>
+            <Card variant="elevated" style={styles.validationCard}>
+              <TouchableOpacity
+                style={styles.validationHeader}
+                onPress={() => setShowValidation(!showValidation)}
+              >
+                <View style={styles.validationTitleRow}>
+                  <Heading size="small">Validation Report</Heading>
+                  <Badge
+                    variant={validation.valid ? 'success' : 'error'}
+                    label={validation.valid ? 'Valid' : 'Invalid'}
+                  />
+                </View>
+                <Mono style={styles.expandIcon}>{showValidation ? '▼' : '▶'}</Mono>
+              </TouchableOpacity>
 
-            {showValidation && (
-              <View style={styles.validationContent}>
-                {validation.errors.length > 0 && (
-                  <View style={styles.errorSection}>
-                    <Text style={styles.errorTitle}>Errors:</Text>
-                    {validation.errors.map((error, i) => (
-                      <Text key={i} style={styles.errorText}>
-                        • {error}
-                      </Text>
-                    ))}
-                  </View>
-                )}
+              {showValidation && (
+                <Animated.View entering={FadeIn.duration(200)} style={styles.validationContent}>
+                  {validation.errors.length > 0 && (
+                    <View style={styles.errorSection}>
+                      <Label size="medium" style={styles.errorTitle}>Errors</Label>
+                      {validation.errors.map((error, i) => (
+                        <Body key={i} size="small" style={styles.errorText}>
+                          • {error}
+                        </Body>
+                      ))}
+                    </View>
+                  )}
 
-                {validation.regionChecks && validation.regionChecks.length > 0 && (
-                  <View style={styles.checksSection}>
-                    <Text style={styles.checksTitle}>Region Checks:</Text>
-                    {validation.regionChecks.map((check, i) => (
-                      <Text key={i} style={check.valid ? styles.checkValid : styles.checkInvalid}>
-                        {check.message}
-                      </Text>
-                    ))}
-                  </View>
-                )}
+                  {validation.regionChecks && validation.regionChecks.length > 0 && (
+                    <View style={styles.checksSection}>
+                      <Label size="medium">Region Checks</Label>
+                      {validation.regionChecks.map((check, i) => (
+                        <Body
+                          key={i}
+                          size="small"
+                          style={check.valid ? styles.checkValid : styles.checkInvalid}
+                        >
+                          {check.message}
+                        </Body>
+                      ))}
+                    </View>
+                  )}
 
-                {validation.dominoChecks && validation.dominoChecks.length > 0 && (
-                  <View style={styles.checksSection}>
-                    <Text style={styles.checksTitle}>
-                      Domino Checks: {validation.dominoChecks.length} total
-                    </Text>
-                    {validation.dominoChecks.filter(c => !c.valid).length > 0 ? (
-                      validation.dominoChecks
-                        .filter(c => !c.valid)
-                        .map((check, i) => (
-                          <Text key={i} style={styles.checkInvalid}>
-                            {check.message}
-                          </Text>
-                        ))
-                    ) : (
-                      <Text style={styles.checkValid}>All dominoes valid ✓</Text>
-                    )}
-                  </View>
-                )}
-              </View>
-            )}
-          </View>
+                  {validation.dominoChecks && validation.dominoChecks.length > 0 && (
+                    <View style={styles.checksSection}>
+                      <Label size="medium">
+                        Domino Checks ({validation.dominoChecks.length})
+                      </Label>
+                      {validation.dominoChecks.filter(c => !c.valid).length > 0 ? (
+                        validation.dominoChecks
+                          .filter(c => !c.valid)
+                          .map((check, i) => (
+                            <Body key={i} size="small" style={styles.checkInvalid}>
+                              {check.message}
+                            </Body>
+                          ))
+                      ) : (
+                        <Body size="small" style={styles.checkValid}>All dominoes valid</Body>
+                      )}
+                    </View>
+                  )}
+                </Animated.View>
+              )}
+            </Card>
+          </Animated.View>
         )}
+
+        {/* Bottom spacing */}
+        <View style={{ height: spacing[6] }} />
       </ScrollView>
 
-      {/* Action Buttons */}
-      <View style={styles.footer}>
+      {/* Footer Action */}
+      <Animated.View entering={FadeInUp.delay(400).duration(400)} style={styles.footer}>
         {solving ? (
-          <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
-            <Text style={styles.cancelButtonText}>Cancel</Text>
-          </TouchableOpacity>
+          <Button
+            variant="danger"
+            size="large"
+            title="Cancel"
+            onPress={handleCancel}
+            style={styles.actionButton}
+          />
         ) : (
-          <TouchableOpacity style={styles.solveButton} onPress={handleSolve}>
-            <Text style={styles.solveButtonText}>{puzzle.solved ? 'Re-Solve' : 'Solve'}</Text>
-          </TouchableOpacity>
+          <Button
+            variant="success"
+            size="large"
+            title={puzzle.solved ? 'Re-Solve' : 'Solve Puzzle'}
+            onPress={handleSolve}
+            style={styles.actionButton}
+          />
         )}
-      </View>
-    </View>
+      </Animated.View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  loadingContainer: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
-    paddingTop: 60,
-    backgroundColor: '#fff',
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
     borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
-  },
-  backButton: {
-    padding: 8,
-  },
-  backButtonText: {
-    fontSize: 16,
-    color: '#007AFF',
+    borderBottomColor: colors.surface.slate,
   },
   title: {
-    fontSize: 18,
-    fontWeight: 'bold',
     flex: 1,
     textAlign: 'center',
   },
@@ -434,171 +488,114 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    paddingHorizontal: spacing[4],
+  },
+  gridCard: {
+    marginTop: spacing[4],
+    padding: 0,
+    overflow: 'hidden',
   },
   gridContainer: {
-    backgroundColor: '#fff',
-    margin: 16,
-    borderRadius: 8,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    height: 400,
+    height: 380,
+    backgroundColor: colors.surface.charcoal,
+    borderRadius: radii.lg,
   },
-  stepByStepCard: {
-    backgroundColor: '#fff',
-    marginHorizontal: 16,
-    marginBottom: 16,
-    marginTop: -4,
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#eee',
+  stepCard: {
+    marginTop: spacing[4],
   },
-  stepByStepRow: {
+  stepRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  stepByStepLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#111',
-  },
-  stepButtonsRow: {
+  stepButtons: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 10,
+    gap: spacing[2],
+    marginTop: spacing[3],
   },
   stepButton: {
-    backgroundColor: '#222',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-  },
-  stepButtonText: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '600',
+    flex: 1,
   },
   stepHint: {
-    marginTop: 10,
-    fontSize: 12,
-    color: '#666',
+    marginTop: spacing[3],
+    textAlign: 'center',
   },
   progressCard: {
-    backgroundColor: '#E3F2FD',
-    padding: 16,
-    margin: 16,
-    marginTop: 0,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#2196F3',
+    marginTop: spacing[4],
+  },
+  progressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing[4],
   },
   progressTitle: {
+    color: colors.accent.brass,
+  },
+  progressStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  progressStat: {
+    alignItems: 'center',
+    gap: spacing[1],
+  },
+  progressValue: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1976D2',
-    marginBottom: 12,
-  },
-  progressText: {
-    fontSize: 14,
-    color: '#1976D2',
-    marginBottom: 4,
-  },
-  spinner: {
-    marginTop: 12,
+    fontFamily: fontFamilies.monoMedium,
+    color: colors.text.primary,
   },
   validationCard: {
-    backgroundColor: '#fff',
-    margin: 16,
-    marginTop: 0,
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    marginTop: spacing[4],
   },
   validationHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
   },
-  validationTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+  validationTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
   },
   expandIcon: {
-    fontSize: 16,
-    color: '#666',
+    color: colors.text.tertiary,
   },
   validationContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
+    marginTop: spacing[4],
+    paddingTop: spacing[4],
+    borderTopWidth: 1,
+    borderTopColor: colors.surface.slate,
   },
   errorSection: {
-    marginBottom: 12,
+    marginBottom: spacing[4],
   },
   errorTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#F44336',
-    marginBottom: 8,
+    color: colors.semantic.coral,
+    marginBottom: spacing[2],
   },
   errorText: {
-    fontSize: 14,
-    color: '#F44336',
-    marginBottom: 4,
+    color: colors.semantic.coral,
+    marginBottom: spacing[1],
   },
   checksSection: {
-    marginBottom: 12,
-  },
-  checksTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 8,
+    marginBottom: spacing[4],
   },
   checkValid: {
-    fontSize: 14,
-    color: '#4CAF50',
-    marginBottom: 4,
+    color: colors.semantic.jade,
+    marginTop: spacing[1],
   },
   checkInvalid: {
-    fontSize: 14,
-    color: '#F44336',
-    marginBottom: 4,
+    color: colors.semantic.coral,
+    marginTop: spacing[1],
   },
   footer: {
-    padding: 16,
-    backgroundColor: '#fff',
+    padding: spacing[4],
     borderTopWidth: 1,
-    borderTopColor: '#ddd',
+    borderTopColor: colors.surface.slate,
+    backgroundColor: colors.surface.charcoal,
   },
-  solveButton: {
-    backgroundColor: '#4CAF50',
-    padding: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  solveButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  cancelButton: {
-    backgroundColor: '#F44336',
-    padding: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  cancelButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
+  actionButton: {
+    width: '100%',
   },
 });

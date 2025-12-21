@@ -15,7 +15,6 @@
  */
 
 import { Platform } from 'react-native';
-import { z } from 'zod';
 import { ExtractionStrategy, MODEL_CANDIDATES, getAvailableProviders } from '../config/models';
 import {
   AIExtractionResult,
@@ -33,67 +32,12 @@ import {
   ExtractionProgress as EnsembleProgress,
   extractPuzzleEnsemble,
 } from './ensembleExtraction';
+import {
+  BoardExtractionSchema,
+  DominoExtractionSchema,
+} from './extractionSchemas';
+import { parseJSONWithFallback } from './jsonParsingUtils';
 import { APIKeys } from './modelClients';
-
-// ════════════════════════════════════════════════════════════════════════════
-// Zod Schemas for AI Response Validation
-// ════════════════════════════════════════════════════════════════════════════
-
-// Lenient constraint schema - normalizes variations in model output
-const ConstraintSchema = z.object({
-  // Accept various type formats that models might return
-  type: z.string().transform(t => {
-    const normalized = t.toLowerCase().replace(/[_\s]/g, '');
-    if (normalized === 'sum' || normalized === 'total') return 'sum';
-    if (normalized.includes('equal') && !normalized.includes('diff')) return 'all_equal';
-    if (normalized.includes('diff') || normalized.includes('unique')) return 'all_different';
-    return t; // Keep original if unknown - will be handled downstream
-  }),
-  op: z
-    .enum(['==', '<', '>', '!='])
-    .optional()
-    .nullable()
-    .transform(v => v ?? undefined),
-  value: z
-    .number()
-    .optional()
-    .nullable()
-    .transform(v => v ?? undefined),
-});
-
-const ConfidenceScoresSchema = z
-  .object({
-    grid: z.number().min(0).max(1),
-    regions: z.number().min(0).max(1),
-    constraints: z.number().min(0).max(1),
-  })
-  .optional();
-
-const BoardExtractionSchema = z.object({
-  rows: z.number().min(2).max(12),
-  cols: z.number().min(2).max(12),
-  gridLocation: z
-    .object({
-      left: z.number(),
-      top: z.number(),
-      right: z.number(),
-      bottom: z.number(),
-      imageWidth: z.number(),
-      imageHeight: z.number(),
-    })
-    .optional(),
-  shape: z.string().min(1),
-  regions: z.string().min(1),
-  constraints: z.record(z.string(), ConstraintSchema).optional(),
-  confidence: ConfidenceScoresSchema,
-  reasoning: z.string().optional(),
-});
-
-const DominoExtractionSchema = z.object({
-  dominoes: z.array(z.tuple([z.number().min(0).max(6), z.number().min(0).max(6)])),
-  confidence: z.number().min(0).max(1).optional(),
-  reasoning: z.string().optional(),
-});
 
 // ════════════════════════════════════════════════════════════════════════════
 // Types
@@ -711,19 +655,21 @@ async function verifyBoardExtraction(
  * - Negative examples to prevent common errors
  * - Conservative confidence scoring guidance
  */
-const BOARD_EXTRACTION_PROMPT = `Analyze this NYT Pips puzzle screenshot. Extract the grid structure with maximum precision.
+const BOARD_EXTRACTION_PROMPT = `Analyze this NYT Pips puzzle screenshot and extract its structure.
 
 ═══════════════════════════════════════════════════════════════════════════════
-STEP 1: GRID DIMENSIONS (count carefully!)
+STEP 1: COUNT GRID DIMENSIONS
 ═══════════════════════════════════════════════════════════════════════════════
-- Count ROWS: Number of horizontal cell lines from TOP to BOTTOM
-- Count COLS: Number of cells in the WIDEST row from LEFT to RIGHT
-- Note: Corners or edges may have MISSING cells - include these in your count
+Determine the BOUNDING BOX of the puzzle:
+- ROWS: Count every horizontal level from TOPMOST cell to BOTTOMMOST cell
+- COLS: Count the MAXIMUM width (widest row determines columns)
+- Puzzles can be ANY size and ANY shape (rectangular, cross, L, irregular, etc.)
+- Include ALL rows/columns even if some positions are empty holes
 
 ═══════════════════════════════════════════════════════════════════════════════
 STEP 2: GRID LOCATION (pixel coordinates)
 ═══════════════════════════════════════════════════════════════════════════════
-Identify the EXACT pixel boundaries of the game grid:
+Identify the pixel boundaries of the puzzle grid:
 - left: X-coordinate of the LEFTMOST cell edge
 - top: Y-coordinate of the TOPMOST cell edge
 - right: X-coordinate of the RIGHTMOST cell edge
@@ -732,61 +678,59 @@ Identify the EXACT pixel boundaries of the game grid:
 - imageHeight: Full height of the image
 
 ═══════════════════════════════════════════════════════════════════════════════
-STEP 3: SHAPE MAP (which cells exist)
+STEP 3: BUILD THE SHAPE STRING (cell existence map)
 ═══════════════════════════════════════════════════════════════════════════════
-For EACH cell position in the rows×cols grid:
-- "." (dot) = cell EXISTS at this position
-- "#" (hash) = NO cell here (hole/gap/missing)
+Go ROW BY ROW, from top to bottom. For each position in the bounding box:
+- "." = A cell EXISTS here (has a colored background, can hold a domino half)
+- "#" = NO cell here (empty space, hole, gap)
 
-IMPORTANT: Check ALL four corners for missing cells!
-Join rows with \\n (backslash-n literal, not newline)
-
-═══════════════════════════════════════════════════════════════════════════════
-STEP 4: REGION MAP (colored areas)
-═══════════════════════════════════════════════════════════════════════════════
-For each cell that EXISTS, identify its colored region:
-- Use letters A, B, C, D, E, F, G, H, I, J (in order of appearance)
-- "#" for holes (same as shape)
-- "." for cells with no visible color yet
-
-Join rows with \\n (backslash-n literal)
+CRITICAL RULES:
+- ONLY use "." and "#" characters - NEVER put letters (A, B, C) in shape!
+- Holes can appear ANYWHERE - corners, edges, middle, scattered throughout
+- Join rows with literal \\n (backslash-n, not actual newlines)
+- Verify: shape should have exactly [rows] lines, each with exactly [cols] characters
 
 ═══════════════════════════════════════════════════════════════════════════════
-STEP 5: CONSTRAINTS (read numbers/symbols)
+STEP 4: BUILD THE REGIONS STRING (color map)
 ═══════════════════════════════════════════════════════════════════════════════
-Look for constraint text near each colored region:
-- "12" or "=12" → {"type": "sum", "op": "==", "value": 12}
-- "<10" → {"type": "sum", "op": "<", "value": 10}
-- ">5" → {"type": "sum", "op": ">", "value": 5}
-- "≠" or "all different" → {"type": "all_different"}
-- "=" with no number → {"type": "all_equal"}
+Go ROW BY ROW again, same order. For each position:
+- Assign letters A, B, C, D, E, F, G, H, I, J... to distinct BACKGROUND COLORS
+- Use "#" for holes (must EXACTLY match the shape field)
+- Same background color = same letter throughout the entire grid
+- Common colors: pink, coral, orange, peach/tan, teal/cyan, gray, olive, green, purple
+
+Join rows with literal \\n. The regions string MUST have IDENTICAL dimensions to shape.
 
 ═══════════════════════════════════════════════════════════════════════════════
-OUTPUT FORMAT (JSON only, NO markdown)
+STEP 5: EXTRACT CONSTRAINTS
+═══════════════════════════════════════════════════════════════════════════════
+Look for diamond-shaped labels on or near each colored region:
+- Number (e.g., "8", "12") → {"type": "sum", "op": "==", "value": N}
+- "0" → {"type": "sum", "op": "==", "value": 0}
+- "=" symbol alone → {"type": "all_equal"}
+- "<N" → {"type": "sum", "op": "<", "value": N}
+- ">N" → {"type": "sum", "op": ">", "value": N}
+- "≠" or different symbol → {"type": "all_different"}
+
+═══════════════════════════════════════════════════════════════════════════════
+OUTPUT FORMAT (JSON only - no markdown, no explanation outside JSON)
 ═══════════════════════════════════════════════════════════════════════════════
 {
-  "rows": 5,
-  "cols": 5,
+  "rows": <number of rows in bounding box>,
+  "cols": <number of columns in bounding box>,
   "gridLocation": {
-    "left": 95,
-    "top": 611,
-    "right": 625,
-    "bottom": 1141,
-    "imageWidth": 720,
-    "imageHeight": 1560
+    "left": <pixels>,
+    "top": <pixels>,
+    "right": <pixels>,
+    "bottom": <pixels>,
+    "imageWidth": <pixels>,
+    "imageHeight": <pixels>
   },
-  "shape": "....#\\n.....\\n.....\\n.....\\n#....",
-  "regions": "AAAB#\\nAABBC\\nDDBCC\\nDDEEE\\n#FEEE",
-  "constraints": {
-    "A": {"type": "sum", "op": "==", "value": 8},
-    "B": {"type": "sum", "op": "<", "value": 12}
-  },
-  "confidence": {
-    "grid": 0.95,
-    "regions": 0.88,
-    "constraints": 0.92
-  },
-  "reasoning": "5x5 grid with holes at NE and SW corners..."
+  "shape": "<dots and hashes joined by \\n>",
+  "regions": "<letters and hashes joined by \\n>",
+  "constraints": {"A": {...}, "B": {...}},
+  "confidence": {"grid": 0.0-1.0, "regions": 0.0-1.0, "constraints": 0.0-1.0},
+  "reasoning": "<brief description: dimensions, cell count, region count>"
 }
 
 ═══════════════════════════════════════════════════════════════════════════════
@@ -885,90 +829,13 @@ async function extractBoard(
       return { success: false, error: 'Could not parse board extraction response - no JSON found' };
     }
 
-    // Fix multi-line strings in shape and regions fields
-    // The AI sometimes returns strings split across lines like:
-    // "shape": "...."
-    //            "...."
-    // We need to join these into a single string with \n separators
-    let jsonString = jsonMatch[0];
-
-    // Fix pattern: "field": "line1"
-    //              "line2"
-    //              "line3"
-    // This matches a quoted string followed by indented quoted strings on subsequent lines
-    const fixMultilineString = (fieldName: string, json: string): string => {
-      // Pattern: "fieldName": "content"
-      //          "more content" (indented)
-      const pattern = new RegExp(`"${fieldName}"\\s*:\\s*"([^"]*)"\\s*\\n\\s*"([^"]*)"`, 'g');
-
-      let fixed = json;
-      let prevFixed = '';
-      let iterations = 0;
-
-      // Keep fixing until no more matches (handles multiple lines)
-      while (fixed !== prevFixed && iterations < 10) {
-        prevFixed = fixed;
-        fixed = fixed.replace(pattern, (match, line1, line2) => {
-          // Join with newline character
-          return `"${fieldName}": "${line1}\\n${line2}"`;
-        });
-        iterations++;
-      }
-
-      return fixed;
-    };
-
-    jsonString = fixMultilineString('shape', jsonString);
-    jsonString = fixMultilineString('regions', jsonString);
-
-    let rawParsed;
-    try {
-      rawParsed = JSON.parse(jsonString);
-    } catch (parseError) {
-      // Fallback: try to fix by removing all newlines between quoted strings and joining them
-      try {
-        let fallbackFix = jsonMatch[0];
-        // Remove newlines and extra quotes between string continuations
-        fallbackFix = fallbackFix.replace(
-          /("(?:shape|regions)"\s*:\s*")([^"]*)"\s*\n\s*"([^"]*)"\s*\n\s*"([^"]*)"\s*\n\s*"([^"]*)"/g,
-          (match, prefix, l1, l2, l3, l4) => {
-            return `${prefix}${l1}\\n${l2}\\n${l3}\\n${l4}"`;
-          }
-        );
-        // Handle 3 lines
-        fallbackFix = fallbackFix.replace(
-          /("(?:shape|regions)"\s*:\s*")([^"]*)"\s*\n\s*"([^"]*)"\s*\n\s*"([^"]*)"/g,
-          (match, prefix, l1, l2, l3) => {
-            return `${prefix}${l1}\\n${l2}\\n${l3}"`;
-          }
-        );
-        // Handle 2 lines
-        fallbackFix = fallbackFix.replace(
-          /("(?:shape|regions)"\s*:\s*")([^"]*)"\s*\n\s*"([^"]*)"/g,
-          (match, prefix, l1, l2) => {
-            return `${prefix}${l1}\\n${l2}"`;
-          }
-        );
-
-        rawParsed = JSON.parse(fallbackFix);
-      } catch (secondError) {
-        return {
-          success: false,
-          error: `Invalid JSON in board response: ${parseError}. Fallback attempt: ${secondError}`,
-        };
-      }
+    // Use shared JSON parsing utility with fallback strategies
+    const parseResult = parseJSONWithFallback(jsonMatch[0], BoardExtractionSchema);
+    if (!parseResult.success) {
+      return { success: false, error: `Board validation failed: ${parseResult.error}` };
     }
 
-    // Validate with Zod schema
-    const validationResult = BoardExtractionSchema.safeParse(rawParsed);
-    if (!validationResult.success) {
-      const errors = validationResult.error.issues.map(
-        (e: z.ZodIssue) => `${e.path.join('.')}: ${e.message}`
-      );
-      return { success: false, error: `Board validation failed: ${errors.join(', ')}` };
-    }
-
-    const validated = validationResult.data;
+    const validated = parseResult.data;
     return {
       success: true,
       data: {
@@ -997,7 +864,7 @@ async function extractBoard(
  * Optimized Domino Extraction Prompt
  * Based on December 2025 research on pip/object counting with vision LLMs
  */
-const DOMINO_EXTRACTION_PROMPT = `Extract the DOMINOES from this Pips puzzle screenshot.
+const DOMINO_EXTRACTION_PROMPT = `Extract ALL dominoes from this Pips puzzle screenshot.
 
 ═══════════════════════════════════════════════════════════════════════════════
 CONTEXT (already extracted)
@@ -1007,73 +874,52 @@ Shape: {shape}
 Regions: {regions}
 
 ═══════════════════════════════════════════════════════════════════════════════
-YOUR TASK: EXTRACT DOMINOES FROM THE TRAY
+DOMINO LOCATION
 ═══════════════════════════════════════════════════════════════════════════════
-The dominoes are shown in a SEPARATE AREA (usually below or beside the main grid).
-This is the "tray" or "bank" of available tiles to place.
-
-DO NOT count cells on the grid - ONLY count dominoes in the tray area.
-
-═══════════════════════════════════════════════════════════════════════════════
-PIP COUNTING REFERENCE (memorize these patterns)
-═══════════════════════════════════════════════════════════════════════════════
-┌─────────────────────────────────────────────────────────────┐
-│ 0 pips │  BLANK - No dots at all (empty half)              │
-│ 1 pip  │  ● - Single dot in CENTER                         │
-│ 2 pips │  ●     - Two dots DIAGONAL (top-left, bottom-right) │
-│        │    ●                                               │
-│ 3 pips │  ●     - Three dots DIAGONAL LINE                  │
-│        │   ●    (corner to corner)                          │
-│        │    ●                                               │
-│ 4 pips │  ● ●   - Four dots in CORNERS                      │
-│        │  ● ●                                               │
-│ 5 pips │  ● ●   - Four CORNERS + CENTER dot                 │
-│        │   ●                                                │
-│        │  ● ●                                               │
-│ 6 pips │  ● ●   - Two COLUMNS of 3 dots each                │
-│        │  ● ●   (6 dots total, arranged 3+3)                │
-│        │  ● ●                                               │
-└─────────────────────────────────────────────────────────────┘
+Dominoes are in a TRAY/BANK area, separate from the main puzzle grid.
+Usually located BELOW the puzzle. The tray may span multiple rows.
+DO NOT count cells on the puzzle grid - ONLY count dominoes in the tray.
 
 ═══════════════════════════════════════════════════════════════════════════════
-EXTRACTION PROCEDURE
+PIP COUNTING PATTERNS
 ═══════════════════════════════════════════════════════════════════════════════
-1. Locate the domino tray area (separate from the game grid)
-2. Count total number of dominoes visible
-3. For EACH domino, count pips on BOTH halves
-4. Record as [left_pips, right_pips] or [top_pips, bottom_pips]
-5. Scan systematically: left-to-right, top-to-bottom
+Each domino half shows 0-6 pips (dots):
+- 0: Blank (no dots at all)
+- 1: One dot in center
+- 2: Two dots diagonal
+- 3: Three dots in diagonal line
+- 4: Four dots in corners
+- 5: Four corners + center dot
+- 6: Two columns of 3 dots (6 total)
 
 ═══════════════════════════════════════════════════════════════════════════════
-OUTPUT FORMAT (JSON only, NO markdown)
+EXTRACTION METHOD
+═══════════════════════════════════════════════════════════════════════════════
+1. Locate the domino tray (below or beside the puzzle grid)
+2. Scan LEFT to RIGHT, TOP to BOTTOM - cover ALL rows of the tray
+3. For each domino: count pips on BOTH halves carefully
+4. Record as [first_half, second_half]
+5. Continue until you've captured EVERY visible domino
+
+IMPORTANT: Count ALL dominoes! The number varies by puzzle size:
+- Small puzzles: 7-8 dominoes
+- Medium puzzles: 9-12 dominoes
+- Large puzzles: 12-14+ dominoes
+Do NOT assume a fixed count - extract what you SEE.
+
+═══════════════════════════════════════════════════════════════════════════════
+OUTPUT FORMAT (JSON only - no markdown)
 ═══════════════════════════════════════════════════════════════════════════════
 {
-  "dominoes": [[6, 4], [5, 3], [2, 1], [0, 0], [4, 4], [3, 2]],
-  "confidence": 0.92,
-  "reasoning": "Found 6 dominoes in tray below grid. All pip counts clear."
+  "dominoes": [[a, b], [c, d], ...],
+  "confidence": 0.0-1.0,
+  "reasoning": "<number of dominoes found, any issues with counting>"
 }
 
 ═══════════════════════════════════════════════════════════════════════════════
 CONFIDENCE SCORING
 ═══════════════════════════════════════════════════════════════════════════════
-Set confidence < 0.80 if:
-- Tray is partially cropped or cut off
-- Any pips are too small to count clearly
-- Image quality is poor
-- Any dominoes overlap or are obscured
-
-═══════════════════════════════════════════════════════════════════════════════
-CRITICAL RULES
-═══════════════════════════════════════════════════════════════════════════════
-❌ DO NOT count cells ON THE GRID as dominoes
-❌ DO NOT guess if pip count is unclear - lower confidence instead
-❌ DO NOT add markdown formatting
-❌ DO NOT output anything except the JSON object
-
-✅ Count ONLY dominoes in the TRAY/BANK area
-✅ Double-check each pip count before adding
-✅ Each domino value must be 0-6 (integers only)
-✅ Typical puzzle has 8-15 dominoes
+Set confidence < 0.80 if: tray is cropped, pips are unclear, image quality is poor
 
 RESPOND WITH ONLY THE JSON OBJECT. NO OTHER TEXT.`;
 
@@ -1119,23 +965,13 @@ async function extractDominoes(
       };
     }
 
-    let rawParsed;
-    try {
-      rawParsed = JSON.parse(jsonMatch[0]);
-    } catch (parseError) {
-      return { success: false, error: `Invalid JSON in domino response: ${parseError}` };
+    // Use shared JSON parsing utility
+    const parseResult = parseJSONWithFallback(jsonMatch[0], DominoExtractionSchema);
+    if (!parseResult.success) {
+      return { success: false, error: `Domino validation failed: ${parseResult.error}` };
     }
 
-    // Validate with Zod schema
-    const validationResult = DominoExtractionSchema.safeParse(rawParsed);
-    if (!validationResult.success) {
-      const errors = validationResult.error.issues.map(
-        (e: z.ZodIssue) => `${e.path.join('.')}: ${e.message}`
-      );
-      return { success: false, error: `Domino validation failed: ${errors.join(', ')}` };
-    }
-
-    const validated = validationResult.data;
+    const validated = parseResult.data;
     return {
       success: true,
       data: {

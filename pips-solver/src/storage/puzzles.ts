@@ -19,6 +19,13 @@ const SETTINGS_KEY = '@pips_settings';
 export type ExtractionStrategy = 'fast' | 'balanced' | 'accurate' | 'ensemble';
 
 /**
+ * API key mode for extraction
+ * - 'openrouter': Use OpenRouter for all models (recommended)
+ * - 'individual': Use individual provider API keys
+ */
+export type ApiKeyMode = 'openrouter' | 'individual';
+
+/**
  * App settings interface
  */
 export interface AppSettings {
@@ -28,15 +35,27 @@ export interface AppSettings {
   defaultDebugLevel: number;
   maxIterationsPerTick: number;
 
-  // API Keys for multi-model extraction
-  anthropicApiKey?: string; // Claude (best for structured JSON)
-  googleApiKey?: string; // Gemini (best for grid/object detection)
-  openaiApiKey?: string; // GPT-4o (fallback)
+  // API Key Mode
+  apiKeyMode?: ApiKeyMode;
+
+  // OpenRouter API Key (unified access to all models)
+  openrouterApiKey?: string;
+
+  // Individual API Keys for multi-model extraction
+  anthropicApiKey?: string; // Claude Opus 4.5 (best for structured JSON)
+  googleApiKey?: string; // Gemini 3 Pro (best for grid/spatial)
+  openaiApiKey?: string; // GPT-5.2 (best for detail/OCR)
 
   // Extraction configuration
   extractionStrategy?: ExtractionStrategy;
 
-  // CV Service URL for hybrid extraction (default: http://localhost:8080)
+  // Use new multi-stage pipeline (default: true)
+  useMultiStagePipeline?: boolean;
+
+  // Save debug responses for troubleshooting
+  saveDebugResponses?: boolean;
+
+  // CV Service URL for hybrid extraction (optional)
   cvServiceUrl?: string;
 }
 
@@ -179,6 +198,9 @@ function getDefaultSettings(): AppSettings {
     defaultFindAll: false,
     defaultDebugLevel: 0,
     maxIterationsPerTick: 100,
-    extractionStrategy: 'accurate', // Default to accurate mode
+    apiKeyMode: 'openrouter', // Default to OpenRouter (easier setup)
+    extractionStrategy: 'ensemble', // Default to ensemble for best accuracy
+    useMultiStagePipeline: true, // Use new multi-stage pipeline
+    saveDebugResponses: false,
   };
 }

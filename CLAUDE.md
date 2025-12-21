@@ -193,3 +193,63 @@ region_constraints:
 - Cell validation by interior brightness and texture variance
 - Multiple extraction versions available for different screenshot types
 - Debug output includes visualization of ROI, edges, grid lines, and detected cells
+
+## Code Quality Standards
+
+### AI Extraction Module Architecture
+
+**Shared Modules** (as of Dec 2025 refactor):
+- `src/services/extractionSchemas.ts`: Centralized Zod schemas for AI response validation
+- `src/services/jsonParsingUtils.ts`: JSON parsing with LLM-specific fallback strategies
+- `aiExtraction.ts` and `ensembleExtraction.ts` import from shared modules
+
+**Pattern**: When adding new AI extraction schemas or parsing logic, add to shared modules first to prevent duplication drift.
+
+### LLM JSON Response Handling
+
+**Problem**: Vision LLMs often return multiline strings incorrectly formatted:
+```json
+"shape": "....."
+         "....."   // <- LLM splits across lines
+```
+
+**Solution**: Use `parseJSONWithFallback()` from `jsonParsingUtils.ts` which:
+1. Attempts standard JSON.parse
+2. Falls back to multiline field fixing (2, 3, 4+ line patterns)
+3. Validates against Zod schema
+
+**Anti-pattern**: Don't inline JSON parsing logic per-file. Always use shared utilities.
+
+### Prompt Engineering Guidelines
+
+**DRY for Prompts**: Prompt templates containing guidance (domino counts, grid rules) must follow DRY principles. Duplicated prompts drift over time.
+
+**Magic Numbers**: Extract repeated values to shared constants or configuration:
+```typescript
+// Good: Centralized guidance
+const DOMINO_COUNTS = { small: '7-8', medium: '9-12', large: '12-14+' };
+
+// Bad: Hardcoded in multiple prompt strings
+"Small puzzles: ~7-8"  // in file A
+"Small puzzles: 7-8"   // in file B (subtle drift)
+```
+
+## Development Guidelines
+
+### When Refactoring AI Extraction Code
+
+**Verification Checklist**:
+- [ ] Run `npx tsc --noEmit` after changes to catch import/type errors
+- [ ] Check both `aiExtraction.ts` AND `ensembleExtraction.ts` for duplicated logic
+- [ ] Verify prompt guidance is consistent between single-model and ensemble paths
+- [ ] Zod schemas should be in `extractionSchemas.ts`, not inline
+
+### Code Duplication Detection
+
+**Files that commonly drift**:
+- `aiExtraction.ts` ↔ `ensembleExtraction.ts` (prompts, schemas, parsing)
+
+**Pattern**: When modifying one extraction file, grep for similar patterns in the other:
+```bash
+grep -n "pattern" src/services/aiExtraction.ts src/services/ensembleExtraction.ts
+```

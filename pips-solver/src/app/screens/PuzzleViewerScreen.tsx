@@ -4,10 +4,14 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, View } from 'react-native';
+import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { normalizePuzzle } from '../../model/normalize';
 import { Cell, StoredPuzzle } from '../../model/types';
 import { getPuzzle } from '../../storage/puzzles';
+import { colors, spacing, radii, shadows } from '../../theme';
+import { fontFamilies, textStyles } from '../../theme/fonts';
+import { Button, Card, Badge, Heading, Body, Label, Mono, Screen } from '../components/ui';
 import GridRenderer from '../components/GridRenderer';
 
 export default function PuzzleViewerScreen({ route, navigation }: any) {
@@ -71,9 +75,11 @@ export default function PuzzleViewerScreen({ route, navigation }: any) {
 
   if (!puzzle || !puzzle.spec) {
     return (
-      <View style={styles.container}>
-        <Text>Loading...</Text>
-      </View>
+      <Screen>
+        <View style={styles.loadingContainer}>
+          <Body>Loading...</Body>
+        </View>
+      </Screen>
     );
   }
 
@@ -81,94 +87,148 @@ export default function PuzzleViewerScreen({ route, navigation }: any) {
   const cellInfo = selectedCell ? getCellInfo(selectedCell) : null;
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Text style={styles.backButtonText}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>{puzzle.name}</Text>
+    <Screen>
+      {/* Header */}
+      <Animated.View entering={FadeInDown.duration(400)} style={styles.header}>
+        <Button
+          variant="ghost"
+          size="small"
+          title="Back"
+          onPress={() => navigation.goBack()}
+        />
+        <Heading size="medium" style={styles.title}>{puzzle.name}</Heading>
         <View style={styles.placeholder} />
-      </View>
+      </Animated.View>
 
-      <ScrollView style={styles.content}>
-        <View style={styles.infoCard}>
-          <Text style={styles.infoTitle}>Puzzle Info</Text>
-          <Text style={styles.infoText}>
-            Size: {puzzle.spec.rows}x{puzzle.spec.cols}
-          </Text>
-          <Text style={styles.infoText}>Max Pip: {puzzle.spec.maxPip || 6}</Text>
-          <Text style={styles.infoText}>
-            Duplicates: {puzzle.spec.allowDuplicates ? 'Allowed' : 'Not Allowed'}
-          </Text>
-          <Text style={styles.infoText}>Status: {puzzle.solved ? 'Solved ✓' : 'Unsolved'}</Text>
-        </View>
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Puzzle Info Card */}
+        <Animated.View entering={FadeInUp.delay(100).duration(400)}>
+          <Card variant="elevated" style={styles.infoCard}>
+            <View style={styles.cardHeader}>
+              <Heading size="small">Puzzle Info</Heading>
+              <Badge
+                variant={puzzle.solved ? 'success' : 'info'}
+                label={puzzle.solved ? 'Solved' : 'Unsolved'}
+              />
+            </View>
+            <View style={styles.infoGrid}>
+              <View style={styles.infoItem}>
+                <Label size="small">Size</Label>
+                <Mono>{puzzle.spec.rows}x{puzzle.spec.cols}</Mono>
+              </View>
+              <View style={styles.infoItem}>
+                <Label size="small">Max Pip</Label>
+                <Mono>{puzzle.spec.maxPip || 6}</Mono>
+              </View>
+              <View style={styles.infoItem}>
+                <Label size="small">Duplicates</Label>
+                <Mono>{puzzle.spec.allowDuplicates ? 'Yes' : 'No'}</Mono>
+              </View>
+            </View>
+          </Card>
+        </Animated.View>
 
-        <View style={styles.gridContainer}>
-          <GridRenderer
-            puzzle={normalized}
-            solution={puzzle.solution}
-            onCellPress={handleCellPress}
-            highlightCell={selectedCell}
-          />
-        </View>
+        {/* Grid Display */}
+        <Animated.View entering={FadeInUp.delay(200).duration(400)}>
+          <Card variant="default" style={styles.gridCard}>
+            <View style={styles.gridContainer}>
+              <GridRenderer
+                puzzle={normalized}
+                solution={puzzle.solution}
+                onCellPress={handleCellPress}
+                highlightCell={selectedCell}
+              />
+            </View>
+          </Card>
+        </Animated.View>
 
+        {/* Selected Cell Info */}
         {cellInfo && (
-          <View style={styles.cellInfoCard}>
-            <Text style={styles.cellInfoTitle}>Selected Cell Info</Text>
-            <Text style={styles.cellInfoText}>Position: {cellInfo.position}</Text>
-            <Text style={styles.cellInfoText}>Region: {cellInfo.regionId}</Text>
-            <Text style={styles.cellInfoText}>Constraint: {cellInfo.constraint}</Text>
-          </View>
+          <Animated.View entering={FadeInUp.duration(300)}>
+            <Card variant="accent" style={styles.cellInfoCard}>
+              <Heading size="small" style={styles.cellInfoTitle}>Selected Cell</Heading>
+              <View style={styles.cellInfoGrid}>
+                <View style={styles.cellInfoItem}>
+                  <Label size="small">Position</Label>
+                  <Mono>{cellInfo.position}</Mono>
+                </View>
+                <View style={styles.cellInfoItem}>
+                  <Label size="small">Region</Label>
+                  <Mono>{cellInfo.regionId}</Mono>
+                </View>
+              </View>
+              <View style={styles.cellInfoConstraint}>
+                <Label size="small">Constraint</Label>
+                <Body size="small" color="secondary">{cellInfo.constraint}</Body>
+              </View>
+            </Card>
+          </Animated.View>
         )}
 
+        {/* Solution Stats */}
         {puzzle.solution && (
-          <View style={styles.solutionCard}>
-            <Text style={styles.solutionTitle}>Solution</Text>
-            <Text style={styles.solutionText}>Dominoes: {puzzle.solution.dominoes.length}</Text>
-            <Text style={styles.solutionText}>Nodes Searched: {puzzle.solution.stats.nodes}</Text>
-            <Text style={styles.solutionText}>Backtracks: {puzzle.solution.stats.backtracks}</Text>
-            <Text style={styles.solutionText}>Time: {puzzle.solution.stats.timeMs}ms</Text>
-          </View>
+          <Animated.View entering={FadeInUp.delay(300).duration(400)}>
+            <Card variant="elevated" style={styles.solutionCard}>
+              <View style={styles.cardHeader}>
+                <Heading size="small">Solution Stats</Heading>
+                <Badge variant="success" label="Valid" />
+              </View>
+              <View style={styles.statsGrid}>
+                <View style={styles.statItem}>
+                  <Mono style={styles.statValue}>{puzzle.solution.dominoes.length}</Mono>
+                  <Label size="small">Dominoes</Label>
+                </View>
+                <View style={styles.statItem}>
+                  <Mono style={styles.statValue}>{puzzle.solution.stats.nodes}</Mono>
+                  <Label size="small">Nodes</Label>
+                </View>
+                <View style={styles.statItem}>
+                  <Mono style={styles.statValue}>{puzzle.solution.stats.backtracks}</Mono>
+                  <Label size="small">Backtracks</Label>
+                </View>
+                <View style={styles.statItem}>
+                  <Mono style={styles.statValue}>{puzzle.solution.stats.timeMs}ms</Mono>
+                  <Label size="small">Time</Label>
+                </View>
+              </View>
+            </Card>
+          </Animated.View>
         )}
+
+        {/* Bottom spacing */}
+        <View style={{ height: spacing[6] }} />
       </ScrollView>
 
-      <View style={styles.footer}>
-        <TouchableOpacity
-          style={styles.solveButton}
+      {/* Footer Action */}
+      <Animated.View entering={FadeInUp.delay(400).duration(400)} style={styles.footer}>
+        <Button
+          variant="primary"
+          size="large"
+          title={puzzle.solved ? 'Re-Solve Puzzle' : 'Solve Puzzle'}
           onPress={() => navigation.navigate('Solve', { puzzleId: puzzle.id })}
-        >
-          <Text style={styles.solveButtonText}>{puzzle.solved ? 'Re-Solve' : 'Solve Puzzle'}</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+          style={styles.solveButton}
+        />
+      </Animated.View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  loadingContainer: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
-    paddingTop: 60,
-    backgroundColor: '#fff',
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
     borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
-  },
-  backButton: {
-    padding: 8,
-  },
-  backButtonText: {
-    fontSize: 16,
-    color: '#007AFF',
+    borderBottomColor: colors.surface.slate,
   },
   title: {
-    fontSize: 20,
-    fontWeight: 'bold',
     flex: 1,
     textAlign: 'center',
   },
@@ -177,98 +237,75 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    paddingHorizontal: spacing[4],
   },
   infoCard: {
-    backgroundColor: '#fff',
-    padding: 16,
-    margin: 16,
-    marginBottom: 0,
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    marginTop: spacing[4],
   },
-  infoTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 12,
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing[4],
   },
-  infoText: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 4,
+  infoGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  infoItem: {
+    alignItems: 'center',
+    gap: spacing[1],
+  },
+  gridCard: {
+    marginTop: spacing[4],
+    padding: 0,
+    overflow: 'hidden',
   },
   gridContainer: {
-    backgroundColor: '#fff',
-    margin: 16,
-    borderRadius: 8,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    height: 400,
+    height: 380,
+    backgroundColor: colors.surface.charcoal,
+    borderRadius: radii.lg,
   },
   cellInfoCard: {
-    backgroundColor: '#fff',
-    padding: 16,
-    margin: 16,
-    marginTop: 0,
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    marginTop: spacing[4],
   },
   cellInfoTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 8,
+    marginBottom: spacing[3],
   },
-  cellInfoText: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 4,
+  cellInfoGrid: {
+    flexDirection: 'row',
+    gap: spacing[6],
+    marginBottom: spacing[3],
+  },
+  cellInfoItem: {
+    gap: spacing[1],
+  },
+  cellInfoConstraint: {
+    gap: spacing[1],
   },
   solutionCard: {
-    backgroundColor: '#E8F5E9',
-    padding: 16,
-    margin: 16,
-    marginTop: 0,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#4CAF50',
+    marginTop: spacing[4],
   },
-  solutionTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#2E7D32',
-    marginBottom: 8,
+  statsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
   },
-  solutionText: {
-    fontSize: 14,
-    color: '#2E7D32',
-    marginBottom: 4,
+  statItem: {
+    alignItems: 'center',
+    gap: spacing[1],
+  },
+  statValue: {
+    fontSize: 18,
+    fontFamily: fontFamilies.monoMedium,
+    color: colors.accent.brass,
   },
   footer: {
-    padding: 16,
-    backgroundColor: '#fff',
+    padding: spacing[4],
     borderTopWidth: 1,
-    borderTopColor: '#ddd',
+    borderTopColor: colors.surface.slate,
+    backgroundColor: colors.surface.charcoal,
   },
   solveButton: {
-    backgroundColor: '#4CAF50',
-    padding: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  solveButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
+    width: '100%',
   },
 });
