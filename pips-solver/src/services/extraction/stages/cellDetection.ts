@@ -245,8 +245,20 @@ async function callModelsForCells(
   const apiResponses = await callAllModels(imageBase64, prompt, config);
   const results: ModelResponse<CellDetectionResult>[] = [];
 
+  console.log(`[CellDetection] Received ${apiResponses.size} API responses for ${grid.rows}x${grid.cols} grid`);
+
   for (const [model, response] of apiResponses) {
+    console.log(`[CellDetection] Model ${model}:`, {
+      hasError: !!response.error,
+      error: response.error,
+      contentLength: response.content?.length ?? 0,
+    });
+
     const parsed = response.error ? null : parseCellResponse(response.content, grid);
+
+    if (!parsed && !response.error) {
+      console.log(`[CellDetection] Parse failed for ${model}. Grid: ${grid.rows}x${grid.cols}. Raw:`, response.content?.substring(0, 300));
+    }
 
     results.push({
       model,
@@ -258,6 +270,9 @@ async function callModelsForCells(
     });
   }
 
+  const validCount = results.filter(r => r.answer !== null).length;
+  console.log(`[CellDetection] Valid responses: ${validCount}/${results.length}`);
+
   return results;
 }
 
@@ -267,6 +282,7 @@ function selectBestResult(
 ): CellDetectionResult {
   if (responses.length === 0) {
     // Fallback: all cells, no holes
+    console.warn(`[CellDetection] FALLBACK USED: No valid responses. Returning all-cells ${grid.rows}x${grid.cols} grid.`);
     const row = '.'.repeat(grid.cols);
     return {
       shape: Array(grid.rows).fill(row).join('\n'),

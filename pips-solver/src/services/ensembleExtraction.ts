@@ -57,26 +57,41 @@ const BOARD_EXTRACTION_PROMPT_V2 = `Analyze this Pips puzzle image and extract i
 STEP-BY-STEP EXTRACTION METHOD:
 
 ═══════════════════════════════════════════════════════════════════════════════
-STEP 1: COUNT GRID DIMENSIONS
+STEP 1: COUNT GRID DIMENSIONS (CRITICAL - COUNT VERY CAREFULLY!)
 ═══════════════════════════════════════════════════════════════════════════════
-Count the BOUNDING BOX of the puzzle:
-- ROWS: Count every horizontal level from the TOPMOST cell to the BOTTOMMOST cell
-- COLS: Count the MAXIMUM width (widest row determines columns)
-- Puzzles can be ANY size (4x4 to 10x10+) and ANY shape (rectangular, cross, L, irregular)
-- Include ALL rows/columns even if some positions are empty holes
+The puzzle grid has VISIBLE BLACK GRIDLINES. Use them to count precisely:
+
+COUNTING METHOD - Use gridlines:
+1. Count all VERTICAL black lines from left to right edge of the grid
+2. Number of columns = (vertical lines) - 1
+3. Count all HORIZONTAL black lines from top to bottom edge of the grid
+4. Number of rows = (horizontal lines) - 1
+
+EXAMPLE: If you see 5 vertical lines and 4 horizontal lines → grid is 4 columns × 3 rows
+
+COMMON MISTAKE TO AVOID:
+- Don't just count colored cells! Count the FULL grid including holes/gaps
+- Holes look like dark/empty squares but they're INSIDE the grid boundary
+- The grid boundary is defined by the outermost gridlines
+
+Typical NYT Pips grid sizes: 4×3, 4×4, 5×4, 5×5, 6×4, 6×5, 6×6
 
 ═══════════════════════════════════════════════════════════════════════════════
 STEP 2: BUILD THE SHAPE STRING (cell existence map)
 ═══════════════════════════════════════════════════════════════════════════════
 Go ROW BY ROW, from top to bottom. For each position in the bounding box:
 - "." = A cell EXISTS here (has a colored background, can hold a domino half)
-- "#" = NO cell here (empty space, hole, gap)
+- "#" = NO cell here (empty space, hole, gap, dark square)
 
 CRITICAL: The shape field uses ONLY "." and "#" characters!
 NEVER put region letters (A, B, C) in the shape field!
 
 Join rows with literal \\n (backslash-n, not actual newlines).
-Verify: shape should have exactly [rows] lines, each with exactly [cols] characters.
+
+SELF-CHECK:
+- shape must have exactly [rows] lines
+- each line must have exactly [cols] characters
+- total cells (dots) + total holes (hashes) = rows × cols
 
 ═══════════════════════════════════════════════════════════════════════════════
 STEP 3: BUILD THE REGIONS STRING (color map)
@@ -177,12 +192,33 @@ PREVIOUS EXTRACTION:
 
 - Dominoes: {dominoes}
 
-VERIFICATION CHECKLIST:
-1. Are grid dimensions correct? Count rows and columns.
-2. Are holes (#) in the correct positions?
-3. Are region colors mapped correctly?
-4. Are constraint values accurate?
-5. Are all dominoes captured with correct pip counts?
+═══════════════════════════════════════════════════════════════════════════════
+VERIFICATION CHECKLIST (check each carefully):
+═══════════════════════════════════════════════════════════════════════════════
+
+1. GRID DIMENSIONS (most common error!):
+   - Count the BLACK GRIDLINES in the image
+   - Columns = (vertical lines) - 1
+   - Rows = (horizontal lines) - 1
+   - Does {rows}x{cols} match your count?
+
+2. SHAPE STRING:
+   - Does it have exactly {rows} lines?
+   - Does each line have exactly {cols} characters?
+   - Are holes (#) in the right positions?
+
+3. REGIONS:
+   - Same dimensions as shape?
+   - Each color mapped to a consistent letter?
+   - Holes (#) match exactly?
+
+4. CONSTRAINTS:
+   - Every region with a diamond label captured?
+   - Values correct?
+
+5. DOMINOES (if extracted):
+   - All dominoes from the tray captured?
+   - Pip counts accurate?
 
 OUTPUT (JSON only):
 {
@@ -194,10 +230,13 @@ OUTPUT (JSON only):
 OR if corrections needed:
 {
   "verified": false,
-  "issues": ["Region B should extend to row 3", "Domino [4,2] should be [4,3]"],
+  "issues": ["Grid should be 4x3 not 3x3", "Missing column in shape"],
   "corrections": {
-    "regions": "corrected region string if needed",
-    "dominoes": [[4, 3], ...],
+    "rows": <corrected row count if wrong>,
+    "cols": <corrected col count if wrong>,
+    "shape": "corrected shape if wrong",
+    "regions": "corrected regions if wrong",
+    "dominoes": [[a, b], ...],
     "constraints": { ... }
   }
 }`;
@@ -291,10 +330,21 @@ function compareDominoResults(a: DominoExtractionResult, b: DominoExtractionResu
 }
 
 /**
+ * Result from board selection with consensus info
+ */
+interface BoardSelectionResult {
+  best: BoardResult;
+  consensusScore: number;
+  combinedScore: number;
+}
+
+/**
  * Select best result from ensemble based on confidence and consensus
  */
-function selectBestBoard(results: BoardResult[]): BoardResult {
-  if (results.length === 1) return results[0];
+function selectBestBoard(results: BoardResult[]): BoardSelectionResult {
+  if (results.length === 1) {
+    return { best: results[0], consensusScore: 1.0, combinedScore: results[0].confidence };
+  }
 
   // Score each result by confidence + agreement with others
   const scored = results.map((r, i) => {
@@ -323,7 +373,11 @@ function selectBestBoard(results: BoardResult[]): BoardResult {
     }))
   );
 
-  return scored[0].result;
+  return {
+    best: scored[0].result,
+    consensusScore: scored[0].consensusScore,
+    combinedScore: scored[0].combinedScore,
+  };
 }
 
 function selectBestDominoes(results: DominoResult[]): DominoResult {
@@ -456,13 +510,28 @@ async function extractBoardEnsemble(
   }
 
   // Select best result
-  const best = selectBestBoard(results);
+  const selection = selectBestBoard(results);
+  const best = selection.best;
 
-  // Verification pass if enabled and confidence below threshold
-  if (config.enableVerification && best.confidence < config.confidenceThreshold) {
+  // Trigger verification if:
+  // 1. Verification is enabled AND
+  // 2. Either confidence is below threshold OR consensus is low (models disagree)
+  const LOW_CONSENSUS_THRESHOLD = 0.5;
+  const needsVerification =
+    config.enableVerification &&
+    (selection.combinedScore < config.confidenceThreshold ||
+      selection.consensusScore < LOW_CONSENSUS_THRESHOLD);
+
+  if (needsVerification) {
+    const reason =
+      selection.consensusScore < LOW_CONSENSUS_THRESHOLD
+        ? `low consensus (${(selection.consensusScore * 100).toFixed(0)}%)`
+        : `low confidence (${(selection.combinedScore * 100).toFixed(0)}%)`;
+
+    console.log(`[Ensemble] Running verification due to ${reason}`);
     onProgress?.({
       step: 'board_verification',
-      message: 'Running verification pass...',
+      message: `Running verification (${reason})...`,
       confidence: best.confidence,
     });
 
@@ -508,6 +577,8 @@ async function extractBoardEnsemble(
           corrected.constraints = verifyParsed.data.corrections.constraints;
         }
         return { success: true, data: corrected, modelsUsed };
+      } else if (verifyParsed.success && verifyParsed.data.verified) {
+        console.log('[Ensemble] Verification confirmed extraction is correct');
       }
     } catch (e) {
       console.warn('[Ensemble] Verification failed:', e);

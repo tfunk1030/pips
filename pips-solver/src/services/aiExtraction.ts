@@ -2,16 +2,16 @@
  * AI Extraction Service
  * Multi-model extraction with ensemble support for maximum accuracy
  *
- * Supports:
- * - Gemini 2.5 Pro (best for grid/object detection, mAP 13.3)
- * - Claude Sonnet 4 (best for structured JSON output, 85% accuracy)
- * - GPT-4o (fallback)
+ * Uses 5-stage extraction pipeline with 3-model ensemble (December 2025):
+ * - Gemini 3 Pro Preview (best for grid/spatial detection)
+ * - GPT-5.2 (best for OCR, pip counting, fine visual detail)
+ * - Claude Opus 4.5 (best for instruction following, structured JSON)
  *
  * Strategies:
- * - fast: Single model (Gemini Flash), ~3s
- * - balanced: Gemini Pro + verification, ~20s
- * - accurate: Gemini Pro + Claude verification, ~35s
- * - ensemble: Multi-model consensus voting, ~45s (MAXIMUM ACCURACY)
+ * - fast: Single model (Gemini 3 Pro), ~5s
+ * - balanced: Multi-model with verification, ~15s
+ * - accurate: Full 3-model consensus, ~25s
+ * - ensemble: 5-stage 3-model consensus voting, ~35s (MAXIMUM ACCURACY)
  */
 
 import { Platform } from 'react-native';
@@ -28,6 +28,14 @@ import {
   GridState,
   RegionState,
 } from '../model/overlayTypes';
+// New 5-stage extraction pipeline
+import {
+  extractPuzzle as extractPuzzleNew,
+  ExtractionProgress as NewPipelineProgress,
+} from './extraction/pipeline';
+import { ExtractionResult as NewExtractionResult, ExtractionConfig } from './extraction/types';
+import { createOpenRouterConfig, createDirectConfig } from './extraction/config';
+// Legacy extraction (kept for fallback)
 import {
   ExtractionProgress as EnsembleProgress,
   extractPuzzleEnsemble,
@@ -112,9 +120,60 @@ export interface MultiModelExtractionResult {
 }
 
 /**
- * Extract puzzle from screenshot using multi-model ensemble for maximum accuracy
+ * Convert new pipeline result to legacy AIExtractionResult format
+ */
+function convertToLegacyResult(newResult: NewExtractionResult): AIExtractionResult {
+  // Build constraints in legacy format
+  const constraints: Record<string, { type: string; op?: string; value?: number }> = {};
+  for (const [label, constraint] of Object.entries(newResult.constraints)) {
+    if (constraint.type === 'sum') {
+      constraints[label] = {
+        type: 'sum',
+        op: constraint.op || '==',
+        value: constraint.value,
+      };
+    } else if (constraint.type === 'all_equal') {
+      constraints[label] = { type: 'all_equal' };
+    }
+  }
+
+  return {
+    board: {
+      rows: newResult.grid.rows,
+      cols: newResult.grid.cols,
+      shape: newResult.grid.shape,
+      regions: newResult.grid.regions,
+      constraints,
+      confidence: {
+        grid: newResult.confidence.perStage.grid,
+        regions: newResult.confidence.perStage.regions,
+        constraints: newResult.confidence.perStage.constraints,
+      },
+    },
+    dominoes: {
+      dominoes: newResult.dominoes,
+      confidence: newResult.confidence.perStage.dominoes,
+    },
+    reasoning: newResult.reviewHints.length > 0
+      ? `Review hints: ${newResult.reviewHints.join(', ')}`
+      : 'Extraction completed successfully',
+    confidence: newResult.confidence.overall,
+    confidenceScores: {
+      grid: newResult.confidence.perStage.grid,
+      regions: newResult.confidence.perStage.regions,
+      constraints: newResult.confidence.perStage.constraints,
+    },
+  };
+}
+
+/**
+ * Extract puzzle from screenshot using 5-stage multi-model pipeline
  *
  * This is the recommended extraction method for production use.
+ * Uses the new 5-stage pipeline with 3-model ensemble:
+ * - Gemini 3 Pro (best for grid/spatial detection)
+ * - GPT-5.2 (best for OCR, pip counting)
+ * - Claude Opus 4.5 (best for structured JSON)
  *
  * @param base64Image - Base64 encoded image data
  * @param options - Extraction options including strategy and API keys
@@ -125,8 +184,7 @@ export interface MultiModelExtractionResult {
  * const result = await extractPuzzleMultiModel(imageBase64, {
  *   strategy: 'ensemble', // Maximum accuracy
  *   apiKeys: {
- *     google: process.env.GOOGLE_API_KEY,
- *     anthropic: process.env.ANTHROPIC_API_KEY,
+ *     openrouter: process.env.OPENROUTER_API_KEY,
  *   },
  *   onProgress: (p) => console.log(p.message),
  * });
@@ -139,40 +197,34 @@ export async function extractPuzzleMultiModel(
   const { strategy, apiKeys, onProgress, useHybridCV = false, cvServiceUrl } = options;
 
   // Validate we have at least one API key
+  const hasOpenRouter = !!apiKeys.openrouter?.trim();
   const availableProviders = getAvailableProviders(apiKeys);
-  if (availableProviders.length === 0) {
+
+  if (!hasOpenRouter && availableProviders.length === 0) {
     return {
       success: false,
       error:
-        'No API keys provided. At least one of: google, anthropic, or openai API key is required.',
+        'No API keys provided. Provide either an OpenRouter API key or individual provider keys (google, anthropic, openai).',
       modelsUsed: [],
       timing: { boardMs: 0, dominoesMs: 0, totalMs: 0 },
     };
   }
 
-  // Log available providers
-  console.log(`[MultiModel] Available providers: ${availableProviders.join(', ')}`);
+  // Log configuration
+  console.log(`[MultiModel] Using NEW 5-stage extraction pipeline`);
+  console.log(`[MultiModel] API Mode: ${hasOpenRouter ? 'OpenRouter' : 'Individual providers'}`);
+  if (!hasOpenRouter) {
+    console.log(`[MultiModel] Available providers: ${availableProviders.join(', ')}`);
+  }
   console.log(`[MultiModel] Strategy: ${strategy}`);
   console.log(`[MultiModel] Hybrid CV: ${useHybridCV ? 'enabled' : 'disabled'}`);
 
+  const startTime = Date.now();
   let imageForAI = base64Image;
   let cvCropMs = 0;
 
   // If hybrid mode is enabled, try to crop puzzle region first
-  // We keep both full image (for dominoes) and cropped image (for board)
   let usedCropping = false;
-  let cropBounds:
-    | {
-        x: number;
-        y: number;
-        width: number;
-        height: number;
-        originalWidth: number;
-        originalHeight: number;
-      }
-    | undefined;
-
-  // Actual grid bounds (without padding) for overlay alignment
   let gridBoundsForOverlay:
     | {
         x: number;
@@ -184,14 +236,10 @@ export async function extractPuzzleMultiModel(
       }
     | undefined;
 
-  let dominoImage: string | undefined;
-
   if (useHybridCV) {
     try {
       // Import CV extraction dynamically to avoid circular deps
-      const { cropPuzzleRegion, cropDominoRegion, setCVServiceURL } = await import(
-        './cvExtraction'
-      );
+      const { cropPuzzleRegion, setCVServiceURL } = await import('./cvExtraction');
 
       // Set CV service URL if provided
       if (cvServiceUrl) {
@@ -204,7 +252,7 @@ export async function extractPuzzleMultiModel(
         confidence: 0,
       });
 
-      // Crop puzzle region for board extraction
+      // Crop puzzle region for extraction
       const cropResult = await cropPuzzleRegion(base64Image);
       cvCropMs = cropResult.extractionMs;
 
@@ -214,82 +262,127 @@ export async function extractPuzzleMultiModel(
         );
         imageForAI = cropResult.croppedImage;
         usedCropping = true;
-        cropBounds = cropResult.bounds;
-        gridBoundsForOverlay = cropResult.gridBounds; // Use actual grid bounds for overlay
+        gridBoundsForOverlay = cropResult.gridBounds;
 
         onProgress?.({
           step: 'initializing',
           message: `Cropped puzzle region (${cropResult.bounds.width}x${cropResult.bounds.height})`,
           confidence: 0.1,
         });
-
-        // Crop domino region for domino extraction
-        // Use the puzzle bottom Y coordinate to know where dominoes start
-        const puzzleBottomY = cropResult.bounds.y + cropResult.bounds.height;
-        const dominoCropResult = await cropDominoRegion(base64Image, puzzleBottomY);
-        cvCropMs += dominoCropResult.extractionMs;
-
-        if (dominoCropResult.success && dominoCropResult.croppedImage) {
-          console.log(
-            `[MultiModel] Domino crop successful: ${dominoCropResult.bounds?.width}x${dominoCropResult.bounds?.height}`
-          );
-          dominoImage = dominoCropResult.croppedImage;
-
-          onProgress?.({
-            step: 'initializing',
-            message: `Cropped domino region (${dominoCropResult.bounds?.width}x${dominoCropResult.bounds?.height})`,
-            confidence: 0.15,
-          });
-        } else {
-          console.warn(
-            `[MultiModel] Domino crop failed: ${dominoCropResult.error}, using full image`
-          );
-          dominoImage = base64Image; // Fallback to full image
-        }
       } else {
         console.warn(`[MultiModel] CV crop failed: ${cropResult.error}, using full image`);
-        // Continue with full image if crop fails
       }
     } catch (error) {
       console.warn('[MultiModel] CV service unavailable, using full image:', error);
-      // Continue with full image if CV service is unavailable
     }
   }
 
-  // Use ensemble extraction:
-  // - Cropped puzzle image for board extraction (better accuracy on grid/regions)
-  // - Cropped domino image for domino extraction (focused on just the dominoes)
-  const result = await extractPuzzleEnsemble(
-    imageForAI,
-    apiKeys,
-    { strategy, onProgress },
-    dominoImage // Use cropped domino image if available
-  );
+  // Build extraction config for new pipeline
+  let extractionConfig: Partial<ExtractionConfig>;
 
-  // Add CV crop time to total timing
-  if (cvCropMs > 0 && result.timing) {
-    result.timing.totalMs += cvCropMs;
+  if (hasOpenRouter) {
+    extractionConfig = createOpenRouterConfig(apiKeys.openrouter!, {
+      saveDebugResponses: true,
+    });
+  } else {
+    extractionConfig = createDirectConfig(
+      {
+        google: apiKeys.google,
+        openai: apiKeys.openai,
+        anthropic: apiKeys.anthropic,
+      },
+      { saveDebugResponses: true }
+    );
   }
 
-  // Use CV's actual grid bounds (without padding) for precise overlay alignment
-  if (usedCropping && gridBoundsForOverlay && result.success && result.result?.board) {
-    const cvBasedLocation = {
-      left: gridBoundsForOverlay.x,
-      top: gridBoundsForOverlay.y,
-      right: gridBoundsForOverlay.x + gridBoundsForOverlay.width,
-      bottom: gridBoundsForOverlay.y + gridBoundsForOverlay.height,
-      imageWidth: gridBoundsForOverlay.originalWidth,
-      imageHeight: gridBoundsForOverlay.originalHeight,
-    };
+  // Adapt progress callback from new pipeline format to ensemble format
+  const adaptedProgress = onProgress
+    ? (progress: NewPipelineProgress) => {
+        // Map new 5-stage progress to ensemble progress steps
+        let step: EnsembleProgress['step'];
+        if (progress.stage === 'grid' || progress.stage === 'cells') {
+          step = 'board_primary';
+        } else if (progress.stage === 'regions') {
+          step = 'board_secondary';
+        } else if (progress.stage === 'constraints') {
+          step = 'board_verification';
+        } else if (progress.stage === 'dominoes') {
+          step = 'dominoes_primary';
+        } else {
+          step = 'complete';
+        }
 
-    console.log(
-      `[MultiModel] Using CV grid bounds for overlay: (${cvBasedLocation.left},${cvBasedLocation.top})-(${cvBasedLocation.right},${cvBasedLocation.bottom})`
+        onProgress({
+          step,
+          message: progress.message,
+          confidence: progress.confidence || 0,
+        });
+      }
+    : undefined;
+
+  try {
+    // Use new 5-stage extraction pipeline
+    const newResult = await extractPuzzleNew(imageForAI, extractionConfig, adaptedProgress);
+
+    // Convert to legacy format
+    const legacyResult = convertToLegacyResult(newResult);
+
+    // Apply CV grid bounds if available
+    if (usedCropping && gridBoundsForOverlay) {
+      legacyResult.board.gridLocation = {
+        left: gridBoundsForOverlay.x,
+        top: gridBoundsForOverlay.y,
+        right: gridBoundsForOverlay.x + gridBoundsForOverlay.width,
+        bottom: gridBoundsForOverlay.y + gridBoundsForOverlay.height,
+        imageWidth: gridBoundsForOverlay.originalWidth,
+        imageHeight: gridBoundsForOverlay.originalHeight,
+      };
+    }
+
+    const totalMs = Date.now() - startTime;
+
+    return {
+      success: true,
+      partial: newResult.needsReview,
+      result: legacyResult,
+      modelsUsed: ['google/gemini-3-pro-preview', 'openai/gpt-5.2', 'anthropic/claude-opus-4-5'],
+      timing: {
+        boardMs: totalMs * 0.7, // Approximate split
+        dominoesMs: totalMs * 0.3,
+        totalMs: totalMs + cvCropMs,
+      },
+    };
+  } catch (error) {
+    console.error('[MultiModel] New pipeline failed:', error);
+
+    // Fallback to legacy ensemble extraction
+    console.log('[MultiModel] Falling back to legacy ensemble extraction...');
+    const legacyResult = await extractPuzzleEnsemble(
+      imageForAI,
+      apiKeys,
+      { strategy, onProgress },
+      undefined
     );
 
-    result.result.board.gridLocation = cvBasedLocation;
-  }
+    // Add CV crop time to total timing
+    if (cvCropMs > 0 && legacyResult.timing) {
+      legacyResult.timing.totalMs += cvCropMs;
+    }
 
-  return result;
+    // Use CV's actual grid bounds for overlay alignment
+    if (usedCropping && gridBoundsForOverlay && legacyResult.success && legacyResult.result?.board) {
+      legacyResult.result.board.gridLocation = {
+        left: gridBoundsForOverlay.x,
+        top: gridBoundsForOverlay.y,
+        right: gridBoundsForOverlay.x + gridBoundsForOverlay.width,
+        bottom: gridBoundsForOverlay.y + gridBoundsForOverlay.height,
+        imageWidth: gridBoundsForOverlay.originalWidth,
+        imageHeight: gridBoundsForOverlay.originalHeight,
+      };
+    }
+
+    return legacyResult;
+  }
 }
 
 /**

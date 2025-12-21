@@ -11,9 +11,11 @@ import { ExtractionConfig } from './types';
 // =============================================================================
 
 export const DEFAULT_MODELS = {
-  gemini: 'google/gemini-3-pro',
+  // Correct model IDs as of December 2025
+  // Sources: ai.google.dev, platform.openai.com, platform.claude.com
+  gemini: 'google/gemini-3-pro-preview',
   gpt: 'openai/gpt-5.2',
-  claude: 'anthropic/claude-opus-4.5',
+  claude: 'anthropic/claude-opus-4-5',
 } as const;
 
 // =============================================================================
@@ -22,7 +24,7 @@ export const DEFAULT_MODELS = {
 
 export const NYT_VALIDATION = {
   /** Minimum grid dimension (rows or cols) */
-  minGridSize: 4,
+  minGridSize: 3,
   /** Maximum grid dimension (rows or cols) */
   maxGridSize: 8,
   /** Valid pip range [min, max] */

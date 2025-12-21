@@ -310,6 +310,8 @@ export interface APIKeys {
   anthropic?: string;
   google?: string;
   openai?: string;
+  /** OpenRouter API key - unified access to all models */
+  openrouter?: string;
 }
 
 /**

@@ -30,11 +30,24 @@ const API_ENDPOINTS: Record<ApiProvider, string> = {
 
 /**
  * Determine which API endpoint to use for a given model
+ *
+ * Priority: OpenRouter first (if configured), then direct provider APIs
+ * This ensures consistent behavior across all models when using OpenRouter
  */
 export function resolveApiEndpoint(model: string, config: ExtractionConfig): ApiEndpoint {
   const { apiKeys } = config;
 
-  // Check for model-specific direct key first
+  // PRIORITY 1: OpenRouter (unified access to all models)
+  if (apiKeys.openrouter) {
+    return {
+      provider: 'openrouter',
+      endpoint: API_ENDPOINTS.openrouter,
+      key: apiKeys.openrouter,
+      model: model,
+    };
+  }
+
+  // PRIORITY 2: Direct provider APIs (fallback when no OpenRouter)
   if (model.startsWith('google/') && apiKeys.google) {
     return {
       provider: 'google',
@@ -59,16 +72,6 @@ export function resolveApiEndpoint(model: string, config: ExtractionConfig): Api
       endpoint: API_ENDPOINTS.anthropic,
       key: apiKeys.anthropic,
       model: model.replace('anthropic/', ''),
-    };
-  }
-
-  // Fall back to OpenRouter
-  if (apiKeys.openrouter) {
-    return {
-      provider: 'openrouter',
-      endpoint: API_ENDPOINTS.openrouter,
-      key: apiKeys.openrouter,
-      model: model,
     };
   }
 
@@ -243,7 +246,7 @@ export async function callVisionApi(
         headers = {
           'x-api-key': endpoint.key,
           'Content-Type': 'application/json',
-          'anthropic-version': '2024-10-22',
+          'anthropic-version': '2023-06-01',
         };
         break;
 
@@ -346,16 +349,25 @@ export async function callAllModels(
     if (apiKeys.anthropic) modelsToCall.push(models.claude);
   }
 
+  console.log(`[ApiClient] Calling ${modelsToCall.length} models:`, modelsToCall);
+
   if (modelsToCall.length === 0) {
     throw new Error('No API keys configured. Please add an OpenRouter key or individual provider keys in Settings.');
   }
 
   // Call all models in parallel
   const promises = modelsToCall.map(async (model) => {
+    console.log(`[ApiClient] Starting call to ${model}`);
     const response = await callVisionApi(
       { model, imageBase64, prompt },
       config
     );
+    console.log(`[ApiClient] ${model} responded:`, {
+      latencyMs: response.latencyMs,
+      hasError: !!response.error,
+      error: response.error,
+      contentLength: response.content?.length ?? 0,
+    });
     return { model, response };
   });
 

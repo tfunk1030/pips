@@ -190,8 +190,21 @@ async function callModelsForGrid(
   const apiResponses = await callAllModels(imageBase64, prompt, config);
   const results: ModelResponse<GridGeometryResult>[] = [];
 
+  console.log(`[GridGeometry] Received ${apiResponses.size} API responses`);
+
   for (const [model, response] of apiResponses) {
+    console.log(`[GridGeometry] Model ${model}:`, {
+      hasError: !!response.error,
+      error: response.error,
+      contentLength: response.content?.length ?? 0,
+      contentPreview: response.content?.substring(0, 200),
+    });
+
     const parsed = response.error ? null : parseGridResponse(response.content);
+
+    if (!parsed && !response.error) {
+      console.log(`[GridGeometry] Parse failed for ${model}. Raw content:`, response.content?.substring(0, 500));
+    }
 
     results.push({
       model,
@@ -203,12 +216,16 @@ async function callModelsForGrid(
     });
   }
 
+  const validCount = results.filter(r => r.answer !== null).length;
+  console.log(`[GridGeometry] Valid responses: ${validCount}/${results.length}`);
+
   return results;
 }
 
 function selectBestResult(responses: ModelResponse<GridGeometryResult>[]): GridGeometryResult {
   if (responses.length === 0) {
     // Fallback if no valid responses
+    console.warn('[GridGeometry] FALLBACK USED: No valid responses from any model. Returning default 6x5 grid.');
     return { rows: 6, cols: 5, confidence: 0 };
   }
 
