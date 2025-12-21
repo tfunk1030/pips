@@ -328,6 +328,10 @@ export async function callVisionApi(
 
 /**
  * Call all configured models in parallel for a stage
+ * 
+ * NOTE: In Dec 2025, Gemini 3 Pro Preview and GPT-5.2 are timing out/failing.
+ * To work around this, you can limit models by only setting the anthropic API key,
+ * or by modifying the models config to only include working models.
  */
 export async function callAllModels(
   imageBase64: string,
@@ -341,8 +345,9 @@ export async function callAllModels(
   const modelsToCall: string[] = [];
 
   if (apiKeys.openrouter) {
-    // OpenRouter can access all models
-    modelsToCall.push(models.gemini, models.gpt, models.claude);
+    // OpenRouter can access all models - but only call Claude if others are failing
+    // TODO: Make this configurable via strategy setting
+    modelsToCall.push(models.claude); // Only Claude for now (most reliable)
   } else {
     if (apiKeys.google) modelsToCall.push(models.gemini);
     if (apiKeys.openai) modelsToCall.push(models.gpt);

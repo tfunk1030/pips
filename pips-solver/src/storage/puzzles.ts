@@ -199,7 +199,7 @@ function getDefaultSettings(): AppSettings {
     defaultDebugLevel: 0,
     maxIterationsPerTick: 100,
     apiKeyMode: 'openrouter', // Default to OpenRouter (easier setup)
-    extractionStrategy: 'balanced', // Default to balanced (fast + accurate)
+    extractionStrategy: 'balanced', // DEFAULT: fast single-model strategy (GPT-5.2 is slow)
     useMultiStagePipeline: true, // Use new multi-stage pipeline
     saveDebugResponses: false,
   };
