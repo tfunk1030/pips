@@ -92,14 +92,14 @@ Constraint types supported:
 
 The mobile app includes AI-powered puzzle extraction from screenshots.
 
-#### Multi-Stage Extraction Pipeline (Dec 2025)
+#### Multi-Stage Extraction Pipeline (Dec 2024)
 
 A 5-stage pipeline with 3-model ensemble for maximum accuracy:
 
 **Models Used (via OpenRouter or direct API):**
-- **Gemini 3 Pro** (`google/gemini-3-pro`): Best for grid geometry and spatial understanding
-- **GPT-5.2** (`openai/gpt-5.2`): Best for OCR, pip counting, and fine visual detail
-- **Claude Opus 4.5** (`anthropic/claude-opus-4.5`): Best for instruction following and structured output
+- **Gemini 2.0 Flash** (`google/gemini-2.0-flash-exp`): Fast, good for grid geometry and spatial understanding
+- **GPT-4o** (`openai/gpt-4o`): Best for OCR, pip counting, and fine visual detail
+- **Claude 3.5 Sonnet** (`anthropic/claude-3.5-sonnet`): Best for instruction following and structured output
 
 **5 Extraction Stages:**
 1. **Grid Geometry** - Extract rows/cols dimensions

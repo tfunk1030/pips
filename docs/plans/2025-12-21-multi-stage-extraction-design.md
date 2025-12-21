@@ -293,9 +293,9 @@ interface ExtractionConfig {
 
   // Model identifiers (OpenRouter format)
   models: {
-    spatial: string;    // default: "google/gemini-3-pro"
-    detail: string;     // default: "openai/gpt-5.2"
-    validator: string;  // default: "anthropic/claude-opus-4.5"
+    spatial: string;    // default: "google/gemini-2.0-flash-exp"
+    detail: string;     // default: "openai/gpt-4o"
+    validator: string;  // default: "anthropic/claude-3.5-sonnet"
   };
 
   // Behavior tuning

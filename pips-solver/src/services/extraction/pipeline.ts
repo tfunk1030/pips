@@ -49,7 +49,7 @@ export type ProgressCallback = (progress: ExtractionProgress) => void;
  * 4. Constraint Extraction - Extract region constraints
  * 5. Domino Extraction - Extract domino tiles
  *
- * Each stage uses 3 models (Gemini 3 Pro, GPT-5.2, Claude Opus 4.5)
+ * Each stage uses 3 models (Gemini 2.0 Flash, GPT-4o, Claude 3.5 Sonnet)
  * with confidence-weighted consensus.
  */
 export async function extractPuzzle(

@@ -345,7 +345,7 @@ export async function extractPuzzleMultiModel(
       success: true,
       partial: newResult.needsReview,
       result: legacyResult,
-      modelsUsed: ['google/gemini-3-pro-preview', 'openai/gpt-5.2', 'anthropic/claude-opus-4.5'],
+      modelsUsed: ['google/gemini-2.0-flash-exp', 'openai/gpt-4o', 'anthropic/claude-3.5-sonnet'],
       timing: {
         boardMs: totalMs * 0.7, // Approximate split
         dominoesMs: totalMs * 0.3,

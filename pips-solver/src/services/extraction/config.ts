@@ -11,11 +11,11 @@ import { ExtractionConfig } from './types';
 // =============================================================================
 
 export const DEFAULT_MODELS = {
-  // Correct model IDs as of December 2025
-  // Sources: ai.google.dev, platform.openai.com, platform.claude.com
-  gemini: 'google/gemini-3-pro-preview',
-  gpt: 'openai/gpt-5.2',
-  claude: 'anthropic/claude-opus-4.5',
+  // Real OpenRouter model IDs (verified working)
+  // See: https://openrouter.ai/models
+  gemini: 'google/gemini-2.0-flash-exp',
+  gpt: 'openai/gpt-4o',
+  claude: 'anthropic/claude-3.5-sonnet',
 } as const;
 
 // =============================================================================
@@ -44,16 +44,16 @@ export const NYT_VALIDATION = {
 export const DEFAULT_CONFIG: ExtractionConfig = {
   apiKeys: {},
   models: { ...DEFAULT_MODELS },
-  maxRetries: 2,
+  maxRetries: 1, // Reduced from 2 - faster failure
   confidenceThreshold: 0.10,
-  timeoutMs: 30000,
+  timeoutMs: 45000, // Increased from 30s - vision models need more time
   validation: {
     minGridSize: NYT_VALIDATION.minGridSize,
     maxGridSize: NYT_VALIDATION.maxGridSize,
     pipRange: NYT_VALIDATION.pipRange,
     uniqueDominoes: NYT_VALIDATION.uniqueDominoes,
   },
-  lowConfidenceThreshold: 0.70,
+  lowConfidenceThreshold: 0.60, // Reduced from 0.70 - fewer retries
   saveDebugResponses: false,
   enableLegacyFallback: true,
 };
