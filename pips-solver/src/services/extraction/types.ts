@@ -59,6 +59,9 @@ export interface ExtractionConfig {
 
   /** Fall back to legacy extraction on failure */
   enableLegacyFallback: boolean;
+
+  /** Set of models that have been disabled due to failures */
+  disabledModels?: Set<string>;
 }
 
 // =============================================================================

@@ -46,7 +46,7 @@ export const DEFAULT_CONFIG: ExtractionConfig = {
   models: { ...DEFAULT_MODELS },
   maxRetries: 2,
   confidenceThreshold: 0.10,
-  timeoutMs: 30000,
+  timeoutMs: 15000,
   validation: {
     minGridSize: NYT_VALIDATION.minGridSize,
     maxGridSize: NYT_VALIDATION.maxGridSize,
@@ -56,6 +56,7 @@ export const DEFAULT_CONFIG: ExtractionConfig = {
   lowConfidenceThreshold: 0.70,
   saveDebugResponses: false,
   enableLegacyFallback: true,
+  disabledModels: new Set(),
 };
 
 // =============================================================================

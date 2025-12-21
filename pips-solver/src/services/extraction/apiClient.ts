@@ -349,14 +349,24 @@ export async function callAllModels(
     if (apiKeys.anthropic) modelsToCall.push(models.claude);
   }
 
-  console.log(`[ApiClient] Calling ${modelsToCall.length} models:`, modelsToCall);
+  // Filter out disabled models (Circuit Breaker)
+  let activeModels = modelsToCall.filter((m) => !config.disabledModels?.has(m));
 
-  if (modelsToCall.length === 0) {
+  // Safety net: If all models are disabled, try all of them again
+  if (activeModels.length === 0 && modelsToCall.length > 0) {
+    console.warn('[ApiClient] All models were disabled. Retrying with all available models.');
+    activeModels = modelsToCall;
+    // We don't clear the set here to allow re-disabling, but we give them one more chance per stage if everything is down.
+  }
+
+  console.log(`[ApiClient] Calling ${activeModels.length} models:`, activeModels);
+
+  if (activeModels.length === 0) {
     throw new Error('No API keys configured. Please add an OpenRouter key or individual provider keys in Settings.');
   }
 
   // Call all models in parallel
-  const promises = modelsToCall.map(async (model) => {
+  const promises = activeModels.map(async (model) => {
     console.log(`[ApiClient] Starting call to ${model}`);
     const response = await callVisionApi(
       { model, imageBase64, prompt },
@@ -368,6 +378,18 @@ export async function callAllModels(
       error: response.error,
       contentLength: response.content?.length ?? 0,
     });
+
+    // Circuit Breaker: Disable model if it times out or returns empty content
+    if (response.error?.includes('timeout') || response.error?.includes('Aborted')) {
+      console.warn(`[ApiClient] Disabling ${model} for future calls due to timeout.`);
+      config.disabledModels?.add(model);
+    }
+    
+    if (!response.error && (!response.content || response.content.length === 0)) {
+      console.warn(`[ApiClient] Disabling ${model} due to empty response.`);
+      config.disabledModels?.add(model);
+    }
+
     return { model, response };
   });
 

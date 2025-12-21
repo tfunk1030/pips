@@ -312,9 +312,14 @@ export async function cropPuzzleRegion(base64Image: string): Promise<CropResult>
     };
   } catch (error) {
     console.error('[CV] Crop failed:', error);
+    let errorMessage = error instanceof Error ? error.message : 'Crop failed';
+    if (errorMessage.includes('Network request failed') || errorMessage.includes('fetch failed')) {
+      errorMessage += `. Check if python CV service is running at ${CV_SERVICE_URL}`;
+    }
+
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Crop failed',
+      error: errorMessage,
       extractionMs: 0,
     };
   }
