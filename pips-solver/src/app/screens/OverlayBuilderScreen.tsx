@@ -220,17 +220,21 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
 
     const settings = await getSettings();
 
+    const hasOpenRouterKey = !!settings.openrouterApiKey?.trim();
     const hasGoogleKey = !!settings.googleApiKey?.trim();
     const hasAnthropicKey = !!settings.anthropicApiKey?.trim();
     const hasOpenAIKey = !!settings.openaiApiKey?.trim();
 
-    if (!hasGoogleKey && !hasAnthropicKey && !hasOpenAIKey) {
+    // OpenRouter provides access to all models, so only need one key
+    if (!hasOpenRouterKey && !hasGoogleKey && !hasAnthropicKey && !hasOpenAIKey) {
       Alert.alert(
         'API Key Required',
-        'Please add at least one API key in Settings to use AI extraction.\n\n' +
-          'Google (Gemini) - Best for grid detection\n' +
-          'Anthropic (Claude) - Best for structured output\n' +
-          'OpenAI (GPT-4o) - General fallback',
+        'Please add an API key in Settings to use AI extraction.\n\n' +
+          'OpenRouter (Recommended) - Access to all models\n' +
+          'Or individual provider keys:\n' +
+          '• Google (Gemini)\n' +
+          '• Anthropic (Claude)\n' +
+          '• OpenAI (GPT)',
         [
           { text: 'Cancel', style: 'cancel' },
           {
@@ -257,6 +261,7 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
     const result = await extractPuzzleMultiModel(state.image.base64, {
       strategy,
       apiKeys: {
+        openrouter: settings.openrouterApiKey,
         google: settings.googleApiKey,
         anthropic: settings.anthropicApiKey,
         openai: settings.openaiApiKey,
