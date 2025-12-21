@@ -23,6 +23,7 @@ INSTRUCTIONS:
 1. Examine each position in the ${grid.rows}x${grid.cols} grid
 2. Build a shape string with ${grid.rows} lines, each with ${grid.cols} characters
 3. Use '.' for cells (colored), '#' for holes (dark/empty)
+4. CRITICAL: The total number of '.' cells MUST be even (dominoes come in pairs of 2 cells)
 
 EXAMPLE for a 5x6 grid with corner holes:
 ##....
@@ -35,7 +36,8 @@ CRITICAL RULES:
 - Output EXACTLY ${grid.rows} lines
 - Each line has EXACTLY ${grid.cols} characters
 - ONLY use '.' and '#' characters
-- Total '.' count must be EVEN (dominoes need pairs)
+- Total '.' count must be EVEN
+- Return ONLY valid JSON. Do not write "Here is the JSON" or any other text.
 
 Return ONLY valid JSON (no markdown, no explanation):
 {"shape": "line1\\nline2\\n...", "confidence": 0.XX}

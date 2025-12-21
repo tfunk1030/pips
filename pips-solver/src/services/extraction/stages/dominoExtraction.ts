@@ -60,7 +60,8 @@ Confidence scoring:
 - 0.95-1.00: All dominoes clearly visible, pips easy to count
 - 0.85-0.94: Most dominoes clear, 1-2 slightly blurry
 - 0.70-0.84: Some pip counts uncertain
-- Below 0.70: Multiple dominoes hard to read`;
+- Below 0.70: Multiple dominoes hard to read
+- Return ONLY valid JSON. Do not write "Here is the JSON" or any other text.`;
 }
 
 // =============================================================================

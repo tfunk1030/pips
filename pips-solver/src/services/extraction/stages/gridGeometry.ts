@@ -20,7 +20,7 @@ INSTRUCTIONS:
 2. Count ROWS: horizontal lines of cells from top to bottom
 3. Count COLS: vertical columns from left to right
 4. Include holes (empty/dark positions within the grid bounds) in your count
-5. Do NOT count the domino tray area - only the main puzzle grid
+5. CRITICAL: Do NOT count the domino tray area (usually below the grid) - only the main puzzle grid!
 
 NYT Pips grids are typically 4-8 rows and 4-8 columns.
 
@@ -28,6 +28,7 @@ IMPORTANT:
 - Count grid LINES, not just visible colored cells
 - A 6x5 grid has 6 rows and 5 columns
 - Holes count as grid positions
+- Return ONLY valid JSON. Do not write "Here is the JSON" or any other text.
 
 Return ONLY valid JSON (no markdown, no explanation):
 {"rows": N, "cols": M, "confidence": 0.XX}

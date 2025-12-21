@@ -74,7 +74,9 @@ Confidence scoring:
 - 0.95-1.00: All constraint symbols clearly visible
 - 0.85-0.94: Most constraints clear, minor ambiguity
 - 0.70-0.84: Some constraints hard to read
-- Below 0.70: Multiple constraints unclear`;
+- Below 0.70: Multiple constraints unclear
+
+CRITICAL: Return ONLY valid JSON. Do not write "Here is the JSON" or any other text.`;
 }
 
 // =============================================================================

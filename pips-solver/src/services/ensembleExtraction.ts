@@ -67,12 +67,15 @@ COUNTING METHOD - Use gridlines:
 3. Count all HORIZONTAL black lines from top to bottom edge of the grid
 4. Number of rows = (horizontal lines) - 1
 
+CRITICAL: Do NOT count the domino tray area (usually below the grid) - only the main puzzle grid!
+
 EXAMPLE: If you see 5 vertical lines and 4 horizontal lines → grid is 4 columns × 3 rows
 
 COMMON MISTAKE TO AVOID:
 - Don't just count colored cells! Count the FULL grid including holes/gaps
 - Holes look like dark/empty squares but they're INSIDE the grid boundary
 - The grid boundary is defined by the outermost gridlines
+- Do NOT include the domino tray in your row count
 
 Typical NYT Pips grid sizes: 4×3, 4×4, 5×4, 5×5, 6×4, 6×5, 6×6
 

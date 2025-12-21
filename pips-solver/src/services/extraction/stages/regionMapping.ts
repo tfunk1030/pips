@@ -60,7 +60,8 @@ Confidence scoring:
 - 0.95-1.00: All region boundaries perfectly clear
 - 0.85-0.94: Very confident, colors distinct
 - 0.70-0.84: Some color boundaries ambiguous
-- Below 0.70: Multiple regions unclear`;
+- Below 0.70: Multiple regions unclear
+- Return ONLY valid JSON. Do not write "Here is the JSON" or any other text.`;
 }
 
 // =============================================================================
