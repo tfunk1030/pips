@@ -183,8 +183,39 @@ function buildGoogleRequest(request: VisionApiRequest): object {
 // Response Parsers
 // =============================================================================
 
+/**
+ * Parse OpenRouter response - handles multiple response formats
+ * OpenRouter proxies different providers which may have different structures
+ */
 function parseOpenRouterResponse(data: any): string {
-  return data?.choices?.[0]?.message?.content || '';
+  // Standard OpenAI-style format (most common)
+  if (data?.choices?.[0]?.message?.content) {
+    const content = data.choices[0].message.content;
+    // Handle array content (Anthropic-style via OpenRouter)
+    if (Array.isArray(content)) {
+      const textPart = content.find((p: any) => p.type === 'text');
+      return textPart?.text || '';
+    }
+    return typeof content === 'string' ? content : '';
+  }
+
+  // Anthropic-style format (direct content array)
+  if (data?.content?.[0]) {
+    const content = data.content[0];
+    return content?.type === 'text' ? content.text : (content?.text || '');
+  }
+
+  // Google-style format (candidates array)
+  if (data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+    return data.candidates[0].content.parts[0].text;
+  }
+
+  // Fallback: check for text at top level
+  if (typeof data?.text === 'string') {
+    return data.text;
+  }
+
+  return '';
 }
 
 function parseOpenAIResponse(data: any): string {
@@ -282,6 +313,28 @@ export async function callVisionApi(
     const data = await response.json();
     const latencyMs = Date.now() - startTime;
 
+    // Check for API errors in response body (some APIs return 200 with error in body)
+    if (data?.error) {
+      const errorMsg = typeof data.error === 'string'
+        ? data.error
+        : data.error?.message || JSON.stringify(data.error);
+      return {
+        content: '',
+        latencyMs,
+        error: `API error: ${errorMsg}`,
+      };
+    }
+
+    // Check for content moderation blocks (common with vision models)
+    const finishReason = data?.choices?.[0]?.finish_reason;
+    if (finishReason === 'content_filter' || finishReason === 'safety') {
+      return {
+        content: '',
+        latencyMs,
+        error: `Content filtered by ${request.model} safety system`,
+      };
+    }
+
     let content: string;
     switch (endpoint.provider) {
       case 'openrouter':
@@ -298,6 +351,24 @@ export async function callVisionApi(
         break;
       default:
         content = '';
+    }
+
+    // Debug: Log raw response when content is empty to diagnose issues
+    if (!content && data) {
+      console.warn(`[ApiClient] Empty content from ${request.model}. Raw response structure:`, {
+        hasChoices: !!data.choices,
+        choicesLength: data.choices?.length,
+        firstChoice: data.choices?.[0] ? {
+          hasMessage: !!data.choices[0].message,
+          messageContent: data.choices[0].message?.content?.substring?.(0, 100) || data.choices[0].message?.content,
+          finishReason: data.choices[0].finish_reason,
+        } : null,
+        hasContent: !!data.content,
+        hasCandidates: !!data.candidates,
+        error: data.error,
+        // For non-standard response structures
+        keys: Object.keys(data).slice(0, 10),
+      });
     }
 
     return { content, latencyMs };

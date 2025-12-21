@@ -11,11 +11,11 @@ import { ExtractionConfig } from './types';
 // =============================================================================
 
 export const DEFAULT_MODELS = {
-  // Real OpenRouter model IDs (verified working)
-  // See: https://openrouter.ai/models
-  gemini: 'google/gemini-2.0-flash-exp',
-  gpt: 'openai/gpt-4o',
-  claude: 'anthropic/claude-3.5-sonnet',
+  // December 2025 OpenRouter model IDs
+  // Verified: https://openrouter.ai/api/v1/models
+  gemini: 'google/gemini-3-pro-preview',
+  gpt: 'openai/gpt-5.2',
+  claude: 'anthropic/claude-opus-4.5',
 } as const;
 
 // =============================================================================
@@ -46,14 +46,14 @@ export const DEFAULT_CONFIG: ExtractionConfig = {
   models: { ...DEFAULT_MODELS },
   maxRetries: 1, // Reduced from 2 - faster failure
   confidenceThreshold: 0.10,
-  timeoutMs: 45000, // Increased from 30s - vision models need more time
+  timeoutMs: 60000, // 60s - GPT-5.2 vision can take 30-45s for large images
   validation: {
     minGridSize: NYT_VALIDATION.minGridSize,
     maxGridSize: NYT_VALIDATION.maxGridSize,
     pipRange: NYT_VALIDATION.pipRange,
     uniqueDominoes: NYT_VALIDATION.uniqueDominoes,
   },
-  lowConfidenceThreshold: 0.60, // Reduced from 0.70 - fewer retries
+  lowConfidenceThreshold: 0.50, // Reduced from 0.70 - fewer retries, accept more results
   saveDebugResponses: false,
   enableLegacyFallback: true,
 };

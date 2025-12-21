@@ -2,10 +2,10 @@
  * Model Configuration
  * Multi-model configuration for maximum accuracy extraction
  *
- * Updated December 2024:
- * - Gemini 2.0 Flash: Fast, good for grid/spatial detection
- * - GPT-4o: Best for OCR, pip counting, and fine visual detail
- * - Claude 3.5 Sonnet: Best for instruction following and structured JSON output
+ * Updated December 21, 2025:
+ * - Gemini 3 Pro Preview: Best for grid/spatial detection
+ * - GPT-5.2: Best for OCR, pip counting, and fine visual detail
+ * - Claude Opus 4.5: Best for instruction following and structured JSON output
  */
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -37,43 +37,43 @@ export interface ModelConfig {
 // ════════════════════════════════════════════════════════════════════════════
 
 export const MODELS: Record<string, ModelConfig> = {
-  // Gemini 2.0 Flash Experimental - Fast and capable (Dec 2024)
-  'gemini-2.0-flash': {
-    id: 'google/gemini-2.0-flash-exp',
+  // Gemini 3 Pro Preview - Latest Google flagship (Dec 2025)
+  'gemini-3-pro-preview': {
+    id: 'google/gemini-3-pro-preview',
     provider: 'google',
-    displayName: 'Gemini 2.0 Flash',
-    spatialScore: 0.92, // Good for grid geometry and spatial understanding
-    jsonScore: 0.88,
-    ocrScore: 0.90,
-    inputCostPer1M: 0.075,
-    outputCostPer1M: 0.30,
-    typicalLatency: 3.0, // Very fast
+    displayName: 'Gemini 3 Pro',
+    spatialScore: 0.97, // Best for grid geometry and spatial understanding
+    jsonScore: 0.90,
+    ocrScore: 0.94,
+    inputCostPer1M: 1.25,
+    outputCostPer1M: 5.0,
+    typicalLatency: 12.0,
   },
 
-  // GPT-4o - Latest OpenAI flagship (current)
-  'gpt-4o': {
-    id: 'openai/gpt-4o',
+  // GPT-5.2 - Latest OpenAI flagship (Dec 2025)
+  'gpt-5.2': {
+    id: 'openai/gpt-5.2',
     provider: 'openai',
-    displayName: 'GPT-4o',
+    displayName: 'GPT-5.2',
     spatialScore: 0.88,
     jsonScore: 0.92,
-    ocrScore: 0.95, // Best for OCR and pip counting
-    inputCostPer1M: 2.50,
-    outputCostPer1M: 10.0,
-    typicalLatency: 5.0,
+    ocrScore: 0.96, // Best for OCR and pip counting
+    inputCostPer1M: 1.75,
+    outputCostPer1M: 14.0,
+    typicalLatency: 8.0,
   },
 
-  // Claude 3.5 Sonnet - Latest Anthropic vision model (current)
-  'claude-3.5-sonnet': {
-    id: 'anthropic/claude-3.5-sonnet',
+  // Claude Opus 4.5 - Latest Anthropic flagship (Dec 2025)
+  'claude-opus-4.5': {
+    id: 'anthropic/claude-opus-4.5',
     provider: 'anthropic',
-    displayName: 'Claude 3.5 Sonnet',
+    displayName: 'Claude Opus 4.5',
     spatialScore: 0.85,
-    jsonScore: 0.96, // Best for structured JSON and validation
-    ocrScore: 0.92,
-    inputCostPer1M: 3.0,
-    outputCostPer1M: 15.0,
-    typicalLatency: 4.0,
+    jsonScore: 0.98, // Best for structured JSON and validation
+    ocrScore: 0.94,
+    inputCostPer1M: 5.0,
+    outputCostPer1M: 25.0,
+    typicalLatency: 10.0,
   },
 } as const;
 
@@ -90,32 +90,32 @@ export type ExtractionTask =
   | 'domino_detection'; // Finding dominoes in tray
 
 /**
- * Optimal model for each task based on benchmarks (December 2024)
+ * Optimal model for each task based on benchmarks (December 2025)
  *
  * Models:
- * - gemini-2.0-flash: Fast, good for grid/spatial detection
- * - gpt-4o: Best for OCR and pip counting
- * - claude-3.5-sonnet: Best for structured JSON output
+ * - gemini-3-pro-preview: Best for grid/spatial detection (spatialScore: 0.97)
+ * - gpt-5.2: Best for OCR and pip counting (ocrScore: 0.96)
+ * - claude-opus-4.5: Best for structured JSON output (jsonScore: 0.98)
  */
 export const TASK_OPTIMAL_MODELS: Record<ExtractionTask, keyof typeof MODELS> = {
-  grid_detection: 'gemini-2.0-flash', // Fast spatial/grid detection
-  region_colors: 'gemini-2.0-flash', // Good image understanding
-  pip_counting: 'gpt-4o', // Best OCR for counting dots
-  constraint_ocr: 'gpt-4o', // Best text reading
-  verification: 'claude-3.5-sonnet', // Best reasoning and JSON
-  domino_detection: 'gpt-4o', // Best object detection/OCR
+  grid_detection: 'gemini-3-pro-preview', // Best spatial/grid detection
+  region_colors: 'gemini-3-pro-preview', // Best image understanding
+  pip_counting: 'gpt-5.2', // Best OCR for counting dots
+  constraint_ocr: 'gpt-5.2', // Best text reading
+  verification: 'claude-opus-4.5', // Best reasoning and JSON
+  domino_detection: 'gpt-5.2', // Best object detection/OCR
 };
 
 /**
  * Fallback chain for each task if primary fails
  */
 export const TASK_FALLBACK_CHAIN: Record<ExtractionTask, (keyof typeof MODELS)[]> = {
-  grid_detection: ['gemini-2.0-flash', 'gpt-4o', 'claude-3.5-sonnet'],
-  region_colors: ['gemini-2.0-flash', 'gpt-4o', 'claude-3.5-sonnet'],
-  pip_counting: ['gpt-4o', 'gemini-2.0-flash', 'claude-3.5-sonnet'],
-  constraint_ocr: ['gpt-4o', 'claude-3.5-sonnet', 'gemini-2.0-flash'],
-  verification: ['claude-3.5-sonnet', 'gpt-4o', 'gemini-2.0-flash'],
-  domino_detection: ['gpt-4o', 'gemini-2.0-flash', 'claude-3.5-sonnet'],
+  grid_detection: ['gemini-3-pro-preview', 'gpt-5.2', 'claude-opus-4.5'],
+  region_colors: ['gemini-3-pro-preview', 'gpt-5.2', 'claude-opus-4.5'],
+  pip_counting: ['gpt-5.2', 'gemini-3-pro-preview', 'claude-opus-4.5'],
+  constraint_ocr: ['gpt-5.2', 'claude-opus-4.5', 'gemini-3-pro-preview'],
+  verification: ['claude-opus-4.5', 'gpt-5.2', 'gemini-3-pro-preview'],
+  domino_detection: ['gpt-5.2', 'gemini-3-pro-preview', 'claude-opus-4.5'],
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -145,7 +145,7 @@ export interface StrategyConfig {
 
 export const STRATEGIES: Record<ExtractionStrategy, StrategyConfig> = {
   fast: {
-    primaryModels: ['gemini-2.0-flash'],
+    primaryModels: ['gemini-3-pro-preview'],
     enableVerification: false,
     confidenceThreshold: 0.6,
     useEnsemble: false,
@@ -153,7 +153,7 @@ export const STRATEGIES: Record<ExtractionStrategy, StrategyConfig> = {
     maxRetries: 1,
   },
   balanced: {
-    primaryModels: ['gpt-4o'],
+    primaryModels: ['gpt-5.2'],
     enableVerification: true,
     confidenceThreshold: 0.75,
     useEnsemble: false,
@@ -161,20 +161,20 @@ export const STRATEGIES: Record<ExtractionStrategy, StrategyConfig> = {
     maxRetries: 1,
   },
   accurate: {
-    primaryModels: ['gpt-4o', 'claude-3.5-sonnet'],
+    primaryModels: ['gpt-5.2', 'claude-opus-4.5'],
     enableVerification: true,
     confidenceThreshold: 0.85,
     useEnsemble: false,
     ensembleSize: 1,
-    maxRetries: 2,
+    maxRetries: 1,
   },
   ensemble: {
-    primaryModels: ['gemini-2.0-flash', 'gpt-4o', 'claude-3.5-sonnet'],
+    primaryModels: ['gemini-3-pro-preview', 'gpt-5.2', 'claude-opus-4.5'],
     enableVerification: true,
     confidenceThreshold: 0.90,
     useEnsemble: true,
     ensembleSize: 3,
-    maxRetries: 1,
+    maxRetries: 1, // Reduced to 1 for faster overall extraction
   },
 };
 

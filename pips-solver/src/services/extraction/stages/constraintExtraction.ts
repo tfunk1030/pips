@@ -252,8 +252,14 @@ export async function extractConstraints(
   // Check if we need to retry
   let validResponses = responses.filter((r) => r.answer !== null && !r.error);
 
-  if (validResponses.length < 2 && retryCount < config.maxRetries) {
+  // Accept single high-confidence response without retry (faster extraction)
+  const hasHighConfidence = validResponses.some((r) => r.confidence >= 0.80);
+  const needsRetry = validResponses.length === 0 ||
+    (validResponses.length < 2 && !hasHighConfidence);
+
+  if (needsRetry && retryCount < config.maxRetries) {
     retryCount++;
+    console.log(`[ConstraintExtraction] Retrying: ${validResponses.length} valid, hasHighConf=${hasHighConfidence}`);
     const retryResponses = await callModelsForConstraints(
       imageBase64,
       getRetryPrompt(regions, validResponses.map((r) => r.answer!)),
