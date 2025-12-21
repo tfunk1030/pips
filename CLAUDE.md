@@ -90,28 +90,88 @@ Constraint types supported:
 
 ### AI Extraction Features
 
-The mobile app includes AI-powered puzzle extraction from screenshots using Claude Vision API:
+The mobile app includes AI-powered puzzle extraction from screenshots.
 
-#### Enhanced Extraction (Implemented Dec 2025)
+#### Multi-Stage Extraction Pipeline (Dec 2025)
 
-- **Confidence Scores:** AI returns confidence metrics (0.0-1.0) for grid, regions, and constraints
-- **Visual Feedback:** Confidence indicators in UI with color coding (green/orange/red)
-- **Smart Prompts:** Explicit format examples and common mistake avoidance in prompts
-- **Self-Verification:** Optional verification pass where Claude checks its own extraction (triggered on low confidence)
-- **Better Error Messages:** Context-aware error messages with actionable next steps
+A 5-stage pipeline with 3-model ensemble for maximum accuracy:
 
-#### Extraction Flow
+**Models Used (via OpenRouter or direct API):**
+- **Gemini 3 Pro** (`google/gemini-3-pro`): Best for grid geometry and spatial understanding
+- **GPT-5.2** (`openai/gpt-5.2`): Best for OCR, pip counting, and fine visual detail
+- **Claude Opus 4.5** (`anthropic/claude-opus-4.5`): Best for instruction following and structured output
 
-1. **Pass 1: Board Structure** - Extracts grid dimensions, holes, regions, constraints with confidence scores
-2. **Optional Verification** - If confidence < 90%, Claude verifies and corrects its extraction
-3. **Pass 2: Dominoes** - Extracts domino tiles from reference tray with confidence score
-4. **User Review** - Confidence indicators help users identify areas needing verification
+**5 Extraction Stages:**
+1. **Grid Geometry** - Extract rows/cols dimensions
+2. **Cell Detection** - Identify cells (`.`) vs holes (`#`)
+3. **Region Mapping** - Map colored regions to labels (A-Z)
+4. **Constraint Extraction** - Extract sum/all_equal constraints per region
+5. **Domino Extraction** - Count pip values on each domino tile
+
+**Consensus Algorithm:**
+- All 3 models run in parallel for each stage
+- Confidence-weighted voting with majority fallback
+- If top confidence exceeds second by >10%, use highest confidence
+- Otherwise, majority vote determines result
+- Automatic retry with clarifying prompts on low confidence (<70%)
+
+**NYT Pips Validation Rules:**
+- Grid size: 4-8 rows/cols
+- Pip values: 0-6
+- Unique dominoes required
+- Region contiguity check (BFS connectivity)
+- Sum feasibility validation
+
+**File Structure:**
+```
+src/services/extraction/
+├── index.ts           # Re-exports all modules
+├── types.ts           # Core interfaces (ExtractionConfig, ExtractionResult)
+├── config.ts          # Default config, NYT_VALIDATION constants
+├── apiClient.ts       # Unified API client (OpenRouter + direct providers)
+├── consensus.ts       # Confidence-weighted voting algorithm
+├── pipeline.ts        # Main 5-stage orchestrator
+├── stages/            # Individual stage implementations
+│   ├── gridGeometry.ts
+│   ├── cellDetection.ts
+│   ├── regionMapping.ts
+│   ├── constraintExtraction.ts
+│   └── dominoExtraction.ts
+└── validation/        # NYT-specific validators
+    ├── gridValidator.ts
+    ├── regionValidator.ts
+    └── dominoValidator.ts
+```
 
 #### Configuration
 
-- API key stored in app Settings
-- Verification pass optional (default: disabled, auto-enabled on low confidence)
-- See `IMPLEMENTATION_SUMMARY.md` for detailed implementation notes
+**API Key Modes:**
+- `openrouter`: Single OpenRouter API key for all models (recommended)
+- `individual`: Separate API keys per provider (Google, OpenAI, Anthropic)
+
+**Extraction Strategies:**
+- `fast`: Single model (~5s)
+- `balanced`: With verification (~15s)
+- `accurate`: Multi-stage (~25s)
+- `ensemble`: 3-model consensus (~45s) - **DEFAULT for maximum accuracy**
+
+**Settings (in `src/storage/puzzles.ts`):**
+```typescript
+interface AppSettings {
+  apiKeyMode?: 'openrouter' | 'individual';
+  openrouterApiKey?: string;
+  anthropicApiKey?: string;
+  googleApiKey?: string;
+  openaiApiKey?: string;
+  extractionStrategy?: 'fast' | 'balanced' | 'accurate' | 'ensemble';
+  useMultiStagePipeline?: boolean;  // default: true
+  saveDebugResponses?: boolean;     // for troubleshooting
+}
+```
+
+#### Design Document
+
+Full architecture details in `docs/plans/2025-12-21-multi-stage-extraction-design.md`
 
 ## Python Backend (Root Directory)
 
@@ -198,12 +258,18 @@ region_constraints:
 
 ### AI Extraction Module Architecture
 
-**Shared Modules** (as of Dec 2025 refactor):
-- `src/services/extractionSchemas.ts`: Centralized Zod schemas for AI response validation
-- `src/services/jsonParsingUtils.ts`: JSON parsing with LLM-specific fallback strategies
-- `aiExtraction.ts` and `ensembleExtraction.ts` import from shared modules
+**New Multi-Stage Pipeline** (Dec 2025):
+- `src/services/extraction/`: Complete 5-stage extraction with 3-model ensemble
+- `src/services/extraction/types.ts`: Core interfaces (ExtractionConfig, ExtractionResult, etc.)
+- `src/services/extraction/config.ts`: NYT_VALIDATION constants, model configs
+- `src/services/extraction/consensus.ts`: Confidence-weighted voting algorithm
 
-**Pattern**: When adding new AI extraction schemas or parsing logic, add to shared modules first to prevent duplication drift.
+**Legacy Modules** (still present for fallback):
+- `src/services/extractionSchemas.ts`: Zod schemas for AI response validation
+- `src/services/jsonParsingUtils.ts`: JSON parsing with LLM-specific fallback strategies
+- `aiExtraction.ts` and `ensembleExtraction.ts`: Single/dual model extraction
+
+**Pattern**: New extraction work should go in `src/services/extraction/`. Legacy modules remain for backward compatibility.
 
 ### LLM JSON Response Handling
 
@@ -240,16 +306,37 @@ const DOMINO_COUNTS = { small: '7-8', medium: '9-12', large: '12-14+' };
 
 **Verification Checklist**:
 - [ ] Run `npx tsc --noEmit` after changes to catch import/type errors
-- [ ] Check both `aiExtraction.ts` AND `ensembleExtraction.ts` for duplicated logic
-- [ ] Verify prompt guidance is consistent between single-model and ensemble paths
-- [ ] Zod schemas should be in `extractionSchemas.ts`, not inline
+- [ ] New extraction features go in `src/services/extraction/`
+- [ ] Stage-specific prompts in `src/services/extraction/stages/`
+- [ ] Validation logic in `src/services/extraction/validation/`
+- [ ] Constants in `src/services/extraction/config.ts` (NYT_VALIDATION)
+
+**Legacy modules still exist** for backward compatibility:
+- `aiExtraction.ts`, `ensembleExtraction.ts`, `extractionSchemas.ts`, `jsonParsingUtils.ts`
+
+### Multi-Stage Pipeline Testing
+
+**Key files to verify after changes:**
+```bash
+# Type check the entire extraction module
+npx tsc --noEmit --strict
+
+# Verify exports match imports
+grep -n "export" src/services/extraction/index.ts
+```
+
+**Consensus algorithm** (`consensus.ts`):
+- Confidence threshold: 0.70 for retry trigger
+- High confidence gap: 0.10 (if top > second by this, use top)
+- Otherwise: majority vote
 
 ### Code Duplication Detection
 
 **Files that commonly drift**:
-- `aiExtraction.ts` ↔ `ensembleExtraction.ts` (prompts, schemas, parsing)
+- Legacy: `aiExtraction.ts` ↔ `ensembleExtraction.ts`
+- New pipeline stages: prompts in `stages/*.ts` should share constants from `config.ts`
 
-**Pattern**: When modifying one extraction file, grep for similar patterns in the other:
+**Pattern**: When modifying extraction, check both legacy and new modules:
 ```bash
-grep -n "pattern" src/services/aiExtraction.ts src/services/ensembleExtraction.ts
+grep -rn "pattern" src/services/extraction/ src/services/aiExtraction.ts
 ```

@@ -14,7 +14,9 @@
       "Skill(senior-architect)",
       "Skill(ux-researcher-designer)",
       "Skill(senior-computer-vision)",
-      "Skill(brainstorming)"
+      "Skill(brainstorming)",
+      "Bash(npx eslint:*)",
+      "Skill(remembering-conversations)"
     ]
   }
 }
