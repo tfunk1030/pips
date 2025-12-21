@@ -300,6 +300,16 @@ export async function callVisionApi(
         content = '';
     }
 
+    // Treat empty responses as errors (otherwise stages will "retry forever")
+    // and we'll waste time waiting on other models.
+    if (!content || content.trim().length === 0) {
+      return {
+        content: '',
+        latencyMs,
+        error: `Empty response content from ${endpoint.provider}`,
+      };
+    }
+
     return { content, latencyMs };
   } catch (error) {
     const latencyMs = Date.now() - startTime;

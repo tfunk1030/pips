@@ -44,9 +44,11 @@ export const NYT_VALIDATION = {
 export const DEFAULT_CONFIG: ExtractionConfig = {
   apiKeys: {},
   models: { ...DEFAULT_MODELS },
-  maxRetries: 2,
+  // Keep retries low: one bad model shouldn't stall the whole pipeline.
+  maxRetries: 1,
   confidenceThreshold: 0.10,
-  timeoutMs: 30000,
+  // Per-model timeout. In ensemble mode, a single slow model shouldn't dominate.
+  timeoutMs: 15000,
   validation: {
     minGridSize: NYT_VALIDATION.minGridSize,
     maxGridSize: NYT_VALIDATION.maxGridSize,
