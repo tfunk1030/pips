@@ -11,10 +11,10 @@ const SETTINGS_KEY = '@pips_settings';
 
 /**
  * Extraction strategy for AI puzzle extraction
- * - 'fast': Single model (Gemini Flash), ~3s
- * - 'balanced': Gemini Pro with verification, ~20s
- * - 'accurate': Gemini Pro + Claude verification, ~35s
- * - 'ensemble': Multi-model consensus, ~45s (MAXIMUM ACCURACY)
+ * - 'fast': Single model (GPT-4o), ~5s
+ * - 'balanced': GPT-4o with verification, ~10s (RECOMMENDED)
+ * - 'accurate': GPT-4o + Claude verification, ~20s
+ * - 'ensemble': Multi-model consensus (3 models), ~30s
  */
 export type ExtractionStrategy = 'fast' | 'balanced' | 'accurate' | 'ensemble';
 
@@ -42,9 +42,9 @@ export interface AppSettings {
   openrouterApiKey?: string;
 
   // Individual API Keys for multi-model extraction
-  anthropicApiKey?: string; // Claude Opus 4.5 (best for structured JSON)
-  googleApiKey?: string; // Gemini 3 Pro (best for grid/spatial)
-  openaiApiKey?: string; // GPT-5.2 (best for detail/OCR)
+  anthropicApiKey?: string; // Claude 3.7 Sonnet (best for structured JSON)
+  googleApiKey?: string; // Gemini 2.5 Pro (strong for grid/spatial)
+  openaiApiKey?: string; // GPT-4o (excellent for detail/OCR)
 
   // Extraction configuration
   extractionStrategy?: ExtractionStrategy;
@@ -199,7 +199,7 @@ function getDefaultSettings(): AppSettings {
     defaultDebugLevel: 0,
     maxIterationsPerTick: 100,
     apiKeyMode: 'openrouter', // Default to OpenRouter (easier setup)
-    extractionStrategy: 'ensemble', // Default to ensemble for best accuracy
+    extractionStrategy: 'balanced', // Default to balanced (fast + accurate)
     useMultiStagePipeline: true, // Use new multi-stage pipeline
     saveDebugResponses: false,
   };

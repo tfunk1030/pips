@@ -26,11 +26,11 @@ export interface ExtractionConfig {
 
   /** Model identifiers (OpenRouter format) */
   models: {
-    /** Model for all stages - default: "google/gemini-3-pro" */
+    /** Model for all stages - default: "google/gemini-2.5-pro" */
     gemini: string;
-    /** Model for all stages - default: "openai/gpt-5.2" */
+    /** Model for all stages - default: "openai/gpt-4o" */
     gpt: string;
-    /** Model for all stages - default: "anthropic/claude-opus-4.5" */
+    /** Model for all stages - default: "anthropic/claude-3.7-sonnet" */
     claude: string;
   };
 
@@ -66,7 +66,7 @@ export interface ExtractionConfig {
 // =============================================================================
 
 export interface ModelResponse<T = unknown> {
-  /** Model identifier (e.g., "google/gemini-3-pro") */
+  /** Model identifier (e.g., "google/gemini-2.5-pro") */
   model: string;
   /** Parsed answer from the model */
   answer: T;

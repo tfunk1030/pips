@@ -11,11 +11,11 @@ import { ExtractionConfig } from './types';
 // =============================================================================
 
 export const DEFAULT_MODELS = {
-  // Correct model IDs as of December 2025
-  // Sources: ai.google.dev, platform.openai.com, platform.claude.com
-  gemini: 'google/gemini-3-pro-preview',
-  gpt: 'openai/gpt-5.2',
-  claude: 'anthropic/claude-opus-4.5',
+  // Correct model IDs as of December 2025 (verified via OpenRouter API)
+  // Sources: openrouter.ai/models
+  gemini: 'google/gemini-2.5-pro',
+  gpt: 'openai/gpt-4o',
+  claude: 'anthropic/claude-3.7-sonnet',
 } as const;
 
 // =============================================================================
