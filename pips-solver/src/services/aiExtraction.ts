@@ -1305,7 +1305,7 @@ export function convertAIResultToBuilderState(result: AIExtractionResult): {
     return chars.map(char => char === '#');
   });
 
-  // Parse regions
+  // Parse regions - ensure regionGrid matches shape dimensions exactly
   const normalizedRegions = normalizeLineBreaks(board.regions);
   const regionLines = normalizedRegions
     .split('\n')
@@ -1315,17 +1315,33 @@ export function convertAIResultToBuilderState(result: AIExtractionResult): {
   const labelToIndex: Record<string, number> = {};
   let nextIndex = 0;
 
-  const regionGrid: (number | null)[][] = regionLines.map((line, r) =>
-    Array.from(line).map((char, c) => {
+  // Create regionGrid with exact dimensions matching shape (rows x cols)
+  // This fixes the bug where AI returns inconsistent shape/regions dimensions
+  const regionGrid: (number | null)[][] = [];
+  for (let r = 0; r < rows; r++) {
+    const row: (number | null)[] = [];
+    const line = regionLines[r] || '';
+    for (let c = 0; c < cols; c++) {
+      const char = line[c] || '#';
       if (char === '#' || holes[r]?.[c]) {
-        return null;
+        row.push(null);
+      } else {
+        if (!(char in labelToIndex)) {
+          labelToIndex[char] = nextIndex++;
+        }
+        row.push(labelToIndex[char]);
       }
-      if (!(char in labelToIndex)) {
-        labelToIndex[char] = nextIndex++;
-      }
-      return labelToIndex[char];
-    })
-  );
+    }
+    regionGrid.push(row);
+  }
+
+  console.log('[DEBUG] convertAIResultToBuilderState: parsed regions', {
+    originalRegionLineCount: regionLines.length,
+    targetRows: rows,
+    targetCols: cols,
+    regionGridSize: `${regionGrid.length}x${regionGrid[0]?.length || 0}`,
+    regionCount: nextIndex,
+  });
 
   // Convert constraints
   const regionConstraints: Record<number, ConstraintDef> = {};

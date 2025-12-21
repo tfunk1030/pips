@@ -135,9 +135,12 @@ export function propagateConstraints(
     }
   }
 
-  // Check for orphaned cells (cells with no adjacent unfilled cells)
-  // This helps detect dead-ends early and prune the search space
-  if (!checkNoOrphanedCells(puzzle, state)) {
+  // Note: Orphan detection is now handled by the cell-first solver approach
+  // The solver picks cells first and pairs with neighbors, so orphans are
+  // naturally detected when a cell has no unfilled neighbors to pair with.
+  // We keep a lightweight check here for early pruning.
+  const orphanResult = checkNoOrphanedCells(puzzle, state);
+  if (!orphanResult) {
     return false;
   }
 
@@ -147,11 +150,16 @@ export function propagateConstraints(
 /**
  * Check that no unfilled cell is orphaned (has no adjacent unfilled cells)
  * Returns false if any orphaned cell is found
+ *
+ * Note: With the cell-first solver approach, this check is mostly redundant
+ * but kept for early pruning during constraint propagation.
  */
 function checkNoOrphanedCells(
   puzzle: NormalizedPuzzle,
   state: SolverState
 ): boolean {
+  let unfilledCount = 0;
+
   for (let row = 0; row < puzzle.spec.rows; row++) {
     for (let col = 0; col < puzzle.spec.cols; col++) {
       // Skip holes
@@ -163,6 +171,8 @@ function checkNoOrphanedCells(
       if (state.gridPips[row][col] !== null) {
         continue;
       }
+
+      unfilledCount++;
 
       // Check if this cell has at least one adjacent unfilled cell
       let hasUnfilledNeighbor = false;
@@ -199,6 +209,11 @@ function checkNoOrphanedCells(
         return false;
       }
     }
+  }
+
+  // Check for odd number of unfilled cells (can't pair them all into dominoes)
+  if (unfilledCount % 2 !== 0) {
+    return false;
   }
 
   return true;

@@ -20,6 +20,11 @@ export function explainUnsatisfiable(
 ): Explanation {
   const conflicts: Conflict[] = [];
 
+  // Check for all_equal regions that need multiple identical doubles
+  // This is a common structural issue that should be checked first
+  const allEqualConflicts = checkAllEqualDoubleRequirement(puzzle);
+  conflicts.push(...allEqualConflicts);
+
   // Check for empty domains
   const emptyDomains = findEmptyDomains(state);
   if (emptyDomains.length > 0) {
@@ -303,6 +308,61 @@ function checkDominoExhaustion(
   }
 
   return null;
+}
+
+/**
+ * Check for all_equal regions that require multiple identical doubles
+ * This is a common cause of unsatisfiable puzzles
+ */
+function checkAllEqualDoubleRequirement(
+  puzzle: NormalizedPuzzle
+): Conflict[] {
+  const conflicts: Conflict[] = [];
+  const tray = puzzle.spec.dominoes || [];
+
+  // Count available doubles in tray
+  const doubleCount: Record<number, number> = {};
+  for (const [pip1, pip2] of tray) {
+    if (pip1 === pip2) {
+      doubleCount[pip1] = (doubleCount[pip1] || 0) + 1;
+    }
+  }
+
+  // Check each all_equal region
+  for (const [regionIdStr, constraint] of Object.entries(puzzle.spec.constraints)) {
+    if (!constraint.all_equal) continue;
+
+    const regionId = parseInt(regionIdStr, 10);
+    const cells = getRegionCells(puzzle, regionId);
+
+    if (cells.length <= 2) continue; // Single domino can handle 2 cells
+
+    // For 4+ cells with all_equal, we need multiple identical dominoes
+    // Each domino with both pips equal covers 2 cells with the same value
+    const dominoesNeeded = Math.ceil(cells.length / 2);
+
+    if (dominoesNeeded > 1) {
+      // Check if any double appears enough times in the tray
+      let canSatisfy = false;
+      for (const [pip, count] of Object.entries(doubleCount)) {
+        if (count >= dominoesNeeded) {
+          canSatisfy = true;
+          break;
+        }
+      }
+
+      if (!canSatisfy) {
+        conflicts.push({
+          type: 'region_impossible',
+          description: `Region ${regionId} has ${cells.length} cells with all_equal constraint, requiring ${dominoesNeeded} identical doubles, but tray doesn't have enough matching doubles`,
+          affectedRegion: regionId,
+          affectedCells: cells,
+        });
+      }
+    }
+  }
+
+  return conflicts;
 }
 
 /**

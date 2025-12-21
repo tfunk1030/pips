@@ -266,6 +266,30 @@ export function builderReducer(
         dominoCount: action.dominoes.length,
       });
 
+      // Validate dimension consistency between grid and regions
+      const aiRows = action.grid.rows || 0;
+      const aiCols = action.grid.cols || 0;
+      const regionGridRows = action.regions.regionGrid?.length || 0;
+      const regionGridCols = action.regions.regionGrid?.[0]?.length || 0;
+
+      if (regionGridRows !== aiRows || regionGridCols !== aiCols) {
+        console.warn('[AI_SUCCESS] Dimension mismatch detected:', {
+          gridDims: `${aiRows}x${aiCols}`,
+          regionGridDims: `${regionGridRows}x${regionGridCols}`,
+        });
+        // Resize regionGrid to match grid dimensions
+        if (action.regions.regionGrid) {
+          const resizedRegionGrid = resizeArray2D(
+            action.regions.regionGrid,
+            aiRows,
+            aiCols,
+            0
+          );
+          action.regions.regionGrid = resizedRegionGrid;
+          console.log('[AI_SUCCESS] Resized regionGrid to match grid dimensions');
+        }
+      }
+
       // Merge AI results into state
       // Calculate optimal bounds for the new grid if we have image dimensions
       let gridBounds = action.grid.bounds || state.grid.bounds;

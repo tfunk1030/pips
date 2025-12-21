@@ -12,7 +12,7 @@ import {
   SolverState,
 } from '../model/types';
 import { explainSuccess, explainUnsatisfiable } from './explain';
-import { getCandidateDominoes, selectNextEdge } from './heuristics';
+import { getCandidateDominoes, selectNextCell, getUnfilledNeighborsForCell, selectNextEdge } from './heuristics';
 import { copyDomains, initializeDomains, isConsistent, propagateConstraints } from './propagate';
 
 export interface SolverResult {
@@ -84,6 +84,7 @@ export function solvePuzzle(puzzle: NormalizedPuzzle, config: SolverConfig): Sol
 
 /**
  * Recursive backtracking with constraint propagation
+ * Uses CELL-FIRST approach (like Python solver) to prevent orphaned cells
  */
 function backtrack(
   puzzle: NormalizedPuzzle,
@@ -120,86 +121,100 @@ function backtrack(
     }
   }
 
-  // Select next edge using MRV heuristic
-  const edge = selectNextEdge(puzzle, state);
+  // CELL-FIRST APPROACH: Pick a cell, then pair it with each unfilled neighbor
+  // This prevents orphaned cells by always considering cell-neighbor pairs
+  const cell = selectNextCell(puzzle, state);
 
-  if (!edge) {
-    // No more edges to fill but not complete - shouldn't happen
+  if (!cell) {
+    // No more unfilled cells - but we already checked isComplete, so this is a bug
     return false;
   }
 
-  // Get candidate dominoes for this edge
-  const candidates = getCandidateDominoes(
-    puzzle,
-    edge,
-    state,
-    config.maxPip,
-    config.allowDuplicates
-  );
+  // Get unfilled neighbors to pair with
+  const neighbors = getUnfilledNeighborsForCell(puzzle, state, cell);
 
-  if (candidates.length === 0) {
+  if (neighbors.length === 0) {
+    // Cell has no unfilled neighbors - this is an orphan!
     stats.prunes++;
     if (config.debugLevel >= 2) {
-      console.log(
-        `Pruned at (${edge.cell1.row},${edge.cell1.col})-(${edge.cell2.row},${edge.cell2.col}): no valid dominoes`
-      );
+      console.log(`Cell (${cell.row},${cell.col}) is orphaned - no unfilled neighbors`);
     }
     return false;
   }
 
-  // Try each candidate domino
-  for (const domino of candidates) {
-    // Create placement
-    const placement: DominoPlacement = {
-      domino,
-      cell1: edge.cell1,
-      cell2: edge.cell2,
-    };
+  // Try each neighbor
+  for (const neighbor of neighbors) {
+    // Create edge for this cell-neighbor pair
+    const edge = { cell1: cell, cell2: neighbor };
 
-    // Save state for backtracking
-    const savedDomains = copyDomains(state.domains);
-    const savedUsedDominoes = new Map(state.usedDominoes);
+    // Get candidate dominoes for this edge
+    const candidates = getCandidateDominoes(
+      puzzle,
+      edge,
+      state,
+      config.maxPip,
+      config.allowDuplicates
+    );
 
-    // Apply placement
-    state.gridPips[edge.cell1.row][edge.cell1.col] = domino.pip1;
-    state.gridPips[edge.cell2.row][edge.cell2.col] = domino.pip2;
-    state.usedDominoes.set(domino.id, (state.usedDominoes.get(domino.id) || 0) + 1);
-    state.placements.push(placement);
-
-    // Propagate constraints
-    const prop1 = propagateConstraints(puzzle, state, edge.cell1, domino.pip1);
-    const prop2 = prop1 && propagateConstraints(puzzle, state, edge.cell2, domino.pip2);
-
-    if (prop1 && prop2) {
-      // Recurse
-      if (config.debugLevel >= 2) {
-        console.log(
-          `Trying domino ${domino.id} at (${edge.cell1.row},${edge.cell1.col})-(${edge.cell2.row},${edge.cell2.col})`
-        );
-      }
-
-      const result = backtrack(puzzle, state, config, stats, solutions);
-
-      if (result) {
-        // Found solution(s) and not finding all
-        return true;
-      }
-    } else {
-      stats.prunes++;
-      if (config.debugLevel >= 2) {
-        console.log(
-          `Pruned domino ${domino.id} at (${edge.cell1.row},${edge.cell1.col})-(${edge.cell2.row},${edge.cell2.col}): constraint violation`
-        );
-      }
+    if (candidates.length === 0) {
+      // No valid dominoes for this edge - try next neighbor
+      continue;
     }
 
-    // Backtrack
-    stats.backtracks++;
-    state.gridPips[edge.cell1.row][edge.cell1.col] = null;
-    state.gridPips[edge.cell2.row][edge.cell2.col] = null;
-    state.usedDominoes = savedUsedDominoes;
-    state.placements.pop();
-    state.domains = savedDomains;
+    // Try each candidate domino
+    for (const domino of candidates) {
+      // Create placement
+      const placement: DominoPlacement = {
+        domino,
+        cell1: edge.cell1,
+        cell2: edge.cell2,
+      };
+
+      // Save state for backtracking
+      const savedDomains = copyDomains(state.domains);
+      const savedUsedDominoes = new Map(state.usedDominoes);
+
+      // Apply placement
+      state.gridPips[edge.cell1.row][edge.cell1.col] = domino.pip1;
+      state.gridPips[edge.cell2.row][edge.cell2.col] = domino.pip2;
+      state.usedDominoes.set(domino.id, (state.usedDominoes.get(domino.id) || 0) + 1);
+      state.placements.push(placement);
+
+      // Propagate constraints
+      const prop1 = propagateConstraints(puzzle, state, edge.cell1, domino.pip1);
+      const prop2 = prop1 && propagateConstraints(puzzle, state, edge.cell2, domino.pip2);
+
+      if (prop1 && prop2) {
+        // Recurse
+        if (config.debugLevel >= 2) {
+          console.log(
+            `Trying domino ${domino.id} at (${edge.cell1.row},${edge.cell1.col})-(${edge.cell2.row},${edge.cell2.col})`
+          );
+        }
+
+        const result = backtrack(puzzle, state, config, stats, solutions);
+
+        if (result) {
+          // Found solution(s) and not finding all
+          return true;
+        }
+      } else {
+        stats.prunes++;
+        if (config.debugLevel >= 2) {
+          console.log(
+            `Pruned domino ${domino.id} at (${edge.cell1.row},${edge.cell1.col})-(${edge.cell2.row},${edge.cell2.col}): constraint violation`
+          );
+        }
+      }
+
+      // Backtrack
+      stats.backtracks++;
+      state.gridPips[edge.cell1.row][edge.cell1.col] = null;
+      state.gridPips[edge.cell2.row][edge.cell2.col] = null;
+      state.usedDominoes = savedUsedDominoes;
+      state.placements.pop();
+      state.domains = savedDomains;
+    }
   }
 
   return false;
@@ -305,6 +320,7 @@ export async function solvePuzzleAsync(
 
 /**
  * Async backtracking with progress callbacks
+ * Uses CELL-FIRST approach (like Python solver) to prevent orphaned cells
  */
 async function backtrackAsync(
   puzzle: NormalizedPuzzle,
@@ -361,90 +377,113 @@ async function backtrackAsync(
     }
   }
 
-  const edge = selectNextEdge(puzzle, state);
-  if (!edge) {
-    console.log('[SOLVER] No more edges to select');
+  // CELL-FIRST APPROACH: Pick a cell, then pair it with each unfilled neighbor
+  const cell = selectNextCell(puzzle, state);
+  if (!cell) {
+    console.log('[SOLVER] No more unfilled cells');
     return false;
   }
 
-  const candidates = getCandidateDominoes(
-    puzzle,
-    edge,
-    state,
-    config.maxPip,
-    config.allowDuplicates
-  );
+  // Get unfilled neighbors to pair with
+  const neighbors = getUnfilledNeighborsForCell(puzzle, state, cell);
+
+  if (neighbors.length === 0) {
+    // Cell has no unfilled neighbors - this is an orphan!
+    stats.prunes++;
+    if (depth < 8) {
+      console.log(`[SOLVER] Cell (${cell.row},${cell.col}) is orphaned - no unfilled neighbors`);
+    }
+    return false;
+  }
 
   if (depth === 0) {
-    console.log(
-      `[SOLVER DEBUG] First edge: (${edge.cell1.row},${edge.cell1.col})-(${edge.cell2.row},${edge.cell2.col})`
-    );
-    console.log(
-      `[SOLVER DEBUG] First edge domains: [${state.domains
-        .get(`${edge.cell1.row},${edge.cell1.col}`)
-        ?.join(',')}] x [${state.domains.get(`${edge.cell2.row},${edge.cell2.col}`)?.join(',')}]`
-    );
-    console.log(`[SOLVER DEBUG] Candidates: ${candidates.map(c => c.id).join(', ') || 'NONE'}`);
+    console.log(`[SOLVER DEBUG] First cell: (${cell.row},${cell.col})`);
+    console.log(`[SOLVER DEBUG] Unfilled neighbors: ${neighbors.map(n => `(${n.row},${n.col})`).join(', ')}`);
   }
 
-  if (candidates.length === 0) {
-    stats.prunes++;
-    return false;
-  }
-
-  for (const domino of candidates) {
+  // Try each neighbor
+  for (const neighbor of neighbors) {
     if (signal?.cancelled) {
       return false;
     }
 
-    const placement: DominoPlacement = {
-      domino,
-      cell1: edge.cell1,
-      cell2: edge.cell2,
-    };
+    // Create edge for this cell-neighbor pair
+    const edge = { cell1: cell, cell2: neighbor };
 
-    const savedDomains = copyDomains(state.domains);
-    const savedUsedDominoes = new Map(state.usedDominoes);
+    // Get candidate dominoes for this edge
+    const candidates = getCandidateDominoes(
+      puzzle,
+      edge,
+      state,
+      config.maxPip,
+      config.allowDuplicates
+    );
 
-    state.gridPips[edge.cell1.row][edge.cell1.col] = domino.pip1;
-    state.gridPips[edge.cell2.row][edge.cell2.col] = domino.pip2;
-    state.usedDominoes.set(domino.id, (state.usedDominoes.get(domino.id) || 0) + 1);
-    state.placements.push(placement);
-
-    const prop1 = propagateConstraints(puzzle, state, edge.cell1, domino.pip1);
-    const prop2 = prop1 && propagateConstraints(puzzle, state, edge.cell2, domino.pip2);
-
-    if (depth < 8) {
-      console.log(
-        `[SOLVER] Depth ${depth}: Placed ${domino.id} at (${edge.cell1.row},${edge.cell1.col})-(${edge.cell2.row},${edge.cell2.col}) -> prop1=${prop1}, prop2=${prop2}`
-      );
+    if (candidates.length === 0) {
+      // No valid dominoes for this edge - try next neighbor
+      continue;
     }
 
-    if (prop1 && prop2) {
-      const result = await backtrackAsync(
-        puzzle,
-        state,
-        config,
-        stats,
-        solutions,
-        onProgress,
-        signal,
-        depth + 1
-      );
+    if (depth === 0) {
+      console.log(`[SOLVER DEBUG] First edge: (${cell.row},${cell.col})-(${neighbor.row},${neighbor.col})`);
+      console.log(`[SOLVER DEBUG] Candidates: ${candidates.map(c => c.id).join(', ') || 'NONE'}`);
+    }
 
-      if (result) {
-        return true;
+    // Try each candidate domino
+    for (const domino of candidates) {
+      if (signal?.cancelled) {
+        return false;
       }
-    } else {
-      stats.prunes++;
-    }
 
-    stats.backtracks++;
-    state.gridPips[edge.cell1.row][edge.cell1.col] = null;
-    state.gridPips[edge.cell2.row][edge.cell2.col] = null;
-    state.usedDominoes = savedUsedDominoes;
-    state.placements.pop();
-    state.domains = savedDomains;
+      const placement: DominoPlacement = {
+        domino,
+        cell1: edge.cell1,
+        cell2: edge.cell2,
+      };
+
+      const savedDomains = copyDomains(state.domains);
+      const savedUsedDominoes = new Map(state.usedDominoes);
+
+      state.gridPips[edge.cell1.row][edge.cell1.col] = domino.pip1;
+      state.gridPips[edge.cell2.row][edge.cell2.col] = domino.pip2;
+      state.usedDominoes.set(domino.id, (state.usedDominoes.get(domino.id) || 0) + 1);
+      state.placements.push(placement);
+
+      const prop1 = propagateConstraints(puzzle, state, edge.cell1, domino.pip1);
+      const prop2 = prop1 && propagateConstraints(puzzle, state, edge.cell2, domino.pip2);
+
+      if (depth < 8) {
+        console.log(
+          `[SOLVER] Depth ${depth}: Placed ${domino.id} at (${edge.cell1.row},${edge.cell1.col})-(${edge.cell2.row},${edge.cell2.col}) -> prop1=${prop1}, prop2=${prop2}`
+        );
+      }
+
+      if (prop1 && prop2) {
+        const result = await backtrackAsync(
+          puzzle,
+          state,
+          config,
+          stats,
+          solutions,
+          onProgress,
+          signal,
+          depth + 1
+        );
+
+        if (result) {
+          return true;
+        }
+      } else {
+        stats.prunes++;
+      }
+
+      stats.backtracks++;
+      state.gridPips[edge.cell1.row][edge.cell1.col] = null;
+      state.gridPips[edge.cell2.row][edge.cell2.col] = null;
+      state.usedDominoes = savedUsedDominoes;
+      state.placements.pop();
+      state.domains = savedDomains;
+    }
   }
 
   return false;
