@@ -27,6 +27,7 @@ import {
   DominoExtractionResult,
   DominoPair,
   GridState,
+  RawResponses,
   RegionState,
 } from '../model/overlayTypes';
 import {
@@ -150,6 +151,13 @@ export interface MultiModelExtractionOptions {
 
   /** CV service URL (default: http://localhost:8080) */
   cvServiceUrl?: string;
+
+  /**
+   * When true, stores raw per-model responses for comparison/debugging.
+   * This enables the extraction comparison feature to show side-by-side
+   * results from each model. Increases memory usage slightly.
+   */
+  saveDebugResponses?: boolean;
 }
 
 export interface MultiModelExtractionResult {
@@ -165,6 +173,8 @@ export interface MultiModelExtractionResult {
     dominoesMs: number;
     totalMs: number;
   };
+  /** Per-model raw responses when saveDebugResponses is enabled */
+  rawResponses?: RawResponses;
 }
 
 /**
@@ -192,7 +202,7 @@ export async function extractPuzzleMultiModel(
   base64Image: string,
   options: MultiModelExtractionOptions
 ): Promise<MultiModelExtractionResult> {
-  const { strategy, apiKeys, onProgress, useHybridCV = false, cvServiceUrl } = options;
+  const { strategy, apiKeys, onProgress, useHybridCV = false, cvServiceUrl, saveDebugResponses = false } = options;
 
   // Validate we have at least one API key
   const availableProviders = getAvailableProviders(apiKeys);
@@ -318,7 +328,7 @@ export async function extractPuzzleMultiModel(
   const result = await extractPuzzleEnsemble(
     imageForAI,
     apiKeys,
-    { strategy, onProgress },
+    { strategy, onProgress, saveDebugResponses },
     dominoImage // Use cropped domino image if available
   );
 
