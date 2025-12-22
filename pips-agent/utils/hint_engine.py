@@ -204,3 +204,263 @@ def generate_hint_level_1(
         content=selected_hint,
         hint_type="strategy",
     )
+
+
+# =============================================================================
+# Level 2 Hint Templates - Focused Direction to Region
+# =============================================================================
+
+# Templates for sum constraint regions
+SUM_REGION_HINT_TEMPLATES = [
+    "Focus on region '{region}' - its sum constraint ({op} {value}) significantly limits valid placements.",
+    "Region '{region}' has a sum constraint of {op} {value}. Consider which domino combinations can achieve this.",
+    "The sum constraint on region '{region}' ({op} {value}) makes it a good starting point.",
+    "Examine region '{region}' closely - few domino pairs can satisfy its {op} {value} sum requirement.",
+]
+
+# Templates for all_equal constraint regions
+ALL_EQUAL_REGION_HINT_TEMPLATES = [
+    "Region '{region}' requires all cells to have equal pip values - this dramatically limits your options.",
+    "Focus on region '{region}' with its all-equal constraint. Which pip values appear on multiple domino halves?",
+    "The all-equal constraint on region '{region}' is very restrictive - start there.",
+    "Region '{region}' needs identical values in each cell. Consider your available dominoes carefully.",
+]
+
+# Templates for small regions (fewer cells = more restrictive)
+SMALL_REGION_HINT_TEMPLATES = [
+    "Region '{region}' has only {cell_count} cell(s), making it easier to enumerate valid placements.",
+    "Start with region '{region}' - with fewer cells, the constraint is more limiting.",
+    "Consider region '{region}' first - smaller regions have fewer valid domino arrangements.",
+]
+
+# Templates for regions with extreme constraint values
+EXTREME_CONSTRAINT_HINT_TEMPLATES = [
+    "Region '{region}' has an extreme constraint value ({op} {value}) - fewer domino combinations can satisfy it.",
+    "The {direction} constraint on region '{region}' ({op} {value}) limits your choices significantly.",
+]
+
+# Generic region focus templates
+GENERIC_REGION_HINT_TEMPLATES = [
+    "Take a closer look at region '{region}' and its constraints.",
+    "Region '{region}' may be a productive place to focus your attention.",
+    "Consider the constraints on region '{region}' and what placements they allow.",
+]
+
+
+def _get_region_cell_count(region_name: str, board: Dict[str, Any]) -> int:
+    """Count how many cells belong to a given region."""
+    regions = board.get("regions", []) if isinstance(board, dict) else getattr(board, "regions", [])
+    count = 0
+    for row in regions:
+        count += row.count(region_name)
+    return count
+
+
+def _get_region_info(puzzle_spec: Any) -> List[Dict[str, Any]]:
+    """
+    Extract information about each region for hint selection.
+
+    Returns a list of region info dicts with:
+    - name: region identifier
+    - constraint_type: 'sum' or 'all_equal'
+    - op: comparison operator (for sum)
+    - value: constraint value (for sum)
+    - cell_count: number of cells in region
+    - restrictiveness_score: estimated difficulty/restrictiveness
+    """
+    # Handle both dict-like and object-like puzzle specs
+    if isinstance(puzzle_spec, dict):
+        region_constraints = puzzle_spec.get("region_constraints", {})
+        board = puzzle_spec.get("board", {})
+    else:
+        region_constraints = puzzle_spec.region_constraints
+        board = puzzle_spec.board
+        # Convert to dict if needed
+        if not isinstance(region_constraints, dict):
+            if hasattr(region_constraints, 'items'):
+                region_constraints = dict(region_constraints.items())
+            elif hasattr(region_constraints, '__dict__'):
+                region_constraints = region_constraints.__dict__
+
+    board_dict = board if isinstance(board, dict) else (
+        {"regions": getattr(board, "regions", []), "shape": getattr(board, "shape", [])}
+    )
+
+    region_info_list = []
+
+    for region_name, constraint in region_constraints.items():
+        # Handle both dict and object constraints
+        if isinstance(constraint, dict):
+            constraint_type = constraint.get("type", "")
+            op = constraint.get("op", "")
+            value = constraint.get("value", 0)
+        else:
+            constraint_type = getattr(constraint, "type", "")
+            op = getattr(constraint, "op", "")
+            value = getattr(constraint, "value", 0)
+
+        cell_count = _get_region_cell_count(region_name, board_dict)
+
+        # Calculate restrictiveness score (higher = more restrictive = better hint target)
+        restrictiveness = 0
+
+        # All-equal constraints are very restrictive
+        if constraint_type == "all_equal":
+            restrictiveness += 50
+
+        # Sum constraints with equality are more restrictive than inequalities
+        if constraint_type == "sum":
+            if op == "==":
+                restrictiveness += 30
+            elif op == "!=":
+                restrictiveness += 10
+            else:  # < or >
+                restrictiveness += 20
+
+        # Smaller regions are more restrictive
+        if cell_count <= 2:
+            restrictiveness += 25
+        elif cell_count <= 4:
+            restrictiveness += 15
+
+        # Extreme values are more restrictive
+        if value is not None:
+            if value <= 2 or value >= 10:
+                restrictiveness += 15
+
+        region_info_list.append({
+            "name": region_name,
+            "constraint_type": constraint_type,
+            "op": op,
+            "value": value,
+            "cell_count": cell_count,
+            "restrictiveness_score": restrictiveness,
+        })
+
+    return region_info_list
+
+
+def _select_target_region(
+    region_info_list: List[Dict[str, Any]],
+    previous_regions: Optional[Set[str]] = None,
+) -> Optional[Dict[str, Any]]:
+    """
+    Select a region to focus the hint on.
+
+    Prioritizes regions that:
+    1. Haven't been hinted before (if previous_regions provided)
+    2. Have higher restrictiveness scores
+    """
+    if not region_info_list:
+        return None
+
+    if previous_regions is None:
+        previous_regions = set()
+
+    # Filter out previously hinted regions
+    available_regions = [r for r in region_info_list if r["name"] not in previous_regions]
+
+    # If all regions have been hinted, reset
+    if not available_regions:
+        available_regions = region_info_list.copy()
+
+    # Sort by restrictiveness (highest first) and pick from top candidates
+    available_regions.sort(key=lambda r: r["restrictiveness_score"], reverse=True)
+
+    # Pick randomly from top 3 most restrictive to add variety
+    top_candidates = available_regions[:min(3, len(available_regions))]
+    return random.choice(top_candidates)
+
+
+def _generate_region_hint_text(region_info: Dict[str, Any]) -> str:
+    """Generate hint text for a specific region based on its properties."""
+    region_name = region_info["name"]
+    constraint_type = region_info["constraint_type"]
+    op = region_info.get("op", "")
+    value = region_info.get("value", 0)
+    cell_count = region_info.get("cell_count", 0)
+
+    # Select appropriate template based on constraint type
+    if constraint_type == "all_equal":
+        template = random.choice(ALL_EQUAL_REGION_HINT_TEMPLATES)
+        return template.format(region=region_name)
+
+    elif constraint_type == "sum":
+        # Check for extreme values
+        if value is not None and (value <= 2 or value >= 10):
+            direction = "low" if value <= 2 else "high"
+            templates = EXTREME_CONSTRAINT_HINT_TEMPLATES + SUM_REGION_HINT_TEMPLATES
+            template = random.choice(templates)
+            return template.format(region=region_name, op=op, value=value, direction=direction)
+        else:
+            template = random.choice(SUM_REGION_HINT_TEMPLATES)
+            return template.format(region=region_name, op=op, value=value)
+
+    # For small regions regardless of constraint type
+    if cell_count <= 2:
+        template = random.choice(SMALL_REGION_HINT_TEMPLATES)
+        return template.format(region=region_name, cell_count=cell_count)
+
+    # Fallback to generic template
+    template = random.choice(GENERIC_REGION_HINT_TEMPLATES)
+    return template.format(region=region_name)
+
+
+def generate_hint_level_2(
+    puzzle_spec: Any,
+    previous_hints: Optional[List[str]] = None,
+    previous_regions: Optional[Set[str]] = None,
+) -> HintResult:
+    """
+    Generate a Level 2 focused direction hint.
+
+    Level 2 hints identify a specific region or constraint where the user
+    should focus their attention. They don't reveal values but point to
+    productive areas of the puzzle.
+
+    Args:
+        puzzle_spec: The puzzle specification (PuzzleSpec model or dict)
+        previous_hints: List of previously given hint texts to avoid repetition
+        previous_regions: Set of region names already hinted to avoid repetition
+
+    Returns:
+        HintResult with region-focused direction content
+    """
+    if previous_hints is None:
+        previous_hints = []
+    if previous_regions is None:
+        previous_regions = set()
+
+    # Extract region information from puzzle
+    region_info_list = _get_region_info(puzzle_spec)
+
+    # Handle edge case: no regions defined
+    if not region_info_list:
+        return HintResult(
+            content="Examine the puzzle constraints carefully to find a starting point.",
+            hint_type="direction",
+        )
+
+    # Select a target region
+    target_region = _select_target_region(region_info_list, previous_regions)
+
+    if target_region is None:
+        return HintResult(
+            content="Review each region's constraints to find the most restrictive one.",
+            hint_type="direction",
+        )
+
+    # Generate hint text for the selected region
+    hint_text = _generate_region_hint_text(target_region)
+
+    # Avoid exact repetition of hint text
+    attempts = 0
+    while hint_text in previous_hints and attempts < 5:
+        hint_text = _generate_region_hint_text(target_region)
+        attempts += 1
+
+    return HintResult(
+        content=hint_text,
+        hint_type="direction",
+        region=target_region["name"],
+    )
