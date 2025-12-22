@@ -9,7 +9,11 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   Alert,
   Image,
+  InputAccessoryView,
+  Keyboard,
   Modal,
+  Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -60,6 +64,9 @@ interface Props {
   /** Optional source image to show overlay comparison */
   sourceImage?: ImageInfo | null;
 }
+
+// Input accessory view ID for iOS number-pad keyboard "Done" button
+const CONSTRAINT_INPUT_ACCESSORY_ID = 'constraint-value-input-accessory';
 
 // Region color palette for visual diff (matches theme/tokens.ts)
 const REGION_COLORS = [
@@ -703,9 +710,14 @@ export default function AIVerificationModal({
     );
   };
 
+  // Dismiss keyboard on background tap
+  const dismissKeyboard = useCallback(() => {
+    Keyboard.dismiss();
+  }, []);
+
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
-      <View style={styles.container}>
+      <Pressable style={styles.container} onPress={dismissKeyboard}>
         <View style={styles.header}>
           <View style={styles.headerRow}>
             <View>
@@ -749,7 +761,11 @@ export default function AIVerificationModal({
           </View>
         </View>
 
-        <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={styles.contentContainer}
+          keyboardShouldPersistTaps="handled"
+        >
           {viewMode === 'visual' ? (
             <>
               {/* Visual Grid Preview with Image Overlay */}
@@ -1001,7 +1017,7 @@ export default function AIVerificationModal({
             </Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </Pressable>
     </Modal>
   );
 }
@@ -1524,11 +1540,30 @@ function ConstraintEditPanel({
               value={constraintValue}
               onChangeText={setConstraintValue}
               keyboardType="number-pad"
+              returnKeyType="done"
+              blurOnSubmit={true}
+              onSubmitEditing={handleSave}
               placeholder="0"
               placeholderTextColor={colors.text.tertiary}
+              inputAccessoryViewID={Platform.OS === 'ios' ? CONSTRAINT_INPUT_ACCESSORY_ID : undefined}
             />
           </View>
         </View>
+      )}
+
+      {/* iOS keyboard accessory view with "Done" button */}
+      {Platform.OS === 'ios' && (
+        <InputAccessoryView nativeID={CONSTRAINT_INPUT_ACCESSORY_ID}>
+          <View style={constraintEditStyles.keyboardAccessory}>
+            <View style={constraintEditStyles.keyboardAccessoryFlex} />
+            <TouchableOpacity
+              style={constraintEditStyles.keyboardDoneButton}
+              onPress={() => Keyboard.dismiss()}
+            >
+              <Text style={constraintEditStyles.keyboardDoneText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </InputAccessoryView>
       )}
 
       {/* Action buttons */}
@@ -1690,6 +1725,28 @@ const constraintEditStyles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: colors.text.inverse,
+  },
+  // iOS keyboard accessory styles
+  keyboardAccessory: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface.graphite,
+    borderTopWidth: 1,
+    borderTopColor: colors.surface.ash,
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[2],
+  },
+  keyboardAccessoryFlex: {
+    flex: 1,
+  },
+  keyboardDoneButton: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+  },
+  keyboardDoneText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.accent.brass,
   },
 });
 
