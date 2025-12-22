@@ -1,0 +1,118 @@
+=== AUTO-BUILD PROGRESS ===
+
+Project: PIPS Monorepo - Git Branch Consolidation
+Spec: 017-merge-auto-claude-branches-into-copilot-fixes
+Workspace: C:\Users\tfunk\pips
+Started: 2025-12-22
+
+Workflow Type: feature
+Rationale: Implements a specific git branch consolidation process requiring careful
+sequential execution, verification at each step, and potential conflict resolution.
+While it doesn't modify application code, it implements a new branch management procedure.
+
+Session 1 (Planner):
+✓ Created implementation_plan.json
+✓ Phases: 4
+✓ Total subtasks: 10
+✓ Created init.sh (pre-flight check script)
+✓ Created build-progress.txt
+
+Phase Summary:
+
+Phase 1: Preparation & Validation (3 subtasks)
+  - Validate repository state and create pre-merge backup
+  - Handle uncommitted changes on copilot-fixes branch
+  - Identify and count all auto-claude branches to merge
+  - Depends on: None
+  - Status: PENDING
+
+Phase 2: Commit Uncommitted Changes (3 subtasks)
+  - Process branches 001-005: commit uncommitted changes
+  - Process branches 006-010: commit uncommitted changes
+  - Process branches 011-017: commit uncommitted changes
+  - Depends on: Phase 1
+  - Status: PENDING
+
+Phase 3: Merge Branches into Copilot-Fixes (3 subtasks)
+  - Merge branches 001-005 into copilot-fixes
+  - Merge branches 006-010 into copilot-fixes
+  - Merge branches 011-017 into copilot-fixes
+  - Depends on: Phase 2
+  - Status: PENDING
+
+Phase 4: Verification & Documentation (1 subtask)
+  - Verify all 17 branches are merged into copilot-fixes
+  - Verify repository integrity and no merge artifacts
+  - Document merge operation in build-progress.txt
+  - Depends on: Phase 3
+  - Status: PENDING
+
+Services Involved:
+- Repository-wide (git operations only, no code services)
+
+Git State (at planning time):
+- Current branch: copilot-fixes
+- Auto-claude branches found: 17
+  * auto-claude/001-enhance-ai-visual-pips-board-extraction-accuracy
+  * auto-claude/002-add-domino-tray-preprocessing
+  * auto-claude/003-add-extraction-comparison-diff-view
+  * auto-claude/004-add-cross-stage-confidence-warnings-to-ui
+  * auto-claude/005-add-image-stats-diagnostic-endpoint
+  * auto-claude/006-inconsistent-button-styling-in-step1gridalignment-
+  * auto-claude/007-step1gridalignment-should-use-themed-ui-components
+  * auto-claude/008-add-haptic-feedback-for-puzzle-grid-interactions
+  * auto-claude/009-ai-verification-modal-lacks-keyboard-accessibility
+  * auto-claude/010-button-loading-state-lacks-animated-spinner
+  * auto-claude/010-enhanced-ocr-constraint-detection
+  * auto-claude/011-complete-domino-pip-detection
+  * auto-claude/012-improved-region-detection-for-complex-layouts
+  * auto-claude/013-complete-user-correction-ui-workflow
+  * auto-claude/014-accurate-confidence-scoring
+  * auto-claude/015-graduated-hint-system
+  * auto-claude/016-diamond-cell-inference-completion
+  * auto-claude/017-commit-and-merge-all-feature-branches
+
+Parallelism Analysis:
+- Max parallel phases: 1 (sequential only)
+- Recommended workers: 1
+- Parallel groups: None
+- Reasoning: Git merge operations must be sequential to maintain clean state and
+  handle potential conflicts. Each merge depends on the previous merge completing
+  successfully.
+
+Verification Strategy:
+- Risk Level: low
+- Test Types Required: None (git operations only)
+- Security Scanning: Not required
+- Staging Deployment: Not required
+
+QA Acceptance Criteria:
+- All 17 auto-claude branches successfully merged into copilot-fixes
+- No merge conflicts remain unresolved
+- Working directory is clean (git status shows no uncommitted changes)
+- No merge artifact markers (<<<<<<, =======, >>>>>>>) in codebase
+- Git repository integrity verified (git fsck passes)
+- All branches appear in 'git branch --merged copilot-fixes'
+- Merge history is preserved and visible in git log
+- Pre-merge backup tag exists for rollback capability
+- Build-progress.txt documents the operation
+- All service directories remain intact
+
+=== STARTUP COMMAND ===
+
+To continue building this spec, run:
+
+  source auto-claude/.venv/bin/activate && python auto-claude/run.py --spec 017 --parallel 1
+
+Example:
+  cd C:\Users\tfunk\pips
+  source auto-claude/.venv/bin/activate
+  python auto-claude/run.py --spec 017 --parallel 1
+
+Pre-flight check (optional):
+  cd C:\Users\tfunk\pips\.auto-claude\specs\017-merge-auto-claude-branches-into-copilot-fixes
+  ./init.sh
+
+=== END SESSION 1 (PLANNER) ===
+
+Next Session: Implementation Agent will execute git operations
