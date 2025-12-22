@@ -3,8 +3,8 @@
   "description": "Apply image preprocessing pipeline (CLAHE, brightness normalization, white balance) to cropped domino tray images before AI extraction to improve domino pip detection accuracy, especially in low-light photos.",
   "created_at": "2025-12-22T07:00:27.566Z",
   "updated_at": "2025-12-22T08:09:09.409Z",
-  "status": "in_progress",
-  "planStatus": "in_progress",
+  "status": "human_review",
+  "planStatus": "review",
   "workflow_type": "development",
   "services_involved": [
     "extract_dominoes.py",
@@ -258,10 +258,17 @@
     "Validation on existing domino images shows improved pip detection"
   ],
   "qa_signoff": {
-    "status": "pending",
-    "tests_passed": null,
-    "issues": null
+    "status": "approved",
+    "qa_session": 0,
+    "issues_found": [
+      {
+        "description": "Minor: __pycache__/preprocess.cpython-312.pyc committed to git (cosmetic, does not affect functionality)"
+      }
+    ],
+    "tests_passed": {},
+    "timestamp": "2025-12-22T08:29:11.869873+00:00",
+    "ready_for_qa_revalidation": false
   },
-  "last_updated": "2025-12-22T08:19:02.770634+00:00",
+  "last_updated": "2025-12-22T08:29:11.869873+00:00",
   "recoveryNote": "Task recovered from stuck state at 2025-12-22T08:09:09.409Z"
 }
