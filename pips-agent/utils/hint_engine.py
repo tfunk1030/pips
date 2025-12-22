@@ -861,3 +861,234 @@ def generate_hint_level_3(
         region=region,
         cell={"row": row, "col": col, "value": value},
     )
+
+
+# =============================================================================
+# Level 4 Hint Logic - Partial Solution (3-5 cells)
+# =============================================================================
+
+# Templates for Level 4 partial solution hints
+PARTIAL_SOLUTION_INTRO_TEMPLATES = [
+    "Here's a partial solution to help you make progress:",
+    "These placements will get you started:",
+    "Try these cell values to move forward:",
+    "Here are several confirmed placements:",
+    "Use these values to break through your stuck point:",
+]
+
+# Templates for individual cell descriptions within partial solution
+PARTIAL_SOLUTION_CELL_TEMPLATES = [
+    "• Row {row}, Column {col}: place {value}",
+    "• ({row}, {col}) = {value}",
+    "• Cell at row {row}, col {col} → {value}",
+]
+
+# Templates for domino-specific partial solutions
+PARTIAL_SOLUTION_DOMINO_TEMPLATES = [
+    "• Place domino [{pip1}, {pip2}] at ({row}, {col})",
+    "• Domino [{pip1}, {pip2}] starting at row {row}, col {col}",
+]
+
+# Fallback when not enough cells can be determined
+PARTIAL_SOLUTION_FALLBACK_TEMPLATES = [
+    "Based on the puzzle constraints, here are the placements that can be determined:",
+    "The following cells have determinable values:",
+    "These are the most certain placements available:",
+]
+
+
+def _collect_unique_placements(
+    placements: List[Dict[str, Any]],
+    target_count: int = 5,
+    min_count: int = 3,
+) -> List[Dict[str, Any]]:
+    """
+    Collect unique cell placements, prioritizing high confidence ones.
+
+    Args:
+        placements: List of placement dictionaries from analysis
+        target_count: Ideal number of placements to return (default 5)
+        min_count: Minimum number to try to collect (default 3)
+
+    Returns:
+        List of unique placements (by cell position)
+    """
+    seen_cells: Set[Tuple[int, int]] = set()
+    unique_placements: List[Dict[str, Any]] = []
+
+    for placement in placements:
+        cell_key = (placement["row"], placement["col"])
+        if cell_key not in seen_cells:
+            seen_cells.add(cell_key)
+            unique_placements.append(placement)
+
+            if len(unique_placements) >= target_count:
+                break
+
+    return unique_placements
+
+
+def _format_partial_solution_text(
+    placements: List[Dict[str, Any]],
+) -> str:
+    """
+    Format multiple placements into a readable partial solution hint.
+
+    Args:
+        placements: List of placement dictionaries
+
+    Returns:
+        Formatted hint text with intro and cell list
+    """
+    if not placements:
+        return "Unable to determine specific cell placements at this time."
+
+    # Select intro template based on placement count
+    if len(placements) >= 3:
+        intro = random.choice(PARTIAL_SOLUTION_INTRO_TEMPLATES)
+    else:
+        intro = random.choice(PARTIAL_SOLUTION_FALLBACK_TEMPLATES)
+
+    # Format each placement
+    cell_lines = []
+    for placement in placements:
+        row = placement["row"]
+        col = placement["col"]
+        value = placement["value"]
+        domino = placement.get("domino")
+
+        if domino:
+            template = random.choice(PARTIAL_SOLUTION_DOMINO_TEMPLATES)
+            line = template.format(pip1=domino[0], pip2=domino[1], row=row, col=col)
+        else:
+            template = random.choice(PARTIAL_SOLUTION_CELL_TEMPLATES)
+            line = template.format(row=row, col=col, value=value)
+
+        cell_lines.append(line)
+
+    return f"{intro}\n" + "\n".join(cell_lines)
+
+
+def generate_hint_level_4(
+    puzzle_spec: Any,
+    previous_hints: Optional[List[str]] = None,
+    previous_cells: Optional[Set[Tuple[int, int]]] = None,
+) -> HintResult:
+    """
+    Generate a Level 4 partial solution hint.
+
+    Level 4 hints reveal multiple cell placements (3-5 cells) to provide
+    substantial progress for users who are truly stuck. This is the most
+    revealing hint level, offering a partial solution without giving away
+    the entire puzzle.
+
+    Args:
+        puzzle_spec: The puzzle specification (PuzzleSpec model or dict)
+        previous_hints: List of previously given hint texts to avoid repetition
+        previous_cells: Set of (row, col) tuples already hinted to avoid repetition
+
+    Returns:
+        HintResult with partial solution (multiple cell placements)
+    """
+    if previous_hints is None:
+        previous_hints = []
+    if previous_cells is None:
+        previous_cells = set()
+
+    # Analyze puzzle to find determinable placements (reuse Level 3 analysis)
+    all_placements = _analyze_puzzle_for_cell_hint(puzzle_spec)
+
+    # Filter out previously hinted cells if we have enough remaining
+    available_placements = [
+        p for p in all_placements
+        if (p["row"], p["col"]) not in previous_cells
+    ]
+
+    # If not enough new cells, include previously hinted ones
+    if len(available_placements) < 3:
+        available_placements = all_placements
+
+    # Collect 3-5 unique placements
+    selected_placements = _collect_unique_placements(
+        available_placements,
+        target_count=5,
+        min_count=3,
+    )
+
+    # Handle edge case: no or very few placements found
+    if not selected_placements:
+        # Try to get any cells from the puzzle as a fallback
+        if isinstance(puzzle_spec, dict):
+            board = puzzle_spec.get("board", {})
+        else:
+            board = puzzle_spec.board
+
+        board_dict = board if isinstance(board, dict) else {
+            "regions": getattr(board, "regions", []),
+            "shape": getattr(board, "shape", [])
+        }
+
+        region_cells = _get_cell_positions_by_region(board_dict)
+
+        # Collect first few cells from each region as fallback
+        fallback_cells = []
+        for region_name, cells in region_cells.items():
+            for cell in cells[:2]:  # Take up to 2 cells per region
+                fallback_cells.append({
+                    "row": cell[0],
+                    "col": cell[1],
+                    "region": region_name,
+                    "value": "?",  # Unknown value
+                    "confidence": "low",
+                })
+                if len(fallback_cells) >= 5:
+                    break
+            if len(fallback_cells) >= 5:
+                break
+
+        if fallback_cells:
+            return HintResult(
+                content="The puzzle constraints are complex. Focus on these key cells:\n" +
+                        "\n".join([f"• Row {c['row']}, Column {c['col']} in region '{c['region']}'"
+                                   for c in fallback_cells[:5]]),
+                hint_type="partial_solution",
+                cells=[{"row": c["row"], "col": c["col"], "region": c.get("region")}
+                       for c in fallback_cells[:5]],
+            )
+
+        # Ultimate fallback
+        return HintResult(
+            content="The puzzle requires careful analysis. Try working through each region's constraints systematically.",
+            hint_type="partial_solution",
+            cells=[],
+        )
+
+    # Format the partial solution text
+    hint_text = _format_partial_solution_text(selected_placements)
+
+    # Build the cells list for the response
+    cells_list = [
+        {
+            "row": p["row"],
+            "col": p["col"],
+            "value": p["value"],
+            "region": p.get("region"),
+        }
+        for p in selected_placements
+    ]
+
+    # Determine the primary region (most common in selections)
+    region_counts: Dict[str, int] = {}
+    for p in selected_placements:
+        region = p.get("region", "")
+        if region:
+            region_counts[region] = region_counts.get(region, 0) + 1
+
+    primary_region = max(region_counts, key=region_counts.get) if region_counts else None
+
+    return HintResult(
+        content=hint_text,
+        hint_type="partial_solution",
+        region=primary_region,
+        cells=cells_list,
+    )
