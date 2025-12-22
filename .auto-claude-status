@@ -1,15 +1,15 @@
 {
   "active": true,
-  "spec": "001-enhance-ai-visual-pips-board-extraction-accuracy",
+  "spec": "002-add-domino-tray-preprocessing",
   "state": "building",
   "subtasks": {
-    "completed": 14,
-    "total": 19,
+    "completed": 2,
+    "total": 10,
     "in_progress": 1,
     "failed": 0
   },
   "phase": {
-    "current": "Frontend UI/UX Improvements",
+    "current": "Core Preprocessing Module",
     "id": null,
     "total": 4
   },
@@ -18,8 +18,8 @@
     "max": 1
   },
   "session": {
-    "number": 15,
-    "started_at": "2025-12-21T23:48:42.843694"
+    "number": 4,
+    "started_at": "2025-12-22T02:01:54.664032"
   },
-  "last_update": "2025-12-22T00:57:55.580363"
+  "last_update": "2025-12-22T02:11:10.431497"
 }
