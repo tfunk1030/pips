@@ -306,6 +306,243 @@ def test_is_diamond_shape_wrong_vertex_count():
 
 
 # =============================================================================
+# Diamond Detection Strategy Tests (detect_by_constraint_labels)
+# =============================================================================
+
+def test_detect_by_constraint_labels_basic(diamond_grid_image_path, temp_dir):
+    """
+    Test that detect_by_constraint_labels returns DetectionResult with correct structure.
+
+    This validates the function exists, is callable, and returns the expected
+    dataclass type with all required fields.
+    """
+    result = detect_by_constraint_labels(diamond_grid_image_path, temp_dir)
+
+    # Verify return type
+    assert isinstance(result, DetectionResult), "Should return DetectionResult dataclass"
+
+    # Verify all required fields exist
+    assert hasattr(result, 'success'), "Result should have 'success' field"
+    assert hasattr(result, 'cells'), "Result should have 'cells' field"
+    assert hasattr(result, 'grid_dims'), "Result should have 'grid_dims' field"
+    assert hasattr(result, 'regions'), "Result should have 'regions' field"
+    assert hasattr(result, 'confidence'), "Result should have 'confidence' field"
+    assert hasattr(result, 'method'), "Result should have 'method' field"
+    assert hasattr(result, 'error'), "Result should have 'error' field"
+
+    # Verify method is correct
+    assert result.method == "constraint_labels", "Method should be 'constraint_labels'"
+
+    # Verify confidence is in valid range
+    assert 0.0 <= result.confidence <= 1.0, "Confidence should be between 0 and 1"
+
+    # Verify cells is a list
+    assert isinstance(result.cells, list), "Cells should be a list"
+
+
+def test_detect_by_constraint_labels_no_diamonds(colored_puzzle_image_path, temp_dir):
+    """
+    Test that detect_by_constraint_labels returns failure when no diamonds are present.
+
+    When the image contains no diamond markers, the function should return a
+    DetectionResult with success=False and an appropriate error message.
+    """
+    result = detect_by_constraint_labels(colored_puzzle_image_path, temp_dir)
+
+    assert isinstance(result, DetectionResult)
+    assert result.success is False, "Should fail when no diamonds present"
+    assert result.method == "constraint_labels"
+    assert result.confidence == 0.0, "Confidence should be 0 when detection fails"
+    assert result.cells == [], "Cells should be empty list when detection fails"
+    assert result.error is not None, "Error message should be set"
+    assert "Too few diamonds" in result.error or "No cells" in result.error, \
+        "Error should mention diamond detection failure"
+
+
+def test_detect_by_constraint_labels_with_diamonds(diamond_grid_image_path, temp_dir):
+    """
+    Test that detect_by_constraint_labels successfully detects diamonds in test image.
+
+    The diamond_grid_image_path fixture creates a 3x3 grid of diamonds that
+    mark cell corners, which should result in a 2x2 grid of 4 cells.
+    """
+    result = detect_by_constraint_labels(diamond_grid_image_path, temp_dir)
+
+    assert isinstance(result, DetectionResult)
+    assert result.success is True, f"Detection should succeed. Error: {result.error}"
+    assert result.method == "constraint_labels"
+
+    # The 3x3 diamond grid should produce 4 cells (2x2 grid)
+    assert len(result.cells) > 0, "Should detect cells from diamond markers"
+    assert len(result.cells) == 4, f"Expected 4 cells for 3x3 diamond grid, got {len(result.cells)}"
+
+    # Verify grid dimensions
+    assert result.grid_dims is not None, "Grid dimensions should be calculated"
+    assert result.grid_dims == (2, 2), f"Expected (2, 2) grid, got {result.grid_dims}"
+
+    # Verify confidence is reasonable
+    assert result.confidence > 0.3, f"Confidence {result.confidence} is too low"
+
+    # Verify regions were detected
+    assert result.regions is not None, "Regions should be calculated"
+
+    # Verify each cell has valid bounding box format (x, y, w, h)
+    for cell in result.cells:
+        assert len(cell) == 4, "Each cell should have 4 values (x, y, w, h)"
+        x, y, w, h = cell
+        assert w > 0 and h > 0, "Cell width and height should be positive"
+
+
+def test_detect_by_constraint_labels_inference(temp_dir):
+    """
+    Test that cell positions are correctly inferred from diamond positions.
+
+    Creates a custom test image with known diamond positions and verifies
+    that the inferred cells are positioned correctly.
+    """
+    # Create a test image with a 4x4 grid of diamonds (16 diamonds)
+    # This should produce a 3x3 grid of 9 cells
+    img = np.ones((500, 500, 3), dtype=np.uint8) * 255
+
+    # Draw 4x4 grid of diamonds at regular intervals
+    diamond_positions = []
+    for row in range(4):
+        for col in range(4):
+            cx = 75 + col * 100  # Start at 75, space by 100 pixels
+            cy = 75 + row * 100
+            diamond_positions.append((cx, cy))
+
+    # Draw diamonds
+    diamond_size = 12
+    for cx, cy in diamond_positions:
+        pts = np.array([
+            [cx, cy - diamond_size],  # Top
+            [cx + diamond_size, cy],  # Right
+            [cx, cy + diamond_size],  # Bottom
+            [cx - diamond_size, cy],  # Left
+        ], dtype=np.int32)
+        cv2.fillPoly(img, [pts], (0, 0, 0))
+
+    # Save test image
+    test_image_path = os.path.join(temp_dir, "inference_test.png")
+    cv2.imwrite(test_image_path, img)
+
+    # Run detection
+    result = detect_by_constraint_labels(test_image_path, temp_dir)
+
+    assert result.success is True, f"Detection should succeed. Error: {result.error}"
+
+    # Should produce 3x3 = 9 cells from 4x4 = 16 corner diamonds
+    expected_cell_count = 9
+    assert len(result.cells) == expected_cell_count, \
+        f"Expected {expected_cell_count} cells from 4x4 diamond grid, got {len(result.cells)}"
+
+    # Verify grid dimensions
+    assert result.grid_dims == (3, 3), f"Expected (3, 3) grid, got {result.grid_dims}"
+
+    # Verify cells are positioned correctly
+    # With diamonds at 75, 175, 275, 375 pixels,
+    # cells should span between adjacent diamond positions
+    for x, y, w, h in result.cells:
+        # Cell width should be approximately 100 pixels (diamond spacing)
+        assert 80 <= w <= 120, f"Cell width {w} is unexpected"
+        assert 80 <= h <= 120, f"Cell height {h} is unexpected"
+
+        # Cell positions should be near diamond positions
+        assert 50 <= x <= 350, f"Cell x position {x} is out of expected range"
+        assert 50 <= y <= 350, f"Cell y position {y} is out of expected range"
+
+
+def test_detect_by_constraint_labels_too_few_diamonds(single_diamond_image_path, temp_dir):
+    """
+    Test that detection fails gracefully with insufficient diamonds.
+
+    When fewer than 4 diamonds are detected, the function should return
+    failure since a grid cannot be inferred from too few points.
+    """
+    result = detect_by_constraint_labels(single_diamond_image_path, temp_dir)
+
+    assert isinstance(result, DetectionResult)
+    assert result.success is False, "Should fail with too few diamonds"
+    assert result.method == "constraint_labels"
+    assert result.confidence == 0.0
+    assert "Too few diamonds" in result.error, \
+        f"Error should mention too few diamonds, got: {result.error}"
+
+
+def test_detect_by_constraint_labels_debug_output(diamond_grid_image_path, temp_dir):
+    """
+    Test that debug output is saved when debug_dir is provided.
+    """
+    result = detect_by_constraint_labels(diamond_grid_image_path, temp_dir)
+
+    # Only check debug output if detection succeeded
+    if result.success:
+        debug_image_path = os.path.join(temp_dir, "constraint_labels_method.png")
+        assert os.path.exists(debug_image_path), "Debug image should be saved"
+
+        # Verify it's a valid image
+        debug_img = cv2.imread(debug_image_path)
+        assert debug_img is not None, "Debug image should be readable"
+
+
+def test_detect_diamonds_function(diamond_grid_image_path):
+    """
+    Test the detect_diamonds() helper function directly.
+    """
+    img = cv2.imread(diamond_grid_image_path)
+    assert img is not None
+
+    diamonds = detect_diamonds(img)
+
+    # Should detect 9 diamonds (3x3 grid)
+    assert len(diamonds) == 9, f"Expected 9 diamonds, found {len(diamonds)}"
+
+    # Each diamond should have (cx, cy, w, h, contour)
+    for d in diamonds:
+        assert len(d) == 5, "Diamond tuple should have 5 elements"
+        cx, cy, w, h, contour = d
+        assert w > 0 and h > 0, "Diamond dimensions should be positive"
+        assert contour is not None, "Contour should not be None"
+
+
+def test_infer_cells_from_diamonds_corner_pattern():
+    """
+    Test infer_cells_from_diamonds with a corner pattern.
+    """
+    # 3x3 grid of diamond centers at corners (100 pixel spacing)
+    diamond_centers = [
+        (100, 100), (200, 100), (300, 100),
+        (100, 200), (200, 200), (300, 200),
+        (100, 300), (200, 300), (300, 300),
+    ]
+    img_shape = (400, 400, 3)
+
+    cells = infer_cells_from_diamonds(diamond_centers, img_shape)
+
+    # Should produce 2x2 = 4 cells
+    assert len(cells) == 4, f"Expected 4 cells, got {len(cells)}"
+
+    # Each cell should be roughly 100x100 pixels
+    for x, y, w, h in cells:
+        assert 80 <= w <= 120, f"Cell width {w} unexpected"
+        assert 80 <= h <= 120, f"Cell height {h} unexpected"
+
+
+def test_infer_cells_from_diamonds_insufficient():
+    """
+    Test that infer_cells_from_diamonds returns empty list with too few diamonds.
+    """
+    # Only 3 diamonds - not enough to infer a grid
+    diamond_centers = [(100, 100), (200, 100), (100, 200)]
+    img_shape = (400, 400, 3)
+
+    cells = infer_cells_from_diamonds(diamond_centers, img_shape)
+
+    assert cells == [], "Should return empty list with fewer than 4 diamonds"
+
+
+# =============================================================================
 # Coordinate Clustering Tests
 # =============================================================================
 
