@@ -50,7 +50,7 @@
       "phase_id": "phase-2",
       "name": "Replace Button Components",
       "description": "Replace all TouchableOpacity-based buttons with themed Button components",
-      "status": "pending",
+      "status": "completed",
       "subtasks": [
         {
           "subtask_id": "subtask-2-1",
@@ -110,7 +110,8 @@
           "subtask_id": "subtask-2-4",
           "title": "Replace newImageButton with themed Button",
           "description": "Replace the 'Choose Different Image' link-style button with Button component using variant='ghost'.",
-          "status": "pending",
+          "status": "completed",
+          "completion_notes": "Replaced TouchableOpacity with Button component using variant='ghost'. Removed unused TouchableOpacity import and newImageButton/newImageButtonText styles. Committed as 5351713.",
           "files_to_modify": [
             "pips-solver/src/app/screens/builder/Step1GridAlignment.tsx"
           ],
@@ -129,13 +130,14 @@
       "phase_id": "phase-3",
       "name": "Replace Text Components",
       "description": "Replace raw Text elements with themed typography components",
-      "status": "pending",
+      "status": "completed",
       "subtasks": [
         {
           "subtask_id": "subtask-3-1",
           "title": "Replace static text with themed Text components",
           "description": "Replace all raw RN Text elements with themed Text, Body, Label, and Heading components. Map colors like #888 to theme color='secondary'.",
-          "status": "pending",
+          "status": "completed",
+          "completion_notes": "Replaced all raw RN Text elements with themed Body and Label components. Updated imports to include Body and Label from UI library. Mapped #888 color to color='secondary'. Cleaned up StyleSheet by removing color/fontSize properties now handled by themed components. Committed as 7a90b14.",
           "files_to_modify": [
             "pips-solver/src/app/screens/builder/Step1GridAlignment.tsx"
           ],
