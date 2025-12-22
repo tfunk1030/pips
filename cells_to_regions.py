@@ -2,12 +2,13 @@
 Cell-to-region clustering module.
 
 This module provides color-based clustering for puzzle cells, using DBSCAN
-as the primary method (automatic cluster count detection) with KMeans as fallback.
+as the primary method (automatic cluster count detection), MeanShift as
+secondary fallback, and KMeans as final fallback.
 """
 
 import cv2
 import numpy as np
-from sklearn.cluster import KMeans, DBSCAN
+from sklearn.cluster import KMeans, DBSCAN, MeanShift, estimate_bandwidth
 from collections import defaultdict
 import json
 from typing import Tuple, List, Dict, Optional
@@ -62,6 +63,54 @@ def dbscan_cluster(
     return labels, centers, n_clusters
 
 
+def meanshift_cluster(
+    colors: np.ndarray,
+    bandwidth: Optional[float] = None,
+    quantile: float = 0.3
+) -> Tuple[np.ndarray, np.ndarray, int]:
+    """
+    Cluster colors using MeanShift algorithm.
+
+    MeanShift automatically determines the number of clusters based on density
+    modes in the color space. It finds cluster centers by iteratively shifting
+    points toward the mode (peak) of the local density. Unlike DBSCAN, it
+    assigns all points to clusters (no noise points).
+
+    Args:
+        colors: Array of colors (N, 3) in BGR or LAB format
+        bandwidth: Kernel bandwidth for MeanShift. If None, automatically
+                   estimated using estimate_bandwidth with the given quantile.
+        quantile: Quantile used for automatic bandwidth estimation (0-1).
+                  Higher values = larger bandwidth = fewer clusters.
+                  Default 0.3 works well for puzzle color segmentation.
+
+    Returns:
+        Tuple of (labels, cluster_centers, n_clusters):
+        - labels: Cluster label for each input color (no noise, all assigned)
+        - cluster_centers: Mean color of each cluster (n_clusters, 3)
+        - n_clusters: Number of clusters found
+    """
+    colors_float = colors.astype(np.float32)
+
+    # Estimate bandwidth if not provided
+    if bandwidth is None:
+        # estimate_bandwidth requires at least 2 samples
+        if len(colors_float) < 2:
+            return np.zeros(len(colors_float), dtype=np.int32), np.zeros((0, colors.shape[1]), dtype=np.float32), 0
+        bandwidth = estimate_bandwidth(colors_float, quantile=quantile)
+        # Ensure bandwidth is positive (can be 0 for very uniform colors)
+        if bandwidth <= 0:
+            bandwidth = 10.0  # Default fallback for LAB color space
+
+    # Fit MeanShift
+    ms = MeanShift(bandwidth=bandwidth, bin_seeding=True)
+    labels = ms.fit_predict(colors_float)
+    centers = ms.cluster_centers_.astype(np.float32)
+    n_clusters = len(centers)
+
+    return labels, centers, n_clusters
+
+
 def kmeans_cluster(
     colors: np.ndarray,
     k: int,
@@ -97,25 +146,27 @@ def cluster_colors_adaptive(
     colors: np.ndarray,
     eps: float = 15.0,
     min_samples: int = 2,
+    meanshift_quantile: float = 0.3,
     fallback_k: int = 6
 ) -> Tuple[np.ndarray, np.ndarray, str]:
     """
     Cluster colors using adaptive method selection.
 
-    Tries DBSCAN first (automatic cluster detection), falls back to KMeans
-    if DBSCAN fails to find meaningful clusters.
+    Tries DBSCAN first (automatic cluster detection), then MeanShift as
+    secondary fallback, and finally KMeans as the last resort.
 
     Args:
         colors: Array of colors (N, 3)
         eps: DBSCAN epsilon parameter
         min_samples: DBSCAN min_samples parameter
+        meanshift_quantile: Quantile for MeanShift bandwidth estimation
         fallback_k: Number of clusters for KMeans fallback
 
     Returns:
         Tuple of (labels, centers, method_used):
         - labels: Cluster label for each input color
         - centers: Cluster center colors
-        - method_used: "dbscan" or "kmeans"
+        - method_used: "dbscan", "meanshift", or "kmeans"
     """
     # Try DBSCAN first
     labels, centers, n_clusters = dbscan_cluster(colors, eps=eps, min_samples=min_samples)
@@ -132,7 +183,14 @@ def cluster_colors_adaptive(
                 labels[i] = np.argmin(distances)
         return labels, centers, "dbscan"
 
-    # Fall back to KMeans
+    # Try MeanShift as secondary fallback
+    labels, centers, n_clusters = meanshift_cluster(colors, quantile=meanshift_quantile)
+
+    if n_clusters >= 2:
+        # MeanShift succeeded
+        return labels, centers, "meanshift"
+
+    # Fall back to KMeans as last resort
     labels, centers = kmeans_cluster(colors, k=fallback_k)
     return labels, centers, "kmeans"
 
