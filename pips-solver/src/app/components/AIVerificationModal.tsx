@@ -2,31 +2,54 @@
  * AI Verification Modal
  * Shows what the AI extracted before applying it to the builder state
  * Enhanced with visual diff showing extraction vs image overlay
+ * Includes cell-by-cell correction UI for manual fixes
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   Image,
   Modal,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
   useWindowDimensions,
 } from 'react-native';
 import Svg, { Circle, G, Line, Rect, Text as SvgText } from 'react-native-svg';
-import { BoardExtractionResult, DominoExtractionResult, ImageInfo } from '../../model/overlayTypes';
+import {
+  BoardExtractionResult,
+  DominoExtractionResult,
+  DominoPair,
+  ImageInfo,
+} from '../../model/overlayTypes';
 import { colors, radii, spacing } from '../../theme';
 
 // View modes for the modal
 type ViewMode = 'text' | 'visual';
 
+// Edit target type for tracking what's being edited
+type EditTarget =
+  | { type: 'cell'; row: number; col: number }
+  | { type: 'domino'; index: number; half: 0 | 1 }
+  | { type: 'constraint'; regionLabel: string }
+  | null;
+
+// Editable results that can be modified by the user
+interface EditableBoardResult extends BoardExtractionResult {
+  // We keep the same structure but allow modifications
+}
+
+interface EditableDominoResult extends DominoExtractionResult {
+  // We keep the same structure but allow modifications
+}
+
 interface Props {
   visible: boolean;
   boardResult: BoardExtractionResult;
   dominoResult: DominoExtractionResult;
-  onAccept: () => void;
+  onAccept: (editedBoard?: BoardExtractionResult, editedDominoes?: DominoExtractionResult) => void;
   onReject: () => void;
   /** Optional source image to show overlay comparison */
   sourceImage?: ImageInfo | null;
@@ -86,22 +109,204 @@ export default function AIVerificationModal({
   const [viewMode, setViewMode] = useState<ViewMode>('visual');
   const [showOverlay, setShowOverlay] = useState(true);
 
-  // Parse extraction data for visual rendering
+  // Editing state - track editable copies of the results
+  const [editedBoard, setEditedBoard] = useState<EditableBoardResult>(() => ({
+    ...boardResult,
+  }));
+  const [editedDominoes, setEditedDominoes] = useState<EditableDominoResult>(() => ({
+    ...dominoResult,
+  }));
+  const [editTarget, setEditTarget] = useState<EditTarget>(null);
+  const [hasEdits, setHasEdits] = useState(false);
+
+  // Reset edited state when props change
+  React.useEffect(() => {
+    setEditedBoard({ ...boardResult });
+    setEditedDominoes({ ...dominoResult });
+    setHasEdits(false);
+    setEditTarget(null);
+  }, [boardResult, dominoResult]);
+
+  // Parse extraction data for visual rendering (use edited versions)
   const parsedData = useMemo(() => {
-    const holes = parseShapeToHoles(boardResult.shape);
-    const { grid: regionGrid, labels: regionLabels } = parseRegionsToGrid(boardResult.regions);
+    const holes = parseShapeToHoles(editedBoard.shape);
+    const { grid: regionGrid, labels: regionLabels } = parseRegionsToGrid(editedBoard.regions);
     return { holes, regionGrid, regionLabels };
-  }, [boardResult.shape, boardResult.regions]);
+  }, [editedBoard.shape, editedBoard.regions]);
 
   // Calculate grid dimensions for SVG
   const gridLayout = useMemo(() => {
     const padding = 16;
     const maxWidth = screenWidth - 40; // Account for modal padding
-    const cellSize = Math.min(40, Math.floor((maxWidth - padding * 2) / boardResult.cols));
-    const gridWidth = boardResult.cols * cellSize + padding * 2;
-    const gridHeight = boardResult.rows * cellSize + padding * 2;
+    const cellSize = Math.min(40, Math.floor((maxWidth - padding * 2) / editedBoard.cols));
+    const gridWidth = editedBoard.cols * cellSize + padding * 2;
+    const gridHeight = editedBoard.rows * cellSize + padding * 2;
     return { cellSize, gridWidth, gridHeight, padding };
-  }, [boardResult.rows, boardResult.cols, screenWidth]);
+  }, [editedBoard.rows, editedBoard.cols, screenWidth]);
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // Editing Callbacks
+  // ════════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Handle cell selection for editing
+   */
+  const handleCellPress = useCallback((row: number, col: number) => {
+    setEditTarget({ type: 'cell', row, col });
+  }, []);
+
+  /**
+   * Toggle a cell between hole and active cell
+   */
+  const toggleCellHole = useCallback((row: number, col: number) => {
+    setEditedBoard(prev => {
+      const shapeLines = prev.shape.split('\\n');
+      const regionLines = prev.regions.split('\\n');
+
+      // Get current character at position
+      const currentShapeChar = shapeLines[row]?.[col];
+      const isCurrentlyHole = currentShapeChar === '#';
+
+      // Update shape string
+      const newShapeLines = shapeLines.map((line, r) => {
+        if (r !== row) return line;
+        const chars = line.split('');
+        chars[col] = isCurrentlyHole ? 'O' : '#';
+        return chars.join('');
+      });
+
+      // Update regions string
+      const newRegionLines = regionLines.map((line, r) => {
+        if (r !== row) return line;
+        const chars = line.split('');
+        if (isCurrentlyHole) {
+          // Converting from hole to cell - assign to first region
+          chars[col] = 'A';
+        } else {
+          // Converting from cell to hole
+          chars[col] = '#';
+        }
+        return chars.join('');
+      });
+
+      return {
+        ...prev,
+        shape: newShapeLines.join('\\n'),
+        regions: newRegionLines.join('\\n'),
+      };
+    });
+    setHasEdits(true);
+    setEditTarget(null);
+  }, []);
+
+  /**
+   * Change the region assignment for a cell
+   */
+  const changeCellRegion = useCallback((row: number, col: number, newRegionLabel: string) => {
+    setEditedBoard(prev => {
+      const regionLines = prev.regions.split('\\n');
+
+      const newRegionLines = regionLines.map((line, r) => {
+        if (r !== row) return line;
+        const chars = line.split('');
+        if (chars[col] !== '#') {
+          chars[col] = newRegionLabel;
+        }
+        return chars.join('');
+      });
+
+      return {
+        ...prev,
+        regions: newRegionLines.join('\\n'),
+      };
+    });
+    setHasEdits(true);
+    setEditTarget(null);
+  }, []);
+
+  /**
+   * Handle domino pip value editing
+   */
+  const handleDominoPipChange = useCallback((index: number, half: 0 | 1, newValue: number) => {
+    if (newValue < 0 || newValue > 6) return;
+
+    setEditedDominoes(prev => {
+      const newDominoes = [...prev.dominoes];
+      const domino = [...newDominoes[index]] as DominoPair;
+      domino[half] = newValue;
+      newDominoes[index] = domino;
+      return { ...prev, dominoes: newDominoes };
+    });
+    setHasEdits(true);
+    setEditTarget(null);
+  }, []);
+
+  /**
+   * Increment/decrement a domino pip value
+   */
+  const cycleDominoPip = useCallback((index: number, half: 0 | 1, direction: 1 | -1) => {
+    setEditedDominoes(prev => {
+      const newDominoes = [...prev.dominoes];
+      const domino = [...newDominoes[index]] as DominoPair;
+      let newVal = domino[half] + direction;
+      if (newVal < 0) newVal = 6;
+      if (newVal > 6) newVal = 0;
+      domino[half] = newVal;
+      newDominoes[index] = domino;
+      return { ...prev, dominoes: newDominoes };
+    });
+    setHasEdits(true);
+  }, []);
+
+  /**
+   * Handle constraint value editing
+   */
+  const handleConstraintChange = useCallback(
+    (regionLabel: string, type: string, value?: number, op?: string) => {
+      setEditedBoard(prev => {
+        const newConstraints = { ...prev.constraints };
+        newConstraints[regionLabel] = { type, value, op };
+        return { ...prev, constraints: newConstraints };
+      });
+      setHasEdits(true);
+      setEditTarget(null);
+    },
+    []
+  );
+
+  /**
+   * Delete a constraint
+   */
+  const deleteConstraint = useCallback((regionLabel: string) => {
+    setEditedBoard(prev => {
+      const newConstraints = { ...prev.constraints };
+      delete newConstraints[regionLabel];
+      return { ...prev, constraints: newConstraints };
+    });
+    setHasEdits(true);
+    setEditTarget(null);
+  }, []);
+
+  /**
+   * Handle accept with edited values
+   */
+  const handleAccept = useCallback(() => {
+    if (hasEdits) {
+      onAccept(editedBoard, editedDominoes);
+    } else {
+      onAccept();
+    }
+  }, [hasEdits, editedBoard, editedDominoes, onAccept]);
+
+  /**
+   * Reset all edits to original values
+   */
+  const resetEdits = useCallback(() => {
+    setEditedBoard({ ...boardResult });
+    setEditedDominoes({ ...dominoResult });
+    setHasEdits(false);
+    setEditTarget(null);
+  }, [boardResult, dominoResult]);
 
   // Format shape and regions for text display
   const formatGrid = (str: string) => {
@@ -123,19 +328,24 @@ export default function AIVerificationModal({
     ));
   };
 
-  // Render visual grid with regions and holes
+  // Render visual grid with regions and holes (editable version)
   const renderVisualGrid = () => {
     const { cellSize, gridWidth, gridHeight, padding } = gridLayout;
     const { holes, regionGrid, regionLabels } = parsedData;
     const elements: React.ReactElement[] = [];
 
+    // Check if a cell is currently selected
+    const isSelectedCell = (row: number, col: number) =>
+      editTarget?.type === 'cell' && editTarget.row === row && editTarget.col === col;
+
     // Draw cells with region colors
-    for (let row = 0; row < boardResult.rows; row++) {
-      for (let col = 0; col < boardResult.cols; col++) {
+    for (let row = 0; row < editedBoard.rows; row++) {
+      for (let col = 0; col < editedBoard.cols; col++) {
         const x = padding + col * cellSize;
         const y = padding + row * cellSize;
         const isHole = holes[row]?.[col] ?? false;
         const regionIndex = regionGrid[row]?.[col];
+        const isSelected = isSelectedCell(row, col);
 
         if (isHole) {
           // Render hole as dark void
@@ -149,6 +359,8 @@ export default function AIVerificationModal({
               fill={colors.surface.obsidian}
               rx={radii.sm}
               opacity={0.9}
+              stroke={isSelected ? colors.accent.brass : undefined}
+              strokeWidth={isSelected ? 2 : 0}
             />
           );
         } else {
@@ -167,6 +379,8 @@ export default function AIVerificationModal({
               fill={regionColor}
               rx={radii.sm}
               opacity={0.85}
+              stroke={isSelected ? colors.accent.brass : undefined}
+              strokeWidth={isSelected ? 3 : 0}
             />
           );
 
@@ -192,14 +406,14 @@ export default function AIVerificationModal({
     }
 
     // Draw grid lines
-    for (let row = 0; row <= boardResult.rows; row++) {
+    for (let row = 0; row <= editedBoard.rows; row++) {
       const y = padding + row * cellSize;
       elements.push(
         <Line
           key={`h-line-${row}`}
           x1={padding}
           y1={y}
-          x2={padding + boardResult.cols * cellSize}
+          x2={padding + editedBoard.cols * cellSize}
           y2={y}
           stroke={colors.surface.ash}
           strokeWidth={1}
@@ -207,7 +421,7 @@ export default function AIVerificationModal({
         />
       );
     }
-    for (let col = 0; col <= boardResult.cols; col++) {
+    for (let col = 0; col <= editedBoard.cols; col++) {
       const x = padding + col * cellSize;
       elements.push(
         <Line
@@ -215,7 +429,7 @@ export default function AIVerificationModal({
           x1={x}
           y1={padding}
           x2={x}
-          y2={padding + boardResult.rows * cellSize}
+          y2={padding + editedBoard.rows * cellSize}
           stroke={colors.surface.ash}
           strokeWidth={1}
           opacity={0.4}
@@ -224,7 +438,7 @@ export default function AIVerificationModal({
     }
 
     // Add constraint indicators (small circles at region centers)
-    const regionCenters = calculateRegionCenters(regionGrid, boardResult.constraints);
+    const regionCenters = calculateRegionCenters(regionGrid, editedBoard.constraints);
     regionCenters.forEach((center, idx) => {
       if (center.constraint) {
         const cx = padding + center.col * cellSize + cellSize / 2;
@@ -271,28 +485,56 @@ export default function AIVerificationModal({
           />
           <G>{elements}</G>
         </Svg>
+        {/* Touch overlay for cell selection */}
+        <View style={[styles.cellTouchOverlay, { width: gridWidth, height: gridHeight }]}>
+          {Array.from({ length: editedBoard.rows }).map((_, row) =>
+            Array.from({ length: editedBoard.cols }).map((_, col) => (
+              <TouchableOpacity
+                key={`touch-${row}-${col}`}
+                style={[
+                  styles.cellTouchTarget,
+                  {
+                    left: padding + col * cellSize,
+                    top: padding + row * cellSize,
+                    width: cellSize,
+                    height: cellSize,
+                  },
+                ]}
+                onPress={() => handleCellPress(row, col)}
+                activeOpacity={0.7}
+              />
+            ))
+          )}
+        </View>
       </View>
     );
   };
 
-  // Render dominoes visually
+  // Render dominoes visually (editable version)
   const renderVisualDominoes = () => {
-    const dominoWidth = 50;
-    const dominoHeight = 24;
-    const gap = 8;
-    const cols = Math.floor((screenWidth - 60) / (dominoWidth + gap));
-
     return (
       <View style={styles.visualDominoContainer}>
-        {dominoResult.dominoes.map((domino, i) => (
+        <Text style={styles.editHint}>Tap halves to cycle pip values (0-6)</Text>
+        {editedDominoes.dominoes.map((domino, i) => (
           <View key={i} style={styles.visualDomino}>
-            <View style={styles.dominoHalf}>
-              {renderPips(domino[0])}
-            </View>
+            <TouchableOpacity
+              style={styles.dominoHalfTouchable}
+              onPress={() => cycleDominoPip(i, 0, 1)}
+              onLongPress={() => cycleDominoPip(i, 0, -1)}
+              delayLongPress={300}
+            >
+              <View style={styles.dominoHalf}>{renderPips(domino[0])}</View>
+            </TouchableOpacity>
             <View style={styles.dominoDivider} />
-            <View style={styles.dominoHalf}>
-              {renderPips(domino[1])}
-            </View>
+            <TouchableOpacity
+              style={styles.dominoHalfTouchable}
+              onPress={() => cycleDominoPip(i, 1, 1)}
+              onLongPress={() => cycleDominoPip(i, 1, -1)}
+              delayLongPress={300}
+            >
+              <View style={styles.dominoHalf}>{renderPips(domino[1])}</View>
+            </TouchableOpacity>
+            <Text style={styles.dominoIndex}>#{i + 1}</Text>
           </View>
         ))}
       </View>
@@ -321,8 +563,26 @@ export default function AIVerificationModal({
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
       <View style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.title}>Verify AI Extraction</Text>
-          <Text style={styles.subtitle}>Review before applying</Text>
+          <View style={styles.headerRow}>
+            <View>
+              <Text style={styles.title}>Verify AI Extraction</Text>
+              <Text style={styles.subtitle}>
+                {hasEdits ? 'Tap cells to edit • Review changes below' : 'Tap cells to correct errors'}
+              </Text>
+            </View>
+            {hasEdits && (
+              <TouchableOpacity style={styles.resetButton} onPress={resetEdits}>
+                <Text style={styles.resetButtonText}>Reset</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Edit indicator badge */}
+          {hasEdits && (
+            <View style={styles.editBadge}>
+              <Text style={styles.editBadgeText}>Modified</Text>
+            </View>
+          )}
 
           {/* View mode toggle */}
           <View style={styles.viewToggle}>
@@ -352,7 +612,7 @@ export default function AIVerificationModal({
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitle}>
-                    Grid ({boardResult.rows}×{boardResult.cols})
+                    Grid ({editedBoard.rows}×{editedBoard.cols})
                   </Text>
                   {sourceImage && (
                     <TouchableOpacity
@@ -365,6 +625,8 @@ export default function AIVerificationModal({
                     </TouchableOpacity>
                   )}
                 </View>
+
+                <Text style={styles.editHint}>Tap a cell to edit region or toggle hole</Text>
 
                 {/* Source image with overlay comparison */}
                 {sourceImage && showOverlay ? (
@@ -388,6 +650,20 @@ export default function AIVerificationModal({
                   renderVisualGrid()
                 )}
 
+                {/* Cell Edit Panel - shows when a cell is selected */}
+                {editTarget?.type === 'cell' && (
+                  <CellEditPanel
+                    row={editTarget.row}
+                    col={editTarget.col}
+                    isHole={parsedData.holes[editTarget.row]?.[editTarget.col] ?? false}
+                    currentRegion={getRegionLabelAtCell(editedBoard.regions, editTarget.row, editTarget.col)}
+                    availableRegions={parsedData.regionLabels}
+                    onToggleHole={() => toggleCellHole(editTarget.row, editTarget.col)}
+                    onChangeRegion={(label) => changeCellRegion(editTarget.row, editTarget.col, label)}
+                    onClose={() => setEditTarget(null)}
+                  />
+                )}
+
                 {/* Region legend */}
                 <View style={styles.legend}>
                   {parsedData.regionLabels.map((label, idx) => (
@@ -404,15 +680,20 @@ export default function AIVerificationModal({
                 </View>
               </View>
 
-              {/* Visual Constraints */}
+              {/* Visual Constraints (Editable) */}
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Constraints</Text>
-                {Object.entries(boardResult.constraints || {}).length === 0 ? (
+                <Text style={styles.editHint}>Tap constraint value to edit</Text>
+                {Object.entries(editedBoard.constraints || {}).length === 0 ? (
                   <Text style={styles.textSmall}>No constraints detected</Text>
                 ) : (
                   <View style={styles.constraintList}>
-                    {Object.entries(boardResult.constraints).map(([label, constraint]) => (
-                      <View key={label} style={styles.constraintItem}>
+                    {Object.entries(editedBoard.constraints).map(([label, constraint]) => (
+                      <TouchableOpacity
+                        key={label}
+                        style={styles.constraintItem}
+                        onPress={() => setEditTarget({ type: 'constraint', regionLabel: label })}
+                      >
                         <View
                           style={[
                             styles.constraintBadge,
@@ -433,16 +714,34 @@ export default function AIVerificationModal({
                             ? 'all equal'
                             : constraint.type}
                         </Text>
-                      </View>
+                      </TouchableOpacity>
                     ))}
                   </View>
+                )}
+
+                {/* Constraint Edit Panel */}
+                {editTarget?.type === 'constraint' && (
+                  <ConstraintEditPanel
+                    regionLabel={editTarget.regionLabel}
+                    currentConstraint={editedBoard.constraints[editTarget.regionLabel]}
+                    regionColor={
+                      REGION_COLORS[
+                        parsedData.regionLabels.indexOf(editTarget.regionLabel) % REGION_COLORS.length
+                      ] || colors.surface.slate
+                    }
+                    onSave={(type, value, op) =>
+                      handleConstraintChange(editTarget.regionLabel, type, value, op)
+                    }
+                    onDelete={() => deleteConstraint(editTarget.regionLabel)}
+                    onClose={() => setEditTarget(null)}
+                  />
                 )}
               </View>
 
               {/* Visual Dominoes */}
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>
-                  Dominoes ({dominoResult.dominoes.length})
+                  Dominoes ({editedDominoes.dominoes.length})
                 </Text>
                 {renderVisualDominoes()}
               </View>
@@ -464,17 +763,18 @@ export default function AIVerificationModal({
             </>
           ) : (
             <>
-              {/* Text View - Original display */}
+              {/* Text View - Shows current (possibly edited) values */}
               {/* Grid Info */}
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Grid Dimensions</Text>
                 <Text style={styles.text}>
-                  {boardResult.rows} rows × {boardResult.cols} columns
+                  {editedBoard.rows} rows × {editedBoard.cols} columns
+                  {hasEdits && ' (edited)'}
                 </Text>
-                {boardResult.gridLocation && (
+                {editedBoard.gridLocation && (
                   <Text style={styles.textSmall}>
-                    Location: ({boardResult.gridLocation.left}, {boardResult.gridLocation.top}) to (
-                    {boardResult.gridLocation.right}, {boardResult.gridLocation.bottom})
+                    Location: ({editedBoard.gridLocation.left}, {editedBoard.gridLocation.top}) to (
+                    {editedBoard.gridLocation.right}, {editedBoard.gridLocation.bottom})
                   </Text>
                 )}
               </View>
@@ -482,22 +782,22 @@ export default function AIVerificationModal({
               {/* Shape */}
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Shape (# = hole)</Text>
-                <View style={styles.gridContainer}>{formatGrid(boardResult.shape)}</View>
+                <View style={styles.gridContainer}>{formatGrid(editedBoard.shape)}</View>
               </View>
 
               {/* Regions */}
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Regions (· = unlabeled, # = hole)</Text>
-                <View style={styles.gridContainer}>{formatGrid(boardResult.regions)}</View>
+                <View style={styles.gridContainer}>{formatGrid(editedBoard.regions)}</View>
               </View>
 
               {/* Constraints */}
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Constraints</Text>
-                {Object.entries(boardResult.constraints || {}).length === 0 ? (
+                {Object.entries(editedBoard.constraints || {}).length === 0 ? (
                   <Text style={styles.textSmall}>No constraints detected</Text>
                 ) : (
-                  Object.entries(boardResult.constraints).map(([label, constraint]) => (
+                  Object.entries(editedBoard.constraints).map(([label, constraint]) => (
                     <Text key={label} style={styles.text}>
                       Region {label}:{' '}
                       {constraint.type === 'sum'
@@ -510,9 +810,9 @@ export default function AIVerificationModal({
 
               {/* Dominoes */}
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Dominoes ({dominoResult.dominoes.length})</Text>
+                <Text style={styles.sectionTitle}>Dominoes ({editedDominoes.dominoes.length})</Text>
                 <View style={styles.dominoContainer}>
-                  {dominoResult.dominoes.map((domino, i) => (
+                  {editedDominoes.dominoes.map((domino, i) => (
                     <Text key={i} style={styles.domino}>
                       [{domino[0]},{domino[1]}]
                     </Text>
@@ -520,10 +820,10 @@ export default function AIVerificationModal({
                 </View>
               </View>
 
-              {/* Confidence */}
+              {/* Confidence (from original extraction) */}
               {boardResult.confidence && (
                 <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Confidence Scores</Text>
+                  <Text style={styles.sectionTitle}>Original Confidence Scores</Text>
                   <Text style={styles.text}>
                     Grid: {Math.round(boardResult.confidence.grid * 100)}%
                   </Text>
@@ -546,10 +846,15 @@ export default function AIVerificationModal({
 
         <View style={styles.buttons}>
           <TouchableOpacity style={[styles.button, styles.rejectButton]} onPress={onReject}>
-            <Text style={styles.buttonText}>Reject - I'll do it manually</Text>
+            <Text style={styles.buttonText}>Reject</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.button, styles.acceptButton]} onPress={onAccept}>
-            <Text style={styles.buttonText}>Accept - Apply this</Text>
+          <TouchableOpacity
+            style={[styles.button, hasEdits ? styles.acceptButtonEdited : styles.acceptButton]}
+            onPress={handleAccept}
+          >
+            <Text style={styles.buttonText}>
+              {hasEdits ? 'Accept with edits' : 'Accept'}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -651,6 +956,16 @@ function getPipPositions(value: number): Array<{ x: number; y: number }> {
 }
 
 /**
+ * Get the region label at a specific cell position
+ */
+function getRegionLabelAtCell(regionsStr: string, row: number, col: number): string | null {
+  const lines = regionsStr.split('\\n').filter(line => line.length > 0);
+  const char = lines[row]?.[col];
+  if (!char || char === '#' || char === '.') return null;
+  return char;
+}
+
+/**
  * Confidence bar component for visual display
  */
 function ConfidenceBar({ label, value }: { label: string; value: number }) {
@@ -706,6 +1021,423 @@ const confidenceBarStyles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     textAlign: 'right',
+  },
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// Cell Edit Panel Component
+// ════════════════════════════════════════════════════════════════════════════
+
+interface CellEditPanelProps {
+  row: number;
+  col: number;
+  isHole: boolean;
+  currentRegion: string | null;
+  availableRegions: string[];
+  onToggleHole: () => void;
+  onChangeRegion: (label: string) => void;
+  onClose: () => void;
+}
+
+function CellEditPanel({
+  row,
+  col,
+  isHole,
+  currentRegion,
+  availableRegions,
+  onToggleHole,
+  onChangeRegion,
+  onClose,
+}: CellEditPanelProps) {
+  return (
+    <View style={cellEditStyles.container}>
+      <View style={cellEditStyles.header}>
+        <Text style={cellEditStyles.title}>
+          Edit Cell ({row + 1}, {col + 1})
+        </Text>
+        <TouchableOpacity onPress={onClose} style={cellEditStyles.closeButton}>
+          <Text style={cellEditStyles.closeText}>×</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Toggle hole/cell */}
+      <TouchableOpacity style={cellEditStyles.actionButton} onPress={onToggleHole}>
+        <Text style={cellEditStyles.actionText}>
+          {isHole ? 'Convert to Cell' : 'Mark as Hole'}
+        </Text>
+      </TouchableOpacity>
+
+      {/* Region selection (only if not a hole) */}
+      {!isHole && (
+        <View style={cellEditStyles.regionSection}>
+          <Text style={cellEditStyles.sectionLabel}>Change Region:</Text>
+          <View style={cellEditStyles.regionButtons}>
+            {availableRegions.map((label, idx) => (
+              <TouchableOpacity
+                key={label}
+                style={[
+                  cellEditStyles.regionButton,
+                  {
+                    backgroundColor: REGION_COLORS[idx % REGION_COLORS.length],
+                    borderWidth: currentRegion === label ? 3 : 0,
+                    borderColor: colors.accent.brass,
+                  },
+                ]}
+                onPress={() => onChangeRegion(label)}
+              >
+                <Text style={cellEditStyles.regionButtonText}>{label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      )}
+    </View>
+  );
+}
+
+const cellEditStyles = StyleSheet.create({
+  container: {
+    backgroundColor: colors.surface.graphite,
+    borderRadius: radii.lg,
+    padding: spacing[4],
+    marginTop: spacing[3],
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing[3],
+  },
+  title: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text.primary,
+  },
+  closeButton: {
+    width: 28,
+    height: 28,
+    borderRadius: radii.full,
+    backgroundColor: colors.surface.ash,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeText: {
+    fontSize: 20,
+    color: colors.text.primary,
+    marginTop: -2,
+  },
+  actionButton: {
+    backgroundColor: colors.surface.slate,
+    borderRadius: radii.md,
+    padding: spacing[3],
+    alignItems: 'center',
+    marginBottom: spacing[3],
+  },
+  actionText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.text.primary,
+  },
+  regionSection: {
+    marginTop: spacing[2],
+  },
+  sectionLabel: {
+    fontSize: 12,
+    color: colors.text.secondary,
+    marginBottom: spacing[2],
+  },
+  regionButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing[2],
+  },
+  regionButton: {
+    width: 36,
+    height: 36,
+    borderRadius: radii.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  regionButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text.primary,
+  },
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// Constraint Edit Panel Component
+// ════════════════════════════════════════════════════════════════════════════
+
+interface ConstraintEditPanelProps {
+  regionLabel: string;
+  currentConstraint?: { type: string; op?: string; value?: number };
+  regionColor: string;
+  onSave: (type: string, value?: number, op?: string) => void;
+  onDelete: () => void;
+  onClose: () => void;
+}
+
+function ConstraintEditPanel({
+  regionLabel,
+  currentConstraint,
+  regionColor,
+  onSave,
+  onDelete,
+  onClose,
+}: ConstraintEditPanelProps) {
+  const [constraintType, setConstraintType] = useState(currentConstraint?.type || 'sum');
+  const [constraintValue, setConstraintValue] = useState(
+    currentConstraint?.value?.toString() || ''
+  );
+  const [constraintOp, setConstraintOp] = useState(currentConstraint?.op || '==');
+
+  const handleSave = () => {
+    const value = constraintValue ? parseInt(constraintValue, 10) : undefined;
+    onSave(constraintType, value, constraintOp);
+  };
+
+  return (
+    <View style={constraintEditStyles.container}>
+      <View style={constraintEditStyles.header}>
+        <View style={constraintEditStyles.headerLeft}>
+          <View style={[constraintEditStyles.regionBadge, { backgroundColor: regionColor }]}>
+            <Text style={constraintEditStyles.regionLabel}>{regionLabel}</Text>
+          </View>
+          <Text style={constraintEditStyles.title}>Edit Constraint</Text>
+        </View>
+        <TouchableOpacity onPress={onClose} style={constraintEditStyles.closeButton}>
+          <Text style={constraintEditStyles.closeText}>×</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Constraint type selection */}
+      <View style={constraintEditStyles.typeSection}>
+        <Text style={constraintEditStyles.sectionLabel}>Type:</Text>
+        <View style={constraintEditStyles.typeButtons}>
+          {['sum', 'all_equal'].map(type => (
+            <TouchableOpacity
+              key={type}
+              style={[
+                constraintEditStyles.typeButton,
+                constraintType === type && constraintEditStyles.typeButtonActive,
+              ]}
+              onPress={() => setConstraintType(type)}
+            >
+              <Text
+                style={[
+                  constraintEditStyles.typeButtonText,
+                  constraintType === type && constraintEditStyles.typeButtonTextActive,
+                ]}
+              >
+                {type === 'sum' ? 'Sum' : 'All Equal'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
+      {/* Value input for sum constraints */}
+      {constraintType === 'sum' && (
+        <View style={constraintEditStyles.valueSection}>
+          <View style={constraintEditStyles.opSection}>
+            <Text style={constraintEditStyles.sectionLabel}>Operator:</Text>
+            <View style={constraintEditStyles.opButtons}>
+              {['==', '<', '>', '!='].map(op => (
+                <TouchableOpacity
+                  key={op}
+                  style={[
+                    constraintEditStyles.opButton,
+                    constraintOp === op && constraintEditStyles.opButtonActive,
+                  ]}
+                  onPress={() => setConstraintOp(op)}
+                >
+                  <Text
+                    style={[
+                      constraintEditStyles.opButtonText,
+                      constraintOp === op && constraintEditStyles.opButtonTextActive,
+                    ]}
+                  >
+                    {op}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <View style={constraintEditStyles.inputSection}>
+            <Text style={constraintEditStyles.sectionLabel}>Value:</Text>
+            <TextInput
+              style={constraintEditStyles.valueInput}
+              value={constraintValue}
+              onChangeText={setConstraintValue}
+              keyboardType="number-pad"
+              placeholder="0"
+              placeholderTextColor={colors.text.tertiary}
+            />
+          </View>
+        </View>
+      )}
+
+      {/* Action buttons */}
+      <View style={constraintEditStyles.actions}>
+        <TouchableOpacity style={constraintEditStyles.deleteButton} onPress={onDelete}>
+          <Text style={constraintEditStyles.deleteButtonText}>Delete</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={constraintEditStyles.saveButton} onPress={handleSave}>
+          <Text style={constraintEditStyles.saveButtonText}>Save</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+const constraintEditStyles = StyleSheet.create({
+  container: {
+    backgroundColor: colors.surface.graphite,
+    borderRadius: radii.lg,
+    padding: spacing[4],
+    marginTop: spacing[3],
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing[4],
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
+  regionBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: radii.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  regionLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text.primary,
+  },
+  title: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text.primary,
+  },
+  closeButton: {
+    width: 28,
+    height: 28,
+    borderRadius: radii.full,
+    backgroundColor: colors.surface.ash,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeText: {
+    fontSize: 20,
+    color: colors.text.primary,
+    marginTop: -2,
+  },
+  typeSection: {
+    marginBottom: spacing[4],
+  },
+  sectionLabel: {
+    fontSize: 12,
+    color: colors.text.secondary,
+    marginBottom: spacing[2],
+  },
+  typeButtons: {
+    flexDirection: 'row',
+    gap: spacing[2],
+  },
+  typeButton: {
+    flex: 1,
+    paddingVertical: spacing[2],
+    paddingHorizontal: spacing[3],
+    backgroundColor: colors.surface.slate,
+    borderRadius: radii.md,
+    alignItems: 'center',
+  },
+  typeButtonActive: {
+    backgroundColor: colors.accent.brass,
+  },
+  typeButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.text.secondary,
+  },
+  typeButtonTextActive: {
+    color: colors.text.inverse,
+  },
+  valueSection: {
+    marginBottom: spacing[4],
+  },
+  opSection: {
+    marginBottom: spacing[3],
+  },
+  opButtons: {
+    flexDirection: 'row',
+    gap: spacing[2],
+  },
+  opButton: {
+    paddingVertical: spacing[2],
+    paddingHorizontal: spacing[3],
+    backgroundColor: colors.surface.slate,
+    borderRadius: radii.md,
+    minWidth: 44,
+    alignItems: 'center',
+  },
+  opButtonActive: {
+    backgroundColor: colors.accent.brass,
+  },
+  opButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.text.secondary,
+  },
+  opButtonTextActive: {
+    color: colors.text.inverse,
+  },
+  inputSection: {},
+  valueInput: {
+    backgroundColor: colors.surface.slate,
+    borderRadius: radii.md,
+    padding: spacing[3],
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text.primary,
+    textAlign: 'center',
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: spacing[3],
+    marginTop: spacing[2],
+  },
+  deleteButton: {
+    flex: 1,
+    paddingVertical: spacing[3],
+    backgroundColor: colors.semantic.coral,
+    borderRadius: radii.md,
+    alignItems: 'center',
+  },
+  deleteButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text.primary,
+  },
+  saveButton: {
+    flex: 2,
+    paddingVertical: spacing[3],
+    backgroundColor: colors.semantic.jade,
+    borderRadius: radii.md,
+    alignItems: 'center',
+  },
+  saveButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text.inverse,
   },
 });
 
@@ -968,9 +1700,67 @@ const styles = StyleSheet.create({
   acceptButton: {
     backgroundColor: colors.semantic.jade,
   },
+  acceptButtonEdited: {
+    backgroundColor: colors.accent.brass,
+  },
   buttonText: {
     color: colors.text.primary,
     fontSize: 16,
     fontWeight: '600',
+  },
+  // Header editing mode styles
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  resetButton: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    backgroundColor: colors.surface.slate,
+    borderRadius: radii.md,
+  },
+  resetButtonText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: colors.text.secondary,
+  },
+  editBadge: {
+    alignSelf: 'flex-start',
+    marginTop: spacing[2],
+    paddingHorizontal: spacing[2],
+    paddingVertical: spacing[1],
+    backgroundColor: colors.accent.brass,
+    borderRadius: radii.sm,
+  },
+  editBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.text.inverse,
+  },
+  editHint: {
+    fontSize: 12,
+    color: colors.text.tertiary,
+    fontStyle: 'italic',
+    marginBottom: spacing[2],
+  },
+  // Cell touch overlay styles
+  cellTouchOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+  },
+  cellTouchTarget: {
+    position: 'absolute',
+    backgroundColor: 'transparent',
+  },
+  // Domino editing styles
+  dominoHalfTouchable: {
+    borderRadius: radii.sm,
+  },
+  dominoIndex: {
+    fontSize: 8,
+    color: colors.text.tertiary,
+    marginLeft: spacing[1],
   },
 });
