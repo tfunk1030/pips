@@ -19,7 +19,7 @@ import Animated from 'react-native-reanimated';
 import Svg, { Circle, Line, Rect } from 'react-native-svg';
 import { BuilderAction, GridBounds, OverlayBuilderState } from '../../../model/overlayTypes';
 import { constrainBounds, hitTestCell } from '../../../utils/gridCalculations';
-import { triggerEdgeDragStart, triggerEdgeDragEnd } from '../../../utils/haptics';
+import { triggerEdgeDragStart, triggerEdgeDragEnd, triggerCellTap } from '../../../utils/haptics';
 import ConfidenceIndicator from '../../components/ConfidenceIndicator';
 
 interface Props {
@@ -302,6 +302,7 @@ function DraggableGridOverlay({
     .onEnd(e => {
       const cell = hitTestCell(e.x, e.y, bounds, rows, cols, containerSize);
       if (cell) {
+        triggerCellTap();
         onCellTap(cell.row, cell.col);
       }
     });
