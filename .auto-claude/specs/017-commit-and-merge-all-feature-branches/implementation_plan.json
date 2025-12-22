@@ -1,0 +1,573 @@
+{
+  "feature": "Commit and Merge All Feature Branches",
+  "workflow_type": "feature",
+  "workflow_rationale": "This is a repository consolidation task following standard git workflows. Requires careful sequencing of commits and merges with conflict resolution, following feature workflow patterns.",
+  "phases": [
+    {
+      "id": "phase-1-setup",
+      "name": "Setup and Backup",
+      "type": "setup",
+      "description": "Create backup tag and commit staged changes on current branch (copilot-fixes)",
+      "depends_on": [],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-1-1",
+          "description": "Create backup tag of current repository state",
+          "service": "repository",
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "git tag -l \"backup-pre-merge-*\" | head -1",
+            "expected": "backup-pre-merge-"
+          },
+          "status": "completed",
+          "completed_at": "2025-12-22T09:33:22.000Z",
+          "notes": "Created backup tag backup-pre-merge-20251222-093322"
+        },
+        {
+          "id": "subtask-1-2",
+          "description": "Commit 44 staged files on copilot-fixes branch",
+          "service": "repository",
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "git diff --cached --stat | wc -l",
+            "expected": "0"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-1-3",
+          "description": "Stage and commit unstaged .auto-claude changes on copilot-fixes",
+          "service": "repository",
+          "files_to_modify": [
+            ".auto-claude/"
+          ],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "git status --porcelain .auto-claude/ | wc -l",
+            "expected": "0"
+          },
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "phase-2-worktree-commits",
+      "name": "Commit Worktree Changes",
+      "type": "implementation",
+      "description": "Commit uncommitted changes in all worktrees before merging",
+      "depends_on": [
+        "phase-1-setup"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-2-1",
+          "description": "Commit changes in worktree 001-enhance-ai-visual-pips-board-extraction-accuracy",
+          "service": "repository",
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "worktree_path": ".worktrees/001-enhance-ai-visual-pips-board-extraction-accuracy",
+          "verification": {
+            "type": "command",
+            "command": "cd .worktrees/001-enhance-ai-visual-pips-board-extraction-accuracy && git status --porcelain | wc -l",
+            "expected": "0"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-2-2",
+          "description": "Commit changes in worktree 002-add-domino-tray-preprocessing",
+          "service": "repository",
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "worktree_path": ".worktrees/002-add-domino-tray-preprocessing",
+          "verification": {
+            "type": "command",
+            "command": "cd .worktrees/002-add-domino-tray-preprocessing && git status --porcelain | wc -l",
+            "expected": "0"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-2-3",
+          "description": "Commit changes in worktree 003-add-extraction-comparison-diff-view",
+          "service": "repository",
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "worktree_path": ".worktrees/003-add-extraction-comparison-diff-view",
+          "verification": {
+            "type": "command",
+            "command": "cd .worktrees/003-add-extraction-comparison-diff-view && git status --porcelain | wc -l",
+            "expected": "0"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-2-4",
+          "description": "Commit changes in worktrees 004-016 (remaining auto-claude worktrees)",
+          "service": "repository",
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "notes": "Batch commit for worktrees 004-016: stage all changes and commit with descriptive message",
+          "verification": {
+            "type": "command",
+            "command": "ls .worktrees/ | wc -l",
+            "expected": "Clean worktrees verified"
+          },
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "phase-3-primary-merge",
+      "name": "Merge Primary Branch",
+      "type": "implementation",
+      "description": "Merge copilot-fixes (41 commits ahead) into main first as it contains the primary work",
+      "depends_on": [
+        "phase-2-worktree-commits"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-3-1",
+          "description": "Switch to main branch",
+          "service": "repository",
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "git rev-parse --abbrev-ref HEAD",
+            "expected": "main"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-3-2",
+          "description": "Merge copilot-fixes into main",
+          "service": "repository",
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "git log --oneline main -1",
+            "expected": "Merge commit or copilot-fixes content"
+          },
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "phase-4-autoclaude-merges",
+      "name": "Merge Auto-Claude Branches",
+      "type": "implementation",
+      "description": "Sequentially merge all 17 auto-claude feature branches into main",
+      "depends_on": [
+        "phase-3-primary-merge"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-4-1",
+          "description": "Merge auto-claude/001-enhance-ai-visual-pips-board-extraction-accuracy into main",
+          "service": "repository",
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "branch": "auto-claude/001-enhance-ai-visual-pips-board-extraction-accuracy",
+          "commits_ahead": 57,
+          "verification": {
+            "type": "command",
+            "command": "git log --oneline main..auto-claude/001-enhance-ai-visual-pips-board-extraction-accuracy | wc -l",
+            "expected": "0"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-4-2",
+          "description": "Merge auto-claude/002-add-domino-tray-preprocessing into main",
+          "service": "repository",
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "branch": "auto-claude/002-add-domino-tray-preprocessing",
+          "commits_ahead": 11,
+          "verification": {
+            "type": "command",
+            "command": "git log --oneline main..auto-claude/002-add-domino-tray-preprocessing | wc -l",
+            "expected": "0"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-4-3",
+          "description": "Merge auto-claude/003-add-extraction-comparison-diff-view into main",
+          "service": "repository",
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "branch": "auto-claude/003-add-extraction-comparison-diff-view",
+          "commits_ahead": 17,
+          "verification": {
+            "type": "command",
+            "command": "git log --oneline main..auto-claude/003-add-extraction-comparison-diff-view | wc -l",
+            "expected": "0"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-4-4",
+          "description": "Merge auto-claude/004-add-cross-stage-confidence-warnings-to-ui into main",
+          "service": "repository",
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "branch": "auto-claude/004-add-cross-stage-confidence-warnings-to-ui",
+          "commits_ahead": 12,
+          "verification": {
+            "type": "command",
+            "command": "git log --oneline main..auto-claude/004-add-cross-stage-confidence-warnings-to-ui | wc -l",
+            "expected": "0"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-4-5",
+          "description": "Merge auto-claude/005-add-image-stats-diagnostic-endpoint into main",
+          "service": "repository",
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "branch": "auto-claude/005-add-image-stats-diagnostic-endpoint",
+          "commits_ahead": 39,
+          "verification": {
+            "type": "command",
+            "command": "git log --oneline main..auto-claude/005-add-image-stats-diagnostic-endpoint | wc -l",
+            "expected": "0"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-4-6",
+          "description": "Merge auto-claude branches 006-010 into main",
+          "service": "repository",
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "branches": [
+            "auto-claude/006-inconsistent-button-styling-in-step1gridalignment-",
+            "auto-claude/007-step1gridalignment-should-use-themed-ui-components",
+            "auto-claude/008-add-haptic-feedback-for-puzzle-grid-interactions",
+            "auto-claude/009-ai-verification-modal-lacks-keyboard-accessibility",
+            "auto-claude/010-button-loading-state-lacks-animated-spinner",
+            "auto-claude/010-enhanced-ocr-constraint-detection"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "git log --oneline -5 main",
+            "expected": "Recent merge commits visible"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-4-7",
+          "description": "Merge auto-claude branches 011-016 into main",
+          "service": "repository",
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "branches": [
+            "auto-claude/011-complete-domino-pip-detection",
+            "auto-claude/012-improved-region-detection-for-complex-layouts",
+            "auto-claude/013-complete-user-correction-ui-workflow",
+            "auto-claude/014-accurate-confidence-scoring",
+            "auto-claude/015-graduated-hint-system",
+            "auto-claude/016-diamond-cell-inference-completion"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "git log --oneline -5 main",
+            "expected": "Recent merge commits visible"
+          },
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "phase-5-utility-merges",
+      "name": "Merge Utility Branches",
+      "type": "implementation",
+      "description": "Merge remaining utility and experimental branches into main",
+      "depends_on": [
+        "phase-4-autoclaude-merges"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-5-1",
+          "description": "Merge beautiful-williams branch (22 commits ahead)",
+          "service": "repository",
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "branch": "beautiful-williams",
+          "commits_ahead": 22,
+          "verification": {
+            "type": "command",
+            "command": "git log --oneline main..beautiful-williams | wc -l",
+            "expected": "0"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-5-2",
+          "description": "Merge claude and codex utility branches",
+          "service": "repository",
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "branches": [
+            "claude",
+            "codex"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "git log --oneline -3 main",
+            "expected": "Merge commits visible"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-5-3",
+          "description": "Review and merge remaining experimental branches (dreamy-perlman, pensive-yalow, vibrant-sinoussi, gpt5, gpt52)",
+          "service": "repository",
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "branches": [
+            "dreamy-perlman",
+            "pensive-yalow",
+            "vibrant-sinoussi",
+            "gpt5",
+            "gpt52"
+          ],
+          "notes": "Skip branches with 0 commits ahead of main or that are already merged",
+          "verification": {
+            "type": "command",
+            "command": "git log --oneline -5 main",
+            "expected": "All branches merged"
+          },
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "phase-6-cleanup",
+      "name": "Cleanup and Verification",
+      "type": "cleanup",
+      "description": "Remove worktrees, verify clean state, and run post-merge tests",
+      "depends_on": [
+        "phase-5-utility-merges"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-6-1",
+          "description": "Verify clean working tree on main branch",
+          "service": "repository",
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "git status --porcelain | wc -l",
+            "expected": "0"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-6-2",
+          "description": "Verify cv-service Python imports work",
+          "service": "cv-service",
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "cd cv-service && python -c \"import main; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-6-3",
+          "description": "Verify pips-solver TypeScript compiles",
+          "service": "pips-solver",
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "cd pips-solver && npm run build 2>&1 | tail -5",
+            "expected": "Build succeeds or no errors"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-6-4",
+          "description": "Create final summary of merged branches",
+          "service": "repository",
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "git log --oneline main -20",
+            "expected": "All merge commits visible"
+          },
+          "status": "pending"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_phases": 6,
+    "total_subtasks": 20,
+    "services_involved": [
+      "repository",
+      "cv-service",
+      "pips-solver"
+    ],
+    "parallelism": {
+      "max_parallel_phases": 1,
+      "parallel_groups": [],
+      "recommended_workers": 1,
+      "speedup_estimate": "Sequential execution required - git operations must be ordered"
+    },
+    "startup_command": "source auto-claude/.venv/bin/activate && python auto-claude/run.py --spec 017 --parallel 1"
+  },
+  "verification_strategy": {
+    "risk_level": "high",
+    "skip_validation": false,
+    "test_creation_phase": "post_implementation",
+    "test_types_required": [
+      "integration"
+    ],
+    "security_scanning_required": false,
+    "staging_deployment_required": false,
+    "acceptance_criteria": [
+      "All branches merged into main",
+      "No merge conflicts remaining",
+      "Clean working tree (git status)",
+      "CV service imports without errors",
+      "Pips-solver compiles without errors",
+      "Commit history preserved and readable",
+      "Backup tag exists before operations"
+    ],
+    "verification_steps": [
+      {
+        "name": "Pre-Merge Backup",
+        "command": "git tag -l 'backup-pre-merge-*' | head -1",
+        "expected_outcome": "Backup tag exists",
+        "type": "pre-check",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Clean Working Tree",
+        "command": "git status --porcelain | wc -l",
+        "expected_outcome": "0",
+        "type": "verification",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "CV Service Health",
+        "command": "cd cv-service && python -c 'import main'",
+        "expected_outcome": "No import errors",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Pips Solver Build",
+        "command": "cd pips-solver && npm run build",
+        "expected_outcome": "Build succeeds",
+        "type": "test",
+        "required": false,
+        "blocking": false
+      }
+    ],
+    "reasoning": "High risk due to 27 branches with potential merge conflicts. Sequential execution required for git safety."
+  },
+  "qa_acceptance": {
+    "unit_tests": {
+      "required": false,
+      "commands": [],
+      "minimum_coverage": null
+    },
+    "integration_tests": {
+      "required": true,
+      "commands": [
+        "cd cv-service && python -c 'import main'"
+      ],
+      "services_to_test": [
+        "cv-service"
+      ]
+    },
+    "e2e_tests": {
+      "required": false,
+      "commands": [],
+      "flows": []
+    },
+    "browser_verification": {
+      "required": false,
+      "pages": []
+    },
+    "database_verification": {
+      "required": false,
+      "checks": []
+    },
+    "git_verification": {
+      "required": true,
+      "checks": [
+        "git status shows clean working tree",
+        "All feature branches merged into main",
+        "Backup tag exists",
+        "Commit history preserved"
+      ]
+    }
+  },
+  "qa_signoff": null,
+  "risk_assessment": {
+    "high_risk": [
+      "Merge conflicts between overlapping features",
+      "Worktree state corruption during branch operations"
+    ],
+    "medium_risk": [
+      "Lost commits if not all changes committed before operations",
+      "Build breakage from incompatible merged code"
+    ],
+    "low_risk": [
+      "Performance impact from many sequential merges",
+      "Disk space increase from preserved history"
+    ]
+  },
+  "status": "human_review",
+  "planStatus": "review",
+  "updated_at": "2025-12-22T14:32:16.964Z"
+}
