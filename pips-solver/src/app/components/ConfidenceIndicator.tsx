@@ -5,6 +5,7 @@
 
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { colors } from '../../theme/tokens';
 
 interface Props {
   label: string;
@@ -18,9 +19,9 @@ export default function ConfidenceIndicator({ label, confidence, compact = false
   }
 
   const getConfidenceColor = (score: number): string => {
-    if (score >= 0.9) return '#34C759'; // Green - high confidence
-    if (score >= 0.8) return '#FF9500'; // Orange - medium confidence
-    return '#FF3B30'; // Red - low confidence
+    if (score >= 0.9) return colors.semantic.jade; // High confidence
+    if (score >= 0.8) return colors.semantic.amber; // Medium confidence
+    return colors.semantic.coral; // Low confidence
   };
 
   const getConfidenceLabel = (score: number): string => {
@@ -68,7 +69,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   label: {
-    color: '#fff',
+    color: colors.text.primary,
     fontSize: 14,
     fontWeight: '500',
   },
@@ -79,7 +80,7 @@ const styles = StyleSheet.create({
   },
   barContainer: {
     height: 8,
-    backgroundColor: '#333',
+    backgroundColor: colors.surface.graphite,
     borderRadius: 4,
     overflow: 'hidden',
     marginBottom: 4,
@@ -89,7 +90,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   percentage: {
-    color: '#888',
+    color: colors.text.tertiary,
     fontSize: 11,
     textAlign: 'right',
   },
@@ -105,11 +106,11 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   compactLabel: {
-    color: '#ccc',
+    color: colors.text.secondary,
     fontSize: 12,
   },
   compactValue: {
-    color: '#fff',
+    color: colors.text.primary,
     fontSize: 12,
     fontWeight: '600',
   },
