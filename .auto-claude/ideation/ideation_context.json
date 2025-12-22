@@ -1,0 +1,48 @@
+{
+  "existing_features": [],
+  "tech_stack": [
+    "React",
+    "FastAPI",
+    "TypeScript",
+    "Python"
+  ],
+  "target_audience": "NYT Pips puzzle enthusiasts who want AI-assisted solving",
+  "planned_features": [
+    "Add Domino Tray Preprocessing",
+    "Complete Domino Pip Detection",
+    "Puzzle History & Favorites",
+    "Specification: Enhance AI Visual Pips Board Extraction Accuracy",
+    "ML-Based Puzzle Detection",
+    "Share Solutions",
+    "Enhanced OCR Constraint Detection",
+    "Performance Optimization",
+    "Automated Test Suite",
+    "Offline Mode",
+    "Improved Region Detection for Complex Layouts",
+    "Premium Features Tier",
+    "Puzzle Analytics Dashboard",
+    "Multi-Puzzle Type Support",
+    "AI Verification Modal lacks keyboard accessibility for constraint editing",
+    "Specification: Commit and Merge All Auto-Claude Branches into Copilot-Fixes",
+    "Complete User Correction UI Workflow",
+    "Specification: Diamond Cell Inference Completion",
+    "Accurate Confidence Scoring",
+    "Enhanced Confidence Feedback UI",
+    "Diamond Cell Inference Completion",
+    "Solution Verification Mode",
+    "Graduated Hint System",
+    "Strategy Tutorial Mode"
+  ],
+  "graph_hints": {},
+  "config": {
+    "enabled_types": [
+      "code_improvements",
+      "ui_ux_improvements",
+      "documentation_gaps"
+    ],
+    "include_roadmap_context": true,
+    "include_kanban_context": true,
+    "max_ideas_per_type": 5
+  },
+  "created_at": "2025-12-22T10:36:37.762832"
+}

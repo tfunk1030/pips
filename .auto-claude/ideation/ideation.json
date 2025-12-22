@@ -1,0 +1,364 @@
+{
+  "id": "ideation-20251222-104217",
+  "project_id": "C:\\Users\\tfunk\\pips",
+  "config": {
+    "enabled_types": [
+      "code_improvements",
+      "ui_ux_improvements",
+      "documentation_gaps"
+    ],
+    "include_roadmap_context": true,
+    "include_kanban_context": true,
+    "max_ideas_per_type": 5
+  },
+  "ideas": [
+    {
+      "id": "ci-001",
+      "type": "code_improvements",
+      "title": "Add Image Quality Pre-check Endpoint",
+      "description": "Expose a standalone /analyze-quality endpoint that returns image quality metrics (brightness, contrast, saturation, dynamic range) before attempting puzzle extraction. This allows the app to warn users about poor image quality upfront.",
+      "rationale": "The _calculate_image_stats function already exists in cv-service/main.py and computes comprehensive quality metrics. Currently this is only used internally during preprocessing. Exposing it as a standalone endpoint follows the existing endpoint pattern and enables proactive quality feedback.",
+      "builds_upon": [
+        "cv-service preprocessing pipeline",
+        "_calculate_image_stats function"
+      ],
+      "estimated_effort": "trivial",
+      "affected_files": [
+        "cv-service/main.py"
+      ],
+      "existing_patterns": [
+        "CropPuzzleRequest/Response pydantic models",
+        "/health endpoint pattern",
+        "decode_image utility"
+      ],
+      "implementation_approach": "Create ImageQualityRequest and ImageQualityResponse pydantic models following existing patterns. Add @app.post('/analyze-quality') endpoint that calls decode_image and _calculate_image_stats, returning quality metrics with suggested thresholds for extraction success likelihood.",
+      "status": "draft",
+      "created_at": "2025-12-22T10:40:00.000Z"
+    },
+    {
+      "id": "ci-002",
+      "type": "code_improvements",
+      "title": "Add Extraction State Persistence",
+      "description": "Persist partial extraction results to AsyncStorage during the multi-stage pipeline, enabling recovery if the app is backgrounded or crashes mid-extraction. Users can resume from the last successful stage.",
+      "rationale": "HintModal.tsx already demonstrates the AsyncStorage persistence pattern for hint levels. The extraction pipeline has clear stage boundaries with validated results. Applying the same persistence pattern to extraction state follows existing code patterns.",
+      "builds_upon": [
+        "HintModal AsyncStorage persistence",
+        "Multi-stage extraction pipeline"
+      ],
+      "estimated_effort": "small",
+      "affected_files": [
+        "pips-solver/src/services/extraction/pipeline.ts",
+        "pips-solver/src/services/extraction/index.ts"
+      ],
+      "existing_patterns": [
+        "HINT_LEVEL_STORAGE_KEY pattern in HintModal",
+        "persistHintLevel callback pattern",
+        "Stage result interfaces"
+      ],
+      "implementation_approach": "Add EXTRACTION_STATE_STORAGE_KEY constant. After each stage completion, serialize the accumulated results to AsyncStorage. On pipeline start, check for existing state and offer to resume. Clear state on successful completion or explicit reset.",
+      "status": "draft",
+      "created_at": "2025-12-22T10:40:00.000Z"
+    },
+    {
+      "id": "ci-003",
+      "type": "code_improvements",
+      "title": "Add Constraint Feasibility Pre-validation Endpoint",
+      "description": "Expose the explain_constraint_conflicts function from hint_engine.py as an API endpoint, allowing the app to validate puzzle constraints before attempting to solve. This catches impossible puzzles early.",
+      "rationale": "The explain_constraint_conflicts function already performs sophisticated feasibility analysis (checking if sum constraints are achievable given cell counts and pip ranges). Currently only accessible through the provide_hints tool. Exposing via API follows the existing cv-service endpoint pattern.",
+      "builds_upon": [
+        "hint_engine.py constraint analysis",
+        "provide_hints tool"
+      ],
+      "estimated_effort": "small",
+      "affected_files": [
+        "pips-agent/api_server.py",
+        "pips-agent/utils/hint_engine.py"
+      ],
+      "existing_patterns": [
+        "FastAPI endpoint pattern from cv-service",
+        "explain_constraint_conflicts function",
+        "YAML parsing from provide_hints"
+      ],
+      "implementation_approach": "Add /validate-constraints POST endpoint to pips-agent/api_server.py that accepts puzzle specification and returns list of feasibility issues. Reuse existing parsing and explain_constraint_conflicts logic. Return empty issues array if puzzle is feasible.",
+      "status": "draft",
+      "created_at": "2025-12-22T10:40:00.000Z"
+    },
+    {
+      "id": "ci-004",
+      "type": "code_improvements",
+      "title": "Add Debug Response Export Function",
+      "description": "Add a utility function to export extraction debug data (raw model responses, consensus details, timing) to a shareable format. This enables users to report extraction issues with full diagnostic data.",
+      "rationale": "The extraction pipeline already collects comprehensive debug information when saveDebugResponses is enabled. This data structure exists but there's no way to export/share it. Adding export follows the existing pattern of debug data collection.",
+      "builds_upon": [
+        "Pipeline debug info structure",
+        "ExtractionResult.debug interface"
+      ],
+      "estimated_effort": "trivial",
+      "affected_files": [
+        "pips-solver/src/services/extraction/pipeline.ts",
+        "pips-solver/src/services/extraction/index.ts"
+      ],
+      "existing_patterns": [
+        "debug info structure in ExtractionResult",
+        "saveDebugResponses config option",
+        "JSON serialization patterns"
+      ],
+      "implementation_approach": "Add exportDebugData(result: ExtractionResult): string function that serializes debug info to JSON with timestamps and version info. Add generateDebugReport(result) that creates a human-readable markdown summary. Both functions should handle missing debug data gracefully.",
+      "status": "draft",
+      "created_at": "2025-12-22T10:40:00.000Z"
+    },
+    {
+      "id": "ci-005",
+      "type": "code_improvements",
+      "title": "Add Cross-Stage Confidence Warnings to ConfidenceSummary",
+      "description": "Enhance the ConfidenceSummary component to display cross-stage validation hints generated by the pipeline (high variance warnings, bottleneck indicators) directly in the UI.",
+      "rationale": "The pipeline already generates detailed confidence hints via generateConfidenceHints() including variance warnings and bottleneck identification. The ConfidenceSummary component displays per-stage scores but doesn't show these insights. The ConfidenceBreakdown component shows a pattern for displaying warnings.",
+      "builds_upon": [
+        "generateConfidenceHints function in pipeline.ts",
+        "ConfidenceSummary component",
+        "ConfidenceBreakdown warning patterns"
+      ],
+      "estimated_effort": "small",
+      "affected_files": [
+        "pips-solver/src/app/components/ui/ConfidenceIndicator.tsx"
+      ],
+      "existing_patterns": [
+        "borderlineWarningStyle in ConfidenceBreakdown",
+        "lowestWarningStyle display pattern",
+        "isBorderline prop pattern"
+      ],
+      "implementation_approach": "Extend ConfidenceSummaryProps to accept hints?: string[] and varianceWarning?: boolean. Add conditional rendering for hints below the confidence bars using the existing warning style patterns from ConfidenceBreakdown. Highlight the lowest stage with the existing isLowest pattern.",
+      "status": "draft",
+      "created_at": "2025-12-22T10:40:00.000Z"
+    },
+    {
+      "id": "uiux-001",
+      "type": "ui_ux_improvements",
+      "title": "Add Accessibility Labels Throughout App",
+      "description": "Add comprehensive accessibility support including accessibilityLabel, accessibilityRole, and accessibilityHint attributes to all interactive elements across the React Native app",
+      "rationale": "Screen reader users cannot navigate most of the app. ExtractionComparisonModal.tsx is the ONLY component with comprehensive accessibility (80+ attributes found). All other screens and components lack accessibility support, creating an inconsistent and largely inaccessible experience.",
+      "category": "accessibility",
+      "affected_components": [
+        "pips-solver/src/app/components/ui/Button.tsx",
+        "pips-solver/src/app/screens/HomeScreen.tsx",
+        "pips-solver/src/app/screens/SolveScreen.tsx",
+        "pips-solver/src/app/screens/builder/Step1GridAlignment.tsx",
+        "pips-solver/src/app/components/AIVerificationModal.tsx",
+        "pips-solver/src/app/components/GridRenderer.tsx",
+        "pips-solver/src/app/components/HintModal.tsx"
+      ],
+      "screenshots": [],
+      "current_state": "ExtractionComparisonModal.tsx has excellent accessibility with 80+ attributes (accessibilityLabel, accessibilityRole, accessibilityHint). However, all other components including Button.tsx, HomeScreen.tsx, SolveScreen.tsx, AIVerificationModal.tsx, HintModal.tsx, and all builder steps have ZERO accessibility attributes.",
+      "proposed_change": "1. Add accessibilityLabel to all Button components describing their action (e.g., 'Solve puzzle', 'Import YAML'). 2. Add accessibilityRole='button' to TouchableOpacity/Pressable elements. 3. Add accessibilityHint for complex interactions (e.g., 'Double tap to open puzzle'). 4. Mark decorative elements with accessible={false}. 5. Add accessibilityLabel to grid cells describing their content (e.g., 'Row 2, Column 3, Region A, pip value 5'). 6. Update GridRenderer to announce cell values when revealed in step-by-step mode.",
+      "user_benefit": "Users with visual impairments can navigate and use the puzzle solver app with screen readers (VoiceOver/TalkBack). This also helps users with motor impairments who rely on switch control or voice commands.",
+      "status": "draft",
+      "created_at": "2025-12-22T03:25:00.000Z"
+    },
+    {
+      "id": "uiux-002",
+      "type": "ui_ux_improvements",
+      "title": "ConfidenceIndicator Uses Hardcoded iOS Colors Instead of Theme",
+      "description": "Replace hardcoded iOS system colors (#34C759, #FF9500, #FF3B30) in ConfidenceIndicator.tsx with the app's semantic theme colors (colors.semantic.jade, amber, coral)",
+      "rationale": "The ConfidenceIndicator component breaks visual consistency by using iOS-specific colors instead of the established 'Tactile Game Table' design system colors. This creates a jarring visual inconsistency with the rest of the app's refined aesthetic.",
+      "category": "visual",
+      "affected_components": [
+        "pips-solver/src/app/components/ConfidenceIndicator.tsx"
+      ],
+      "screenshots": [],
+      "current_state": "ConfidenceIndicator.tsx lines 21-27 use hardcoded iOS colors: #34C759 (green), #FF9500 (orange), #FF3B30 (red). These don't match the app's theme tokens which define colors.semantic.jade (#7ECFB3), colors.semantic.amber (#E8C547), and colors.semantic.coral (#E85D75). Also lines 60-95 use additional hardcoded colors: '#fff', '#888', '#333', '#ccc'.",
+      "proposed_change": "Import colors from theme/tokens.ts and replace: 1) '#34C759' -> colors.semantic.jade, 2) '#FF9500' -> colors.semantic.amber (or colors.accent.brass), 3) '#FF3B30' -> colors.semantic.coral, 4) '#fff' -> colors.text.primary, 5) '#888' -> colors.text.tertiary, 6) '#333' -> colors.surface.slate, 7) '#ccc' -> colors.text.secondary",
+      "user_benefit": "Consistent visual language across the app creates a more polished, professional experience. Users won't experience jarring color shifts when viewing confidence indicators.",
+      "status": "draft",
+      "created_at": "2025-12-22T03:25:00.000Z"
+    },
+    {
+      "id": "uiux-003",
+      "type": "ui_ux_improvements",
+      "title": "Increase Touch Targets in Grid Controls to Meet Accessibility Guidelines",
+      "description": "Increase touch target sizes in Step1GridAlignment.tsx row/column control buttons from 36x36 to minimum 44x44 pixels to meet WCAG touch target accessibility guidelines",
+      "rationale": "The current 36x36 pixel touch targets for row/column increment/decrement buttons are below the WCAG 2.5.5 AAA minimum of 44x44 pixels. This makes the controls difficult to use for users with motor impairments or on smaller screens.",
+      "category": "accessibility",
+      "affected_components": [
+        "pips-solver/src/app/screens/builder/Step1GridAlignment.tsx"
+      ],
+      "screenshots": [],
+      "current_state": "Step1GridAlignment.tsx line 538-542 defines controlButton with width: 36, height: 36. This is 8 pixels below the minimum 44x44 recommended by WCAG for touch targets. The -/+ buttons for adjusting rows and columns are difficult to tap precisely.",
+      "proposed_change": "1. Update styles.controlButton: width: 44, height: 44 (was 36x36). 2. Increase fontSize in controlButtonText from 20 to 22 to maintain visual balance. 3. Alternatively, add hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} to TouchableOpacity to expand touch area without changing visual size. 4. Adjust controlRow gap to account for larger button sizes.",
+      "user_benefit": "Users with motor impairments, tremors, or those using the app on small screens can more easily tap the row/column adjustment controls without frustration or accidental mis-taps.",
+      "status": "draft",
+      "created_at": "2025-12-22T03:25:00.000Z"
+    },
+    {
+      "id": "uiux-004",
+      "type": "ui_ux_improvements",
+      "title": "Increase Domino Half Touch Targets in AI Verification Modal",
+      "description": "Increase the touch target size for domino pip editing in AIVerificationModal from 22x22 to minimum 44x44 pixels while maintaining the compact visual display",
+      "rationale": "The domino half touch targets in the AI Verification Modal are only 22x22 pixels (dominoHalf style), less than half the recommended minimum. Users trying to edit pip values by tapping or long-pressing must be extremely precise, leading to frustration and errors.",
+      "category": "usability",
+      "affected_components": [
+        "pips-solver/src/app/components/AIVerificationModal.tsx"
+      ],
+      "screenshots": [],
+      "current_state": "AIVerificationModal.tsx lines 1658-1661 define dominoHalf with width: 22, height: 22. The TouchableOpacity wrapper (dominoHalfTouchable) also constrains to this small size. Users must tap with high precision to cycle pip values (0-6) using tap/long-press gestures.",
+      "proposed_change": "1. Keep visual dominoHalf size at 22x22 for compact display. 2. Add hitSlop={{ top: 11, bottom: 11, left: 11, right: 11 }} to the TouchableOpacity wrapper to expand touch area to 44x44. 3. Add visual feedback on touch (slight scale animation using withTiming(0.95)). 4. Consider adding a tooltip or visual indicator showing the current tap/long-press interaction pattern.",
+      "user_benefit": "Users can more easily edit domino pip values without needing pixel-perfect precision. Reduces frustration when correcting AI extraction errors, leading to faster puzzle setup.",
+      "status": "draft",
+      "created_at": "2025-12-22T03:25:00.000Z"
+    },
+    {
+      "id": "uiux-005",
+      "type": "ui_ux_improvements",
+      "title": "Add Loading Spinner Animation to Button Component",
+      "description": "Replace the static 'Loading...' text in the Button component with an animated ActivityIndicator spinner for better visual feedback during async operations",
+      "rationale": "The Button component currently just shows 'Loading...' text when in loading state, which provides minimal visual feedback. An animated spinner is more universally recognizable as a loading indicator and provides continuous visual feedback that something is happening.",
+      "category": "interaction",
+      "affected_components": [
+        "pips-solver/src/app/components/ui/Button.tsx"
+      ],
+      "screenshots": [],
+      "current_state": "Button.tsx line 128 shows: {loading ? 'Loading...' : title}. This is a static text replacement with no animation. The theme defines animation utilities in animations.ts but they're not used for loading feedback.",
+      "proposed_change": "1. Import ActivityIndicator from 'react-native'. 2. Replace line 128 with conditional rendering that includes both spinner and optional text: {loading ? (<View style={styles.loadingContainer}><ActivityIndicator size='small' color={variantStyles.text.color} style={{ marginRight: spacing[2] }} /><Text style={[styles.text, variantStyles.text]}>{title}</Text></View>) : (<Text>{title}</Text>)}. 3. Add styles.loadingContainer: { flexDirection: 'row', alignItems: 'center' }. 4. The spinner inherits the text color from the button variant for visual consistency.",
+      "user_benefit": "Users receive immediate, animated visual feedback when triggering async operations like AI extraction or puzzle solving, reducing uncertainty about whether their action was registered.",
+      "status": "draft",
+      "created_at": "2025-12-22T03:25:00.000Z"
+    },
+    {
+      "id": "doc-001",
+      "type": "documentation_gaps",
+      "title": "Update main README to reflect monorepo structure",
+      "description": "The root README.md only documents the React Native mobile app, but the project has evolved into a monorepo with three services: pips-solver (mobile app), cv-service (Python FastAPI), and pips-agent (Claude Agent SDK). Users and contributors landing on the repo see incomplete project context.",
+      "rationale": "The README is the first thing users and contributors see. Currently it mentions 'src/' paths that don't align with actual project structure (which uses pips-solver/src/). This causes confusion for onboarding developers and misrepresents the project scope.",
+      "category": "readme",
+      "targetAudience": "users",
+      "affectedAreas": [
+        "README.md",
+        "package.json"
+      ],
+      "currentDocumentation": "Basic mobile app documentation with outdated project structure references",
+      "proposedContent": "Add monorepo overview section, update project structure diagram to show cv-service/pips-agent/pips-solver layout, add quick links to each service's documentation, update installation instructions to cover all services",
+      "priority": "high",
+      "estimatedEffort": "medium"
+    },
+    {
+      "id": "doc-002",
+      "type": "documentation_gaps",
+      "title": "Create README for cv-service computer vision API",
+      "description": "The cv-service directory contains a FastAPI backend with 4 endpoints (/extract-geometry, /crop-puzzle, /crop-dominoes, /health) but has no README.md. While FastAPI auto-generates OpenAPI docs at /docs, there's no human-readable setup guide or architecture explanation.",
+      "rationale": "Developers needing to run or modify the CV service must read through main.py (800+ lines) to understand capabilities. The service handles critical puzzle extraction functionality and integrates with the mobile app - documentation is essential for maintenance.",
+      "category": "readme",
+      "targetAudience": "developers",
+      "affectedAreas": [
+        "cv-service/main.py",
+        "cv-service/hybrid_extraction.py",
+        "cv-service/confidence_config.py"
+      ],
+      "currentDocumentation": "Only inline docstrings and auto-generated FastAPI /docs endpoint",
+      "proposedContent": "Create cv-service/README.md with: overview of CV extraction pipeline, API endpoint reference with request/response examples, environment setup (Docker/local), configuration options, debug output explanation, integration guide for mobile app",
+      "priority": "high",
+      "estimatedEffort": "medium"
+    },
+    {
+      "id": "doc-003",
+      "type": "documentation_gaps",
+      "title": "Add architecture diagram for multi-service communication",
+      "description": "The project has complex service interactions: mobile app calls cv-service for image processing, calls AI APIs for extraction, and uses the local solver. CLAUDE.md describes this textually but there's no visual architecture diagram.",
+      "rationale": "Contributors need to understand data flow: Screenshot -> cv-service crop -> AI extraction -> solver -> UI display. A visual diagram would accelerate onboarding and help with debugging integration issues. The multi-model ensemble extraction pipeline is especially complex.",
+      "category": "architecture",
+      "targetAudience": "contributors",
+      "affectedAreas": [
+        "docs/",
+        "CLAUDE.md"
+      ],
+      "currentDocumentation": "Text-based architecture description in CLAUDE.md, design doc for extraction pipeline in docs/plans/",
+      "proposedContent": "Create docs/architecture.md with Mermaid diagrams showing: service topology, puzzle extraction data flow, AI ensemble consensus algorithm flow, solver/validator pipeline, mobile app screen navigation",
+      "priority": "medium",
+      "estimatedEffort": "medium"
+    },
+    {
+      "id": "doc-004",
+      "type": "documentation_gaps",
+      "title": "Document extraction service API surface with JSDoc",
+      "description": "The pips-solver/src/services/extraction/ module exports 30+ functions (extractPuzzle, resolveConsensus, validateExtractionResult, etc.) via index.ts, but most lack JSDoc parameter descriptions. This is the core AI extraction pipeline used throughout the app.",
+      "rationale": "Developers working on extraction features must read implementation code to understand function signatures. The consensus algorithm, validation rules, and stage parameters are non-obvious. Better docs would reduce bugs when calling these APIs.",
+      "category": "api_docs",
+      "targetAudience": "developers",
+      "affectedAreas": [
+        "pips-solver/src/services/extraction/index.ts",
+        "pips-solver/src/services/extraction/pipeline.ts",
+        "pips-solver/src/services/extraction/consensus.ts",
+        "pips-solver/src/services/extraction/validation/index.ts"
+      ],
+      "currentDocumentation": "Module-level comment in index.ts, scattered JSDoc in some files like types.ts",
+      "proposedContent": "Add comprehensive JSDoc to all exported functions: @param/@returns for extractPuzzle, resolveConsensus, validate* functions; document confidence thresholds, retry behavior, and error conditions",
+      "priority": "medium",
+      "estimatedEffort": "large"
+    },
+    {
+      "id": "doc-005",
+      "type": "documentation_gaps",
+      "title": "Create project-wide troubleshooting guide",
+      "description": "Users report issues across services: OCR failures, CV extraction misses, solver timeouts, API key configuration. pips-agent/README.md has a small troubleshooting section, but there's no comprehensive guide covering common issues across all services.",
+      "rationale": "Support burden is high when users can't self-diagnose issues. Common problems include: Tesseract not found, cv-service connection refused, low extraction confidence, solver 'no solution' errors. A centralized troubleshooting doc would reduce friction.",
+      "category": "troubleshooting",
+      "targetAudience": "users",
+      "affectedAreas": [
+        "docs/",
+        "pips-agent/README.md",
+        "cv-service/"
+      ],
+      "currentDocumentation": "Scattered: pips-agent/README.md has 4 troubleshooting entries, cv-service has validation report MDs, CLAUDE.md has debugging notes",
+      "proposedContent": "Create docs/troubleshooting.md covering: API key setup (OpenRouter vs individual providers), Tesseract installation, cv-service Docker deployment, common extraction failures with example images, solver debugging (constraint conflicts, domino feasibility), mobile app build issues",
+      "priority": "medium",
+      "estimatedEffort": "medium"
+    }
+  ],
+  "project_context": {
+    "existing_features": [],
+    "tech_stack": [
+      "React",
+      "FastAPI",
+      "TypeScript",
+      "Python"
+    ],
+    "target_audience": "NYT Pips puzzle enthusiasts who want AI-assisted solving",
+    "planned_features": [
+      "Add Domino Tray Preprocessing",
+      "Complete Domino Pip Detection",
+      "Puzzle History & Favorites",
+      "Specification: Enhance AI Visual Pips Board Extraction Accuracy",
+      "ML-Based Puzzle Detection",
+      "Share Solutions",
+      "Enhanced OCR Constraint Detection",
+      "Performance Optimization",
+      "Automated Test Suite",
+      "Offline Mode",
+      "Improved Region Detection for Complex Layouts",
+      "Premium Features Tier",
+      "Puzzle Analytics Dashboard",
+      "Multi-Puzzle Type Support",
+      "AI Verification Modal lacks keyboard accessibility for constraint editing",
+      "Specification: Commit and Merge All Auto-Claude Branches into Copilot-Fixes",
+      "Complete User Correction UI Workflow",
+      "Specification: Diamond Cell Inference Completion",
+      "Accurate Confidence Scoring",
+      "Enhanced Confidence Feedback UI",
+      "Diamond Cell Inference Completion",
+      "Solution Verification Mode",
+      "Graduated Hint System",
+      "Strategy Tutorial Mode"
+    ]
+  },
+  "summary": {
+    "total_ideas": 15,
+    "by_type": {
+      "code_improvements": 5,
+      "ui_ux_improvements": 5,
+      "documentation_gaps": 5
+    },
+    "by_status": {
+      "draft": 15
+    }
+  },
+  "generated_at": "2025-12-22T10:42:17.599536",
+  "updated_at": "2025-12-22T10:42:17.599536"
+}

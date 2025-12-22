@@ -1,0 +1,136 @@
+{
+  "project_name": "Pips (NYT Pips Assistant)",
+  "project_type": "mobile-app",
+  "tech_stack": {
+    "primary_language": "TypeScript",
+    "frameworks": [
+      "React Native",
+      "Expo",
+      "FastAPI"
+    ],
+    "key_dependencies": [
+      "expo",
+      "react-native",
+      "react-native-svg",
+      "react-navigation",
+      "async-storage",
+      "opencv-python",
+      "claude-agent-sdk",
+      "pytesseract",
+      "zod",
+      "yaml"
+    ]
+  },
+  "target_audience": {
+    "primary_persona": "Casual puzzle enthusiasts who enjoy NYT Pips domino puzzles and want an efficient way to solve or get hints for challenging puzzles",
+    "secondary_personas": [
+      "Competitive puzzle solvers seeking to verify their solutions",
+      "NYT Games subscribers who play daily puzzles",
+      "Mobile-first users who prefer solving puzzles on their phones"
+    ],
+    "pain_points": [
+      "Manually entering puzzle data is tedious and error-prone",
+      "No easy way to import puzzles directly from screenshots",
+      "Difficult to track and manage solved vs unsolved puzzles offline",
+      "Getting stuck on hard puzzles with no way to get progressive hints",
+      "Verifying if a partial solution is still valid requires mental computation"
+    ],
+    "goals": [
+      "Quickly import puzzles via camera/screenshot without manual data entry",
+      "Get intelligent hints when stuck without revealing the full solution",
+      "Solve puzzles offline while commuting or traveling",
+      "Validate their manual solutions against the solver",
+      "Build a personal library of puzzles to revisit"
+    ],
+    "usage_context": "Users typically play during commutes, breaks, or leisure time on mobile devices. They want quick puzzle import via camera, offline capability for areas with poor connectivity, and graduated hints that respect the puzzle-solving experience without spoiling it entirely."
+  },
+  "product_vision": {
+    "one_liner": "An offline-first mobile app that imports, validates, and solves NYT Pips domino puzzles using AI-powered image extraction and constraint satisfaction algorithms.",
+    "problem_statement": "NYT Pips players struggle to get help when stuck on puzzles, manually entering puzzle data into digital tools is cumbersome, and there's no elegant mobile solution for storing, solving, and validating domino puzzles offline.",
+    "value_proposition": "Pips combines computer vision for instant puzzle import from photos, a sophisticated CSP solver that runs entirely on-device, and AI-powered graduated hints that help users progress without spoiling the puzzle - all working offline.",
+    "success_metrics": [
+      "Image extraction accuracy rate (currently targeting 89%+)",
+      "Solver success rate across different puzzle difficulties",
+      "Time from photo capture to imported puzzle ready for solving",
+      "User retention and return rate for daily puzzle solving",
+      "Hint usage patterns showing users complete puzzles with help"
+    ]
+  },
+  "current_state": {
+    "maturity": "mvp",
+    "existing_features": [
+      "YAML/JSON puzzle import with sample puzzles",
+      "Local library stored in AsyncStorage for offline use",
+      "React Native SVG grid viewer with pan/zoom and region coloring",
+      "CSP-style solver with MRV, forward checking, and region-bound propagation",
+      "Validation pipeline for puzzle specs and solver outputs",
+      "CV service for extracting grid geometry from images",
+      "AI-powered image extraction using vision models",
+      "Ensemble extraction combining CV and AI approaches",
+      "Confidence scoring with calibration for extraction quality",
+      "Multi-step puzzle builder (grid alignment, region painting, constraints, dominoes)",
+      "AI verification modal for extraction review",
+      "Extraction comparison diff view",
+      "Graduated hint system with AI-powered hint generation",
+      "Haptic feedback for grid interactions",
+      "Domino tray preprocessing",
+      "Diamond cell inference for complex layouts",
+      "Theme system with dark/light mode support",
+      "Health check endpoints for services"
+    ],
+    "known_gaps": [
+      "No automated tests visible for mobile app components",
+      "Limited error recovery for failed extractions",
+      "No user accounts or cloud sync capability",
+      "No sharing or export functionality for puzzles",
+      "No tutorial or onboarding flow for new users",
+      "No accessibility features (screen reader support, etc.)",
+      "No analytics or crash reporting integration"
+    ],
+    "technical_debt": [
+      "Multiple test files in cv-service suggest active debugging/refinement phase",
+      "Extraction accuracy at 89.2% indicates room for improvement",
+      "Services may need containerization for easier deployment",
+      "No visible CI/CD pipeline beyond GitHub Actions workflows for Claude"
+    ]
+  },
+  "competitive_context": {
+    "alternatives": [
+      "Manual paper-based solving",
+      "Generic puzzle-solving apps (not Pips-specific)",
+      "Web-based domino puzzle solvers",
+      "Reddit/community forums for hints"
+    ],
+    "differentiators": [
+      "Camera-based puzzle import using computer vision and AI ensemble",
+      "Fully offline-capable with on-device solver",
+      "Graduated hint system that preserves puzzle-solving enjoyment",
+      "Purpose-built for NYT Pips domino puzzles specifically",
+      "CSP solver with explanation capabilities for why solutions work"
+    ],
+    "market_position": "A specialized mobile companion app for NYT Pips enthusiasts, filling the niche between manual solving and full spoiler solutions by providing intelligent, graduated assistance.",
+    "competitor_pain_points": [],
+    "competitor_analysis_available": false
+  },
+  "constraints": {
+    "technical": [
+      "Expo SDK compatibility requirements (currently on SDK 54)",
+      "React Native performance constraints for complex grid rendering",
+      "Image processing needs balance between accuracy and mobile device capabilities",
+      "AI API calls require network connectivity for hint generation",
+      "OCR/Tesseract accuracy limitations for constraint detection"
+    ],
+    "resources": [
+      "Solo developer project (tfunk1030 is primary contributor with 239 commits)",
+      "Dependent on third-party AI APIs (Anthropic Claude) for intelligent hints",
+      "Open source/personal project constraints on time and budget"
+    ],
+    "dependencies": [
+      "Anthropic API for Claude-based hint generation",
+      "Expo ecosystem for mobile app distribution",
+      "OpenCV for computer vision processing",
+      "Tesseract OCR for text extraction from puzzle images"
+    ]
+  },
+  "created_at": "2025-06-22T22:30:00Z"
+}

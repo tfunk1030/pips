@@ -1,0 +1,13 @@
+name: Tiny Example
+rows: 2
+cols: 2
+regions:
+  - [1, 1]
+  - [2, 2]
+regionConstraints:
+  1:
+    sum: 3
+  2:
+    sum: 3
+maxPip: 3
+allowDuplicates: false

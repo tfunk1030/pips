@@ -1,0 +1,45 @@
+{
+  "file_path": "pips-solver/src/app/components/ui/index.ts",
+  "main_branch_history": [],
+  "task_views": {
+    "005-add-image-stats-diagnostic-endpoint": {
+      "task_id": "005-add-image-stats-diagnostic-endpoint",
+      "branch_point": {
+        "commit_hash": "faf3f69f9b2794c6a85ffd2581461d3d68bdf8ef",
+        "content": "",
+        "timestamp": "2025-12-22T03:09:16.372053"
+      },
+      "worktree_state": null,
+      "task_intent": {
+        "title": "005-add-image-stats-diagnostic-endpoint",
+        "description": "Create a _calculate_image_stats function and expose it as a standalone API endpoint that returns brightness, contrast, dynamic range, color balance, and saturation metrics without requiring preprocessing. This helps users diagnose image quality issues before extraction.",
+        "from_plan": true
+      },
+      "commits_behind_main": 0,
+      "status": "active",
+      "merged_at": null
+    },
+    "007-step1gridalignment-should-use-themed-ui-components": {
+      "task_id": "007-step1gridalignment-should-use-themed-ui-components",
+      "branch_point": {
+        "commit_hash": "faf3f69f9b2794c6a85ffd2581461d3d68bdf8ef",
+        "content": "",
+        "timestamp": "2025-12-22T03:10:00.281002"
+      },
+      "worktree_state": {
+        "content": "/**\n * UI Component Library\n *\n * Themed, reusable components for the Pips Solver app\n */\n\n// Buttons\nexport { Button } from './Button';\n\n// Cards\nexport { Card, CardHeader, CardFooter } from './Card';\n\n// Typography\nexport {\n  Text,\n  DisplayText,\n  Heading,\n  Body,\n  Label,\n  Mono,\n} from './Text';\n",
+        "last_modified": "2025-12-22T03:10:03.076808"
+      },
+      "task_intent": {
+        "title": "007-step1gridalignment-should-use-themed-ui-components",
+        "description": "Refactor Step1GridAlignment screen to use the established Button, Card, and Text components from the UI library instead of raw TouchableOpacity and inline StyleSheet styles. This improves consistency, accessibility, and maintainability.",
+        "from_plan": true
+      },
+      "commits_behind_main": 0,
+      "status": "active",
+      "merged_at": null
+    }
+  },
+  "created_at": "2025-12-22T03:09:29.311922",
+  "last_updated": "2025-12-22T03:10:01.934483"
+}

@@ -1,0 +1,45 @@
+{
+  "file_path": "pips-solver/src/utils/gridCalculations.ts",
+  "main_branch_history": [],
+  "task_views": {
+    "005-add-image-stats-diagnostic-endpoint": {
+      "task_id": "005-add-image-stats-diagnostic-endpoint",
+      "branch_point": {
+        "commit_hash": "faf3f69f9b2794c6a85ffd2581461d3d68bdf8ef",
+        "content": "",
+        "timestamp": "2025-12-22T03:09:16.372053"
+      },
+      "worktree_state": null,
+      "task_intent": {
+        "title": "005-add-image-stats-diagnostic-endpoint",
+        "description": "Create a _calculate_image_stats function and expose it as a standalone API endpoint that returns brightness, contrast, dynamic range, color balance, and saturation metrics without requiring preprocessing. This helps users diagnose image quality issues before extraction.",
+        "from_plan": true
+      },
+      "commits_behind_main": 0,
+      "status": "active",
+      "merged_at": null
+    },
+    "007-step1gridalignment-should-use-themed-ui-components": {
+      "task_id": "007-step1gridalignment-should-use-themed-ui-components",
+      "branch_point": {
+        "commit_hash": "faf3f69f9b2794c6a85ffd2581461d3d68bdf8ef",
+        "content": "",
+        "timestamp": "2025-12-22T03:10:00.281002"
+      },
+      "worktree_state": {
+        "content": "/**\n * Grid calculation utilities\n * Handles cell positioning, hit testing, and coordinate transforms\n */\n\nimport { GridBounds } from '../model/overlayTypes';\n\nexport interface CellPosition {\n  row: number;\n  col: number;\n  x: number;\n  y: number;\n  width: number;\n  height: number;\n}\n\nexport interface ImageDimensions {\n  width: number;\n  height: number;\n}\n\n/**\n * Calculate pixel positions for all cells in the grid\n */\nexport function calculateCellPositions(\n  bounds: GridBounds,\n  rows: number,\n  cols: number,\n  imageDims: ImageDimensions\n): CellPosition[][] {\n  const { width: imgWidth, height: imgHeight } = imageDims;\n\n  // Convert percentage bounds to pixels\n  const left = (bounds.left / 100) * imgWidth;\n  const top = (bounds.top / 100) * imgHeight;\n  const right = (bounds.right / 100) * imgWidth;\n  const bottom = (bounds.bottom / 100) * imgHeight;\n\n  const gridWidth = right - left;\n  const gridHeight = bottom - top;\n\n  const cellWidth = gridWidth / cols;\n  const cellHeight = gridHeight / rows;\n\n  const positions: CellPosition[][] = [];\n\n  for (let r = 0; r < rows; r++) {\n    const row: CellPosition[] = [];\n    for (let c = 0; c < cols; c++) {\n      row.push({\n        row: r,\n        col: c,\n        x: left + c * cellWidth,\n        y: top + r * cellHeight,\n        width: cellWidth,\n        height: cellHeight,\n      });\n    }\n    positions.push(row);\n  }\n\n  return positions;\n}\n\n/**\n * Hit test to determine which cell was tapped\n * Returns null if outside grid\n */\nexport function hitTestCell(\n  x: number,\n  y: number,\n  bounds: GridBounds,\n  rows: number,\n  cols: number,\n  imageDims: ImageDimensions\n): { row: number; col: number } | null {\n  const { width: imgWidth, height: imgHeight } = imageDims;\n\n  // Convert percentage bounds to pixels\n  const left = (bounds.left / 100) * imgWidth;\n  const top = (bounds.top / 100) * imgHeight;\n  const right = (bounds.right / 100) * imgWidth;\n  const bottom = (bounds.bottom / 100) * imgHeight;\n\n  // Check if point is inside grid\n  if (x < left || x > right || y < top || y > bottom) {\n    return null;\n  }\n\n  const gridWidth = right - left;\n  const gridHeight = bottom - top;\n\n  const cellWidth = gridWidth / cols;\n  const cellHeight = gridHeight / rows;\n\n  const col = Math.floor((x - left) / cellWidth);\n  const row = Math.floor((y - top) / cellHeight);\n\n  // Clamp to valid range\n  if (row < 0 || row >= rows || col < 0 || col >= cols) {\n    return null;\n  }\n\n  return { row, col };\n}\n\n/**\n * Get cell center point in pixels\n */\nexport function getCellCenter(\n  row: number,\n  col: number,\n  bounds: GridBounds,\n  rows: number,\n  cols: number,\n  imageDims: ImageDimensions\n): { x: number; y: number } {\n  const positions = calculateCellPositions(bounds, rows, cols, imageDims);\n  const cell = positions[row]?.[col];\n\n  if (!cell) {\n    return { x: 0, y: 0 };\n  }\n\n  return {\n    x: cell.x + cell.width / 2,\n    y: cell.y + cell.height / 2,\n  };\n}\n\n/**\n * Convert pixel coordinates to percentage bounds\n */\nexport function pixelsToBounds(\n  left: number,\n  top: number,\n  right: number,\n  bottom: number,\n  imageDims: ImageDimensions\n): GridBounds {\n  return {\n    left: (left / imageDims.width) * 100,\n    top: (top / imageDims.height) * 100,\n    right: (right / imageDims.width) * 100,\n    bottom: (bottom / imageDims.height) * 100,\n  };\n}\n\n/**\n * Constrain bounds to valid range\n */\nexport function constrainBounds(bounds: GridBounds): GridBounds {\n  return {\n    left: Math.max(0, Math.min(bounds.left, bounds.right - 10)),\n    top: Math.max(0, Math.min(bounds.top, bounds.bottom - 10)),\n    right: Math.min(100, Math.max(bounds.right, bounds.left + 10)),\n    bottom: Math.min(100, Math.max(bounds.bottom, bounds.top + 10)),\n  };\n}\n\n/**\n * Calculate optimal bounds for a grid given an aspect ratio\n */\nexport function calculateOptimalBounds(\n  rows: number,\n  cols: number,\n  imageDims: ImageDimensions,\n  padding: number = 10\n): GridBounds {\n  const imageAspect = imageDims.width / imageDims.height;\n  const gridAspect = cols / rows;\n\n  let bounds: GridBounds;\n\n  if (gridAspect > imageAspect) {\n    // Grid is wider than image - fit width\n    const height = ((100 - 2 * padding) * imageAspect) / gridAspect;\n    const topPad = (100 - height) / 2;\n    bounds = {\n      left: padding,\n      top: topPad,\n      right: 100 - padding,\n      bottom: 100 - topPad,\n    };\n  } else {\n    // Grid is taller than image - fit height\n    const width = ((100 - 2 * padding) * gridAspect) / imageAspect;\n    const leftPad = (100 - width) / 2;\n    bounds = {\n      left: leftPad,\n      top: padding,\n      right: 100 - leftPad,\n      bottom: 100 - padding,\n    };\n  }\n\n  return constrainBounds(bounds);\n}\n\n/**\n * Snap bounds to create even cell sizes\n */\nexport function snapBoundsToGrid(\n  bounds: GridBounds,\n  rows: number,\n  cols: number\n): GridBounds {\n  // Ensure grid dimensions are multiples of cell count for clean rendering\n  const width = bounds.right - bounds.left;\n  const height = bounds.bottom - bounds.top;\n\n  // Round to nearest cell boundary\n  const cellWidth = width / cols;\n  const cellHeight = height / rows;\n\n  return {\n    left: bounds.left,\n    top: bounds.top,\n    right: bounds.left + cellWidth * cols,\n    bottom: bounds.top + cellHeight * rows,\n  };\n}\n",
+        "last_modified": "2025-12-22T03:10:03.114672"
+      },
+      "task_intent": {
+        "title": "007-step1gridalignment-should-use-themed-ui-components",
+        "description": "Refactor Step1GridAlignment screen to use the established Button, Card, and Text components from the UI library instead of raw TouchableOpacity and inline StyleSheet styles. This improves consistency, accessibility, and maintainability.",
+        "from_plan": true
+      },
+      "commits_behind_main": 0,
+      "status": "active",
+      "merged_at": null
+    }
+  },
+  "created_at": "2025-12-22T03:09:35.201661",
+  "last_updated": "2025-12-22T03:10:02.865510"
+}

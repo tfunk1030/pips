@@ -1,0 +1,45 @@
+{
+  "file_path": "pips-solver/src/app/components/ConfidenceIndicator.tsx",
+  "main_branch_history": [],
+  "task_views": {
+    "005-add-image-stats-diagnostic-endpoint": {
+      "task_id": "005-add-image-stats-diagnostic-endpoint",
+      "branch_point": {
+        "commit_hash": "faf3f69f9b2794c6a85ffd2581461d3d68bdf8ef",
+        "content": "",
+        "timestamp": "2025-12-22T03:09:16.372053"
+      },
+      "worktree_state": null,
+      "task_intent": {
+        "title": "005-add-image-stats-diagnostic-endpoint",
+        "description": "Create a _calculate_image_stats function and expose it as a standalone API endpoint that returns brightness, contrast, dynamic range, color balance, and saturation metrics without requiring preprocessing. This helps users diagnose image quality issues before extraction.",
+        "from_plan": true
+      },
+      "commits_behind_main": 0,
+      "status": "active",
+      "merged_at": null
+    },
+    "007-step1gridalignment-should-use-themed-ui-components": {
+      "task_id": "007-step1gridalignment-should-use-themed-ui-components",
+      "branch_point": {
+        "commit_hash": "faf3f69f9b2794c6a85ffd2581461d3d68bdf8ef",
+        "content": "",
+        "timestamp": "2025-12-22T03:10:00.281002"
+      },
+      "worktree_state": {
+        "content": "/**\n * Confidence Indicator Component\n * Displays AI extraction confidence scores with visual feedback\n */\n\nimport React from 'react';\nimport { StyleSheet, Text, View } from 'react-native';\n\ninterface Props {\n  label: string;\n  confidence?: number;\n  compact?: boolean;\n}\n\nexport default function ConfidenceIndicator({ label, confidence, compact = false }: Props) {\n  if (confidence === undefined) {\n    return null;\n  }\n\n  const getConfidenceColor = (score: number): string => {\n    if (score >= 0.9) return '#34C759'; // Green - high confidence\n    if (score >= 0.8) return '#FF9500'; // Orange - medium confidence\n    return '#FF3B30'; // Red - low confidence\n  };\n\n  const getConfidenceLabel = (score: number): string => {\n    if (score >= 0.9) return 'High';\n    if (score >= 0.8) return 'Medium';\n    return 'Low';\n  };\n\n  const color = getConfidenceColor(confidence);\n  const confidenceLabel = getConfidenceLabel(confidence);\n  const percentage = Math.round(confidence * 100);\n\n  if (compact) {\n    return (\n      <View style={styles.compactContainer}>\n        <View style={[styles.dot, { backgroundColor: color }]} />\n        <Text style={styles.compactLabel}>{label}</Text>\n        <Text style={styles.compactValue}>{percentage}%</Text>\n      </View>\n    );\n  }\n\n  return (\n    <View style={styles.container}>\n      <View style={styles.header}>\n        <Text style={styles.label}>{label}</Text>\n        <Text style={[styles.confidenceLabel, { color }]}>{confidenceLabel}</Text>\n      </View>\n      <View style={styles.barContainer}>\n        <View style={[styles.barFill, { width: `${percentage}%`, backgroundColor: color }]} />\n      </View>\n      <Text style={styles.percentage}>{percentage}%</Text>\n    </View>\n  );\n}\n\nconst styles = StyleSheet.create({\n  container: {\n    marginVertical: 8,\n  },\n  header: {\n    flexDirection: 'row',\n    justifyContent: 'space-between',\n    alignItems: 'center',\n    marginBottom: 6,\n  },\n  label: {\n    color: '#fff',\n    fontSize: 14,\n    fontWeight: '500',\n  },\n  confidenceLabel: {\n    fontSize: 12,\n    fontWeight: '600',\n    textTransform: 'uppercase',\n  },\n  barContainer: {\n    height: 8,\n    backgroundColor: '#333',\n    borderRadius: 4,\n    overflow: 'hidden',\n    marginBottom: 4,\n  },\n  barFill: {\n    height: '100%',\n    borderRadius: 4,\n  },\n  percentage: {\n    color: '#888',\n    fontSize: 11,\n    textAlign: 'right',\n  },\n  // Compact styles\n  compactContainer: {\n    flexDirection: 'row',\n    alignItems: 'center',\n    gap: 6,\n  },\n  dot: {\n    width: 8,\n    height: 8,\n    borderRadius: 4,\n  },\n  compactLabel: {\n    color: '#ccc',\n    fontSize: 12,\n  },\n  compactValue: {\n    color: '#fff',\n    fontSize: 12,\n    fontWeight: '600',\n  },\n});\n",
+        "last_modified": "2025-12-22T03:10:03.060644"
+      },
+      "task_intent": {
+        "title": "007-step1gridalignment-should-use-themed-ui-components",
+        "description": "Refactor Step1GridAlignment screen to use the established Button, Card, and Text components from the UI library instead of raw TouchableOpacity and inline StyleSheet styles. This improves consistency, accessibility, and maintainability.",
+        "from_plan": true
+      },
+      "commits_behind_main": 0,
+      "status": "active",
+      "merged_at": null
+    }
+  },
+  "created_at": "2025-12-22T03:09:28.092077",
+  "last_updated": "2025-12-22T03:10:01.466968"
+}

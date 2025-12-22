@@ -1,0 +1,665 @@
+{
+  "id": "roadmap-1734894600000",
+  "project_name": "Pips Puzzle Solver",
+  "version": "1.0",
+  "vision": "AI-powered mobile app that solves NYT Pips puzzles from screenshots with optional hints or full solutions",
+  "target_audience": {
+    "primary": "NYT Pips puzzle enthusiasts who want AI-assisted solving",
+    "secondary": [
+      "Casual mobile puzzle gamers seeking quick solutions",
+      "Puzzle learners who prefer hints over direct answers",
+      "Power users who want to understand puzzle-solving strategies"
+    ]
+  },
+  "phases": [
+    {
+      "id": "phase-1",
+      "name": "Foundation & Core Accuracy",
+      "description": "Improve detection accuracy and complete core functionality gaps to deliver reliable puzzle solving",
+      "order": 1,
+      "status": "planned",
+      "features": [
+        "feature-1",
+        "feature-2",
+        "feature-3",
+        "feature-4",
+        "feature-5",
+        "feature-6"
+      ],
+      "milestones": [
+        {
+          "id": "milestone-1-1",
+          "title": "80% Detection Accuracy",
+          "description": "Users can reliably extract puzzles from screenshots with 80%+ accuracy on standard layouts",
+          "features": [
+            "feature-1",
+            "feature-2",
+            "feature-3"
+          ],
+          "status": "planned"
+        },
+        {
+          "id": "milestone-1-2",
+          "title": "Complete Puzzle Workflow",
+          "description": "Users can complete the full workflow from screenshot to solution with corrections if needed",
+          "features": [
+            "feature-4",
+            "feature-5"
+          ],
+          "status": "planned"
+        },
+        {
+          "id": "milestone-1-3",
+          "title": "Quality Foundation",
+          "description": "Test suite in place to prevent regressions and ensure reliability",
+          "features": [
+            "feature-6"
+          ],
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "phase-2",
+      "name": "User Experience & Learning",
+      "description": "Enhance the user experience with graduated hints, learning features, and better feedback",
+      "order": 2,
+      "status": "planned",
+      "features": [
+        "feature-7",
+        "feature-8",
+        "feature-9",
+        "feature-10",
+        "feature-11"
+      ],
+      "milestones": [
+        {
+          "id": "milestone-2-1",
+          "title": "Progressive Learning Mode",
+          "description": "Users can learn puzzle-solving strategies without spoilers through graduated hints",
+          "features": [
+            "feature-7",
+            "feature-8"
+          ],
+          "status": "planned"
+        },
+        {
+          "id": "milestone-2-2",
+          "title": "Engagement Features",
+          "description": "Users stay engaged with puzzle history, statistics, and better confidence feedback",
+          "features": [
+            "feature-9",
+            "feature-10",
+            "feature-11"
+          ],
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "phase-3",
+      "name": "Advanced Intelligence & Performance",
+      "description": "Implement ML-based detection for improved accuracy and add performance optimizations",
+      "order": 3,
+      "status": "planned",
+      "features": [
+        "feature-12",
+        "feature-13",
+        "feature-14",
+        "feature-15"
+      ],
+      "milestones": [
+        {
+          "id": "milestone-3-1",
+          "title": "ML-Powered Detection",
+          "description": "Puzzle extraction achieves 90%+ accuracy using trained ML models",
+          "features": [
+            "feature-12",
+            "feature-13"
+          ],
+          "status": "planned"
+        },
+        {
+          "id": "milestone-3-2",
+          "title": "Offline & Performance",
+          "description": "App works offline and delivers sub-5-second solve times consistently",
+          "features": [
+            "feature-14",
+            "feature-15"
+          ],
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "id": "phase-4",
+      "name": "Growth & Expansion",
+      "description": "Expand to new puzzle types, add community features, and explore monetization",
+      "order": 4,
+      "status": "planned",
+      "features": [
+        "feature-16",
+        "feature-17",
+        "feature-18",
+        "feature-19"
+      ],
+      "milestones": [
+        {
+          "id": "milestone-4-1",
+          "title": "Multi-Puzzle Support",
+          "description": "App supports multiple NYT puzzle types beyond Pips",
+          "features": [
+            "feature-16"
+          ],
+          "status": "planned"
+        },
+        {
+          "id": "milestone-4-2",
+          "title": "Community & Monetization",
+          "description": "Social features and premium tiers enable sustainable growth",
+          "features": [
+            "feature-17",
+            "feature-18",
+            "feature-19"
+          ],
+          "status": "planned"
+        }
+      ]
+    }
+  ],
+  "features": [
+    {
+      "id": "feature-1",
+      "title": "Enhanced OCR Constraint Detection",
+      "description": "Improve OCR accuracy for reading constraint numbers and text from puzzle screenshots. Currently OCR struggles with various fonts, sizes, and image qualities.",
+      "rationale": "Constraint detection is critical for puzzle solving. Users currently experience failures when constraints aren't read correctly, requiring manual correction. Improving OCR directly addresses the pain point of 40-60% detection accuracy on complex puzzles.",
+      "priority": "must",
+      "complexity": "high",
+      "impact": "high",
+      "phase_id": "phase-1",
+      "dependencies": [],
+      "status": "planned",
+      "acceptance_criteria": [
+        "OCR correctly reads constraint numbers in 90%+ of standard puzzle screenshots",
+        "OCR handles different font sizes and styles",
+        "OCR works with both high and low resolution images",
+        "Preprocessing pipeline optimizes images for text recognition"
+      ],
+      "user_stories": [
+        "As a puzzle enthusiast, I want the app to correctly read constraint numbers so that I get accurate solutions",
+        "As a mobile user, I want OCR to work reliably with my phone's screenshot quality so that I don't have to retake photos"
+      ],
+      "linked_spec_id": "010-enhanced-ocr-constraint-detection",
+      "competitor_insight_ids": []
+    },
+    {
+      "id": "feature-2",
+      "title": "Complete Domino Pip Detection",
+      "description": "Finish implementing domino pip detection to accurately identify pip values on domino tiles. Currently marked as incomplete in the codebase.",
+      "rationale": "Domino pip values are essential puzzle data. Without accurate detection, the solver cannot produce correct solutions. This is a critical gap that blocks full automated puzzle extraction.",
+      "priority": "must",
+      "complexity": "medium",
+      "impact": "high",
+      "phase_id": "phase-1",
+      "dependencies": [],
+      "status": "planned",
+      "acceptance_criteria": [
+        "Pip detection correctly identifies 0-6 pip values on each domino half",
+        "Detection works with rotated dominoes",
+        "Handles different domino visual styles and colors",
+        "Confidence score reflects actual detection accuracy"
+      ],
+      "user_stories": [
+        "As a Pips player, I want the app to correctly detect domino pip values so that the solution accounts for all constraints"
+      ],
+      "linked_spec_id": "011-complete-domino-pip-detection",
+      "competitor_insight_ids": []
+    },
+    {
+      "id": "feature-3",
+      "title": "Improved Region Detection for Complex Layouts",
+      "description": "Enhance region detection algorithms to handle complex puzzle layouts with irregular shapes, overlapping colors, and non-standard grid patterns.",
+      "rationale": "Region detection is imperfect on complex layouts, causing frustration for users with challenging puzzles - exactly when they need help most. This addresses the known gap in grid dimension estimation for irregular layouts.",
+      "priority": "must",
+      "complexity": "high",
+      "impact": "high",
+      "phase_id": "phase-1",
+      "dependencies": [],
+      "status": "planned",
+      "acceptance_criteria": [
+        "Region contours correctly identified for 85%+ of puzzles",
+        "Color segmentation handles gradients and similar colors",
+        "Grid dimensions accurately estimated for irregular layouts",
+        "Fallback strategies when primary detection fails"
+      ],
+      "user_stories": [
+        "As a user with a complex puzzle, I want the app to correctly identify all regions so that I can get help on the hardest puzzles",
+        "As a mobile user, I want region detection to work even with slight image distortions from camera angles"
+      ],
+      "linked_spec_id": "012-improved-region-detection-for-complex-layouts",
+      "competitor_insight_ids": []
+    },
+    {
+      "id": "feature-4",
+      "title": "Complete User Correction UI Workflow",
+      "description": "Finish the user correction UI workflow to allow users to easily fix any detection errors before solving. Currently incomplete per project discovery.",
+      "rationale": "Even with improved detection, some corrections will always be needed. A smooth correction workflow turns partial detection failures into successful solves, directly addressing user frustration.",
+      "priority": "must",
+      "complexity": "medium",
+      "impact": "high",
+      "phase_id": "phase-1",
+      "dependencies": [
+        "feature-2",
+        "feature-3"
+      ],
+      "status": "planned",
+      "acceptance_criteria": [
+        "Users can edit detected grid dimensions",
+        "Users can correct region assignments for any cell",
+        "Users can fix constraint values with tap-to-edit",
+        "Users can adjust domino pip values visually",
+        "Changes are reflected in real-time preview"
+      ],
+      "user_stories": [
+        "As a user, I want to quickly fix detection errors so that I don't have to start over from scratch",
+        "As a puzzle enthusiast, I want to correct constraint numbers without retyping everything"
+      ],
+      "linked_spec_id": "013-complete-user-correction-ui-workflow",
+      "competitor_insight_ids": []
+    },
+    {
+      "id": "feature-5",
+      "title": "Accurate Confidence Scoring",
+      "description": "Calibrate confidence scores to accurately reflect detection reliability. Currently scores are conservative (40% when actual accuracy may be higher), confusing users.",
+      "rationale": "Conservative confidence scores undermine user trust. Accurate scores help users know when to trust automated detection vs when to verify manually, improving overall experience.",
+      "priority": "should",
+      "complexity": "medium",
+      "impact": "medium",
+      "phase_id": "phase-1",
+      "dependencies": [
+        "feature-1",
+        "feature-2",
+        "feature-3"
+      ],
+      "status": "planned",
+      "acceptance_criteria": [
+        "Confidence scores correlate with actual detection accuracy within 10%",
+        "Different confidence thresholds for different detection components",
+        "Visual indicators clearly communicate confidence levels to users",
+        "High-confidence detections proven reliable in testing"
+      ],
+      "user_stories": [
+        "As a user, I want confidence scores to accurately reflect detection quality so that I know when to review the extraction",
+        "As a power user, I want to trust high-confidence detections without manual verification"
+      ],
+      "linked_spec_id": "014-accurate-confidence-scoring",
+      "competitor_insight_ids": []
+    },
+    {
+      "id": "feature-6",
+      "title": "Automated Test Suite",
+      "description": "Implement comprehensive automated tests for CV detection, solver, and mobile app components. Currently marked as TODO throughout the codebase.",
+      "rationale": "Automated tests prevent regressions and enable confident refactoring. Critical for maintaining quality as detection algorithms are improved.",
+      "priority": "should",
+      "complexity": "medium",
+      "impact": "medium",
+      "phase_id": "phase-1",
+      "dependencies": [],
+      "status": "under_review",
+      "acceptance_criteria": [
+        "Unit tests cover core detection functions",
+        "Integration tests verify end-to-end puzzle solving",
+        "Test fixtures include diverse puzzle screenshots",
+        "CI pipeline runs tests on every commit",
+        "80%+ code coverage on critical paths"
+      ],
+      "user_stories": [
+        "As a developer, I want automated tests so that I can refactor detection code without breaking functionality",
+        "As a maintainer, I want CI checks so that regressions are caught before deployment"
+      ],
+      "competitor_insight_ids": []
+    },
+    {
+      "id": "feature-7",
+      "title": "Graduated Hint System",
+      "description": "Implement a multi-level hint system that progressively reveals puzzle-solving insights without fully spoiling the solution. From strategic guidance to specific cell hints.",
+      "rationale": "Many users want help without complete spoilers. This directly addresses the pain point of wanting to learn strategies without ruining the puzzle experience, differentiating from online solution lookups.",
+      "priority": "should",
+      "complexity": "medium",
+      "impact": "high",
+      "phase_id": "phase-2",
+      "dependencies": [
+        "feature-4"
+      ],
+      "status": "planned",
+      "acceptance_criteria": [
+        "Level 1: General strategy hints without revealing specifics",
+        "Level 2: Identify which region or constraint to focus on",
+        "Level 3: Reveal a specific cell placement as a nudge",
+        "Level 4: Show partial solution for stuck areas",
+        "Users can progress through hint levels at their own pace"
+      ],
+      "user_stories": [
+        "As a puzzle learner, I want progressive hints so that I can learn without complete spoilers",
+        "As a casual player, I want a nudge to get unstuck without revealing the whole solution",
+        "As a power user, I want to understand why a placement is correct, not just what it is"
+      ],
+      "linked_spec_id": "015-graduated-hint-system",
+      "competitor_insight_ids": []
+    },
+    {
+      "id": "feature-8",
+      "title": "Strategy Tutorial Mode",
+      "description": "Create an interactive tutorial that teaches Pips puzzle-solving techniques through guided examples and explanations of constraint satisfaction logic.",
+      "rationale": "Users want to learn puzzle-solving techniques and reduce frustration on harder puzzles. A tutorial helps users become better solvers, increasing long-term engagement.",
+      "priority": "could",
+      "complexity": "high",
+      "impact": "medium",
+      "phase_id": "phase-2",
+      "dependencies": [
+        "feature-7"
+      ],
+      "status": "under_review",
+      "acceptance_criteria": [
+        "Interactive walkthrough of basic Pips rules",
+        "Explanation of region constraint logic",
+        "Examples of common solving patterns",
+        "Progressive difficulty in tutorial puzzles",
+        "Track user progress through tutorials"
+      ],
+      "user_stories": [
+        "As a new player, I want to learn Pips solving strategies so that I can solve puzzles independently",
+        "As an intermediate player, I want to understand advanced techniques to tackle harder puzzles"
+      ],
+      "competitor_insight_ids": []
+    },
+    {
+      "id": "feature-9",
+      "title": "Puzzle History & Favorites",
+      "description": "Track solved puzzles locally with the ability to revisit, favorite, and review past solutions and the strategies used.",
+      "rationale": "Users may want to revisit puzzles or track their progress. History creates stickiness and helps users learn from past solves.",
+      "priority": "should",
+      "complexity": "low",
+      "impact": "medium",
+      "phase_id": "phase-2",
+      "dependencies": [],
+      "status": "under_review",
+      "acceptance_criteria": [
+        "Solved puzzles stored locally with timestamps",
+        "Thumbnail preview of each puzzle",
+        "Option to favorite puzzles for quick access",
+        "View the solution and hints used for any past puzzle",
+        "Clear history option with confirmation"
+      ],
+      "user_stories": [
+        "As a regular user, I want to see my solved puzzle history so that I can track my progress",
+        "As a learner, I want to revisit past solutions to review the strategies used"
+      ],
+      "competitor_insight_ids": []
+    },
+    {
+      "id": "feature-10",
+      "title": "Solution Verification Mode",
+      "description": "Allow users to input their own partial solution and verify correctness without revealing the full answer, confirming if their approach is valid.",
+      "rationale": "Users want to verify their solutions are correct without spoilers. This directly addresses the user goal of solution verification while maintaining puzzle integrity.",
+      "priority": "should",
+      "complexity": "medium",
+      "impact": "high",
+      "phase_id": "phase-2",
+      "dependencies": [
+        "feature-4"
+      ],
+      "status": "under_review",
+      "acceptance_criteria": [
+        "Users can input partial or complete solutions",
+        "Verification confirms if solution is valid without showing answer",
+        "Highlights conflicting cells if solution is invalid",
+        "Option to reveal which constraints are violated"
+      ],
+      "user_stories": [
+        "As a puzzle enthusiast, I want to verify my solution without spoilers so that I can check my work",
+        "As a learner, I want to know which constraints I violated so that I can understand my mistakes"
+      ],
+      "competitor_insight_ids": []
+    },
+    {
+      "id": "feature-11",
+      "title": "Enhanced Confidence Feedback UI",
+      "description": "Improve visual feedback for detection confidence with clear indicators, explanations of what was detected with low confidence, and suggestions for improvement.",
+      "rationale": "Better confidence communication helps users understand when manual review is needed and why, reducing frustration from unexpected errors.",
+      "priority": "should",
+      "complexity": "low",
+      "impact": "medium",
+      "phase_id": "phase-2",
+      "dependencies": [
+        "feature-5"
+      ],
+      "status": "under_review",
+      "acceptance_criteria": [
+        "Color-coded confidence indicators per component",
+        "Tooltip explanations for low-confidence areas",
+        "Suggestions for how to improve detection",
+        "Animated highlights drawing attention to uncertain areas"
+      ],
+      "user_stories": [
+        "As a user, I want to see exactly what the app is uncertain about so that I can focus my review",
+        "As a mobile user, I want clear visual cues about detection quality at a glance"
+      ],
+      "competitor_insight_ids": []
+    },
+    {
+      "id": "feature-12",
+      "title": "ML-Based Puzzle Detection",
+      "description": "Implement machine learning models for puzzle component detection, moving beyond rule-based CV to trained neural networks for higher accuracy.",
+      "rationale": "ML-based detection can achieve 90%+ accuracy where rule-based approaches plateau at 60-80%. This is noted as a future improvement in the project discovery.",
+      "priority": "could",
+      "complexity": "high",
+      "impact": "high",
+      "phase_id": "phase-3",
+      "dependencies": [
+        "feature-6"
+      ],
+      "status": "under_review",
+      "acceptance_criteria": [
+        "Trained model for grid/cell detection",
+        "Trained model for region segmentation",
+        "Trained model for constraint text recognition",
+        "90%+ accuracy on test puzzle dataset",
+        "Model runs on-device for mobile performance"
+      ],
+      "user_stories": [
+        "As a user, I want near-perfect puzzle detection so that I rarely need to make corrections",
+        "As a power user, I want consistent accuracy regardless of puzzle complexity"
+      ],
+      "competitor_insight_ids": []
+    },
+    {
+      "id": "feature-13",
+      "title": "Diamond Cell Inference Completion",
+      "description": "Complete the diamond detection cell inference that is currently marked as TODO. Diamond detection works but cell inference from markers is incomplete.",
+      "rationale": "This is explicit technical debt noted in the codebase. Completing it improves detection accuracy for puzzles using diamond markers.",
+      "priority": "should",
+      "complexity": "medium",
+      "impact": "medium",
+      "phase_id": "phase-3",
+      "dependencies": [
+        "feature-3"
+      ],
+      "status": "planned",
+      "acceptance_criteria": [
+        "Diamond markers correctly infer cell positions",
+        "Works with various diamond sizes and orientations",
+        "Integrates with grid detection pipeline",
+        "Test coverage for diamond-based puzzles"
+      ],
+      "user_stories": [
+        "As a user with diamond-marked puzzles, I want accurate detection so that the full puzzle is captured"
+      ],
+      "linked_spec_id": "016-diamond-cell-inference-completion",
+      "competitor_insight_ids": []
+    },
+    {
+      "id": "feature-14",
+      "title": "Offline Mode",
+      "description": "Enable core puzzle solving to work offline by caching ML models and solver logic locally, with sync when connectivity returns.",
+      "rationale": "Users may want to solve puzzles without internet access. Offline capability removes dependency on connectivity and reduces latency.",
+      "priority": "could",
+      "complexity": "high",
+      "impact": "medium",
+      "phase_id": "phase-3",
+      "dependencies": [
+        "feature-12"
+      ],
+      "status": "under_review",
+      "acceptance_criteria": [
+        "Detection models bundled with app or downloaded once",
+        "Solver runs entirely on-device",
+        "Hints generation works offline",
+        "Graceful degradation when AI features need connectivity"
+      ],
+      "user_stories": [
+        "As a mobile user, I want to solve puzzles offline when traveling without connectivity",
+        "As a user, I want faster solving without waiting for network requests"
+      ],
+      "competitor_insight_ids": []
+    },
+    {
+      "id": "feature-15",
+      "title": "Performance Optimization",
+      "description": "Optimize processing pipeline to achieve consistent sub-5-second solve times from screenshot to solution, reducing current 2-5 second variability.",
+      "rationale": "Speed is a key success metric. Faster solve times improve user experience, especially for mobile users wanting quick answers.",
+      "priority": "could",
+      "complexity": "medium",
+      "impact": "medium",
+      "phase_id": "phase-3",
+      "dependencies": [
+        "feature-1",
+        "feature-2",
+        "feature-3"
+      ],
+      "status": "under_review",
+      "acceptance_criteria": [
+        "95th percentile solve time under 5 seconds",
+        "Median solve time under 3 seconds",
+        "Memory usage stays under 100MB",
+        "No UI jank during processing",
+        "Progress indicators for longer operations"
+      ],
+      "user_stories": [
+        "As a user, I want quick solutions so that I don't wait long when stuck",
+        "As a mobile user, I want efficient processing that doesn't drain my battery"
+      ],
+      "competitor_insight_ids": []
+    },
+    {
+      "id": "feature-16",
+      "title": "Multi-Puzzle Type Support",
+      "description": "Extend the solver architecture to support other NYT puzzle types like Spelling Bee, Connections, or Letter Boxed, leveraging the existing screenshot extraction pipeline.",
+      "rationale": "Expanding to other puzzle types increases addressable market and creates a unified puzzle-solving platform, strengthening the market position.",
+      "priority": "wont",
+      "complexity": "high",
+      "impact": "high",
+      "phase_id": "phase-4",
+      "dependencies": [
+        "feature-12"
+      ],
+      "status": "under_review",
+      "acceptance_criteria": [
+        "Architecture supports pluggable puzzle type modules",
+        "At least one additional puzzle type implemented",
+        "Consistent UX across puzzle types",
+        "Puzzle type auto-detection from screenshots"
+      ],
+      "user_stories": [
+        "As a NYT puzzle fan, I want one app for all my puzzle-solving needs",
+        "As a casual gamer, I want help with multiple puzzle types without switching apps"
+      ],
+      "competitor_insight_ids": []
+    },
+    {
+      "id": "feature-17",
+      "title": "Share Solutions",
+      "description": "Allow users to share their solved puzzles or interesting strategies with others via social media or messaging, with spoiler protection options.",
+      "rationale": "Social sharing drives organic growth and creates community. Spoiler protection respects users who haven't solved the puzzle yet.",
+      "priority": "wont",
+      "complexity": "low",
+      "impact": "medium",
+      "phase_id": "phase-4",
+      "dependencies": [
+        "feature-9"
+      ],
+      "status": "under_review",
+      "acceptance_criteria": [
+        "Generate shareable puzzle summary image",
+        "Option to hide solution in shared content",
+        "Share to common social platforms",
+        "Deep links back to app for recipients"
+      ],
+      "user_stories": [
+        "As a social user, I want to share my puzzle victories with friends",
+        "As a puzzle enthusiast, I want to share interesting strategies without spoilers"
+      ],
+      "competitor_insight_ids": []
+    },
+    {
+      "id": "feature-18",
+      "title": "Premium Features Tier",
+      "description": "Implement a premium subscription tier with advanced features like unlimited hints, priority processing, ad-free experience, and exclusive tutorials.",
+      "rationale": "Monetization enables sustainable development. Premium tier converts engaged users to revenue while keeping core functionality free.",
+      "priority": "wont",
+      "complexity": "medium",
+      "impact": "high",
+      "phase_id": "phase-4",
+      "dependencies": [
+        "feature-7",
+        "feature-8"
+      ],
+      "status": "under_review",
+      "acceptance_criteria": [
+        "In-app subscription purchase flow",
+        "Clear free vs premium feature differentiation",
+        "Premium users get unlimited hints",
+        "Premium users get priority solving queue",
+        "Ad-free experience for premium users"
+      ],
+      "user_stories": [
+        "As a power user, I want unlimited hints for a subscription fee",
+        "As a frequent user, I want an ad-free experience for a reasonable price"
+      ],
+      "competitor_insight_ids": []
+    },
+    {
+      "id": "feature-19",
+      "title": "Puzzle Analytics Dashboard",
+      "description": "Provide users with statistics about their puzzle-solving history including solve times, hint usage, accuracy improvements, and streak tracking.",
+      "rationale": "Analytics create engagement hooks and help users see their improvement over time, increasing retention and satisfaction.",
+      "priority": "wont",
+      "complexity": "medium",
+      "impact": "low",
+      "phase_id": "phase-4",
+      "dependencies": [
+        "feature-9"
+      ],
+      "status": "under_review",
+      "acceptance_criteria": [
+        "Track solve times per puzzle",
+        "Track hint usage patterns",
+        "Show improvement trends over time",
+        "Daily/weekly solving streaks",
+        "Shareable stats summary"
+      ],
+      "user_stories": [
+        "As a competitive user, I want to track my solving statistics",
+        "As a learner, I want to see my improvement over time"
+      ],
+      "competitor_insight_ids": []
+    }
+  ],
+  "metadata": {
+    "created_at": "2025-12-22T18:50:00Z",
+    "updated_at": "2025-12-22T16:09:41.614Z",
+    "generated_by": "roadmap_features agent",
+    "prioritization_framework": "MoSCoW",
+    "competitor_analysis_used": false
+  }
+}

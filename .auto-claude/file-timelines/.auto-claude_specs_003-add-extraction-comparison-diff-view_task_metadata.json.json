@@ -1,0 +1,28 @@
+{
+  "file_path": ".auto-claude/specs/003-add-extraction-comparison-diff-view/task_metadata.json",
+  "main_branch_history": [],
+  "task_views": {
+    "003-add-extraction-comparison-diff-view": {
+      "task_id": "003-add-extraction-comparison-diff-view",
+      "branch_point": {
+        "commit_hash": "faf3f69f9b2794c6a85ffd2581461d3d68bdf8ef",
+        "content": "",
+        "timestamp": "2025-12-22T03:09:14.458300"
+      },
+      "worktree_state": {
+        "content": "{\n  \"sourceType\": \"ideation\",\n  \"ideationType\": \"code_improvements\",\n  \"ideaId\": \"ci-005\",\n  \"rationale\": \"The extraction pipeline stores rawResponses from each model (Gemini, GPT, Claude) in result.debug.rawResponses when saveDebugResponses is enabled. The compareCellDetections function (gridValidator.ts lines 602-644) already computes cell-by-cell disagreement analysis. This data exists but isn't exposed to users.\",\n  \"category\": \"feature\",\n  \"estimatedEffort\": \"large\",\n  \"complexity\": \"large\",\n  \"affectedFiles\": [\n    \"pips-solver/src/app/screens/OverlayBuilderScreen.tsx\",\n    \"pips-solver/src/app/components/ExtractionComparisonModal.tsx\",\n    \"pips-solver/src/services/extraction/validation/gridValidator.ts\"\n  ]\n}",
+        "last_modified": "2025-12-22T03:09:21.814931"
+      },
+      "task_intent": {
+        "title": "Add Extraction Comparison/Diff View",
+        "description": "Allow users to compare extraction results from different AI models side-by-side. This surfaces per-model responses stored during debug mode for manual verification and enables cell-by-cell disagreement analysis.",
+        "from_plan": true
+      },
+      "commits_behind_main": 0,
+      "status": "active",
+      "merged_at": null
+    }
+  },
+  "created_at": "2025-12-22T03:09:15.144974",
+  "last_updated": "2025-12-22T03:09:15.236889"
+}

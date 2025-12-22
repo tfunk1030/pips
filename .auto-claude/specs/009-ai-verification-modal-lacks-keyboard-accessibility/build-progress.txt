@@ -1,0 +1,59 @@
+# Build Progress - AI Verification Modal Keyboard Accessibility
+
+## Current Status: In Progress
+
+## Completed Steps:
+- [x] 1.1 - Merge auto-claude/001-enhance-ai-visual-pips-board branch to get AIVerificationModal and related files
+- [x] 2.1 - Analyze AIVerificationModal TextInput usage and identify keyboard accessibility issues
+
+## Next Steps:
+- [ ] 2.2 - Implement keyboard dismissal on background tap
+- [ ] 2.3 - Add 'Done' toolbar for iOS number-pad keyboard
+- [ ] 2.4 - Implement keyboard navigation between inputs
+
+## Analysis Results (Subtask 2.1):
+
+### TextInput Location:
+- File: `pips-solver/src/app/components/AIVerificationModal.tsx`
+- Component: `ConstraintEditPanel` (lines 1270-1277)
+- Purpose: Allows editing constraint values for regions (e.g., sum = 15)
+
+### Current TextInput Implementation:
+```tsx
+<TextInput
+  style={constraintEditStyles.valueInput}
+  value={constraintValue}
+  onChangeText={setConstraintValue}
+  keyboardType="number-pad"
+  placeholder="0"
+  placeholderTextColor={colors.text.tertiary}
+/>
+```
+
+### Identified Keyboard Accessibility Issues:
+
+1. **Issue #1: iOS number-pad lacks "Done" button**
+   - `keyboardType="number-pad"` on iOS shows a keyboard without a return/done key
+   - Users have no obvious way to dismiss the keyboard
+   - FIX: Add an `inputAccessoryView` with a "Done" button for iOS
+
+2. **Issue #2: No background tap dismissal**
+   - Neither the edit panels nor the modal container implement tap-to-dismiss
+   - Missing `TouchableWithoutFeedback` or `Pressable` wrapping with `Keyboard.dismiss()`
+   - FIX: Wrap content areas with touchable components that call `Keyboard.dismiss()`
+
+3. **Issue #3: No keyboard submission handling**
+   - Missing `returnKeyType` prop (should be "done")
+   - Missing `onSubmitEditing` callback
+   - Missing `blurOnSubmit` configuration
+   - FIX: Add these props to enable keyboard-driven dismissal
+
+4. **Issue #4: ScrollView doesn't handle taps properly**
+   - Missing `keyboardShouldPersistTaps="handled"` on the ScrollView
+   - Tapping buttons while keyboard is open may not work as expected
+   - FIX: Add `keyboardShouldPersistTaps` prop to ScrollView
+
+## Notes:
+- Merged branch contains AIVerificationModal.tsx at pips-solver/src/app/components/AIVerificationModal.tsx
+- The component has two edit panels: CellEditPanel (no TextInput) and ConstraintEditPanel (has TextInput)
+- Only ConstraintEditPanel contains a TextInput for numeric value entry

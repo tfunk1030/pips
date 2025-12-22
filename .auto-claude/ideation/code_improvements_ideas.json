@@ -1,0 +1,74 @@
+{
+  "code_improvements": [
+    {
+      "id": "ci-001",
+      "type": "code_improvements",
+      "title": "Add Image Quality Pre-check Endpoint",
+      "description": "Expose a standalone /analyze-quality endpoint that returns image quality metrics (brightness, contrast, saturation, dynamic range) before attempting puzzle extraction. This allows the app to warn users about poor image quality upfront.",
+      "rationale": "The _calculate_image_stats function already exists in cv-service/main.py and computes comprehensive quality metrics. Currently this is only used internally during preprocessing. Exposing it as a standalone endpoint follows the existing endpoint pattern and enables proactive quality feedback.",
+      "builds_upon": ["cv-service preprocessing pipeline", "_calculate_image_stats function"],
+      "estimated_effort": "trivial",
+      "affected_files": ["cv-service/main.py"],
+      "existing_patterns": ["CropPuzzleRequest/Response pydantic models", "/health endpoint pattern", "decode_image utility"],
+      "implementation_approach": "Create ImageQualityRequest and ImageQualityResponse pydantic models following existing patterns. Add @app.post('/analyze-quality') endpoint that calls decode_image and _calculate_image_stats, returning quality metrics with suggested thresholds for extraction success likelihood.",
+      "status": "draft",
+      "created_at": "2025-12-22T10:40:00.000Z"
+    },
+    {
+      "id": "ci-002",
+      "type": "code_improvements",
+      "title": "Add Extraction State Persistence",
+      "description": "Persist partial extraction results to AsyncStorage during the multi-stage pipeline, enabling recovery if the app is backgrounded or crashes mid-extraction. Users can resume from the last successful stage.",
+      "rationale": "HintModal.tsx already demonstrates the AsyncStorage persistence pattern for hint levels. The extraction pipeline has clear stage boundaries with validated results. Applying the same persistence pattern to extraction state follows existing code patterns.",
+      "builds_upon": ["HintModal AsyncStorage persistence", "Multi-stage extraction pipeline"],
+      "estimated_effort": "small",
+      "affected_files": ["pips-solver/src/services/extraction/pipeline.ts", "pips-solver/src/services/extraction/index.ts"],
+      "existing_patterns": ["HINT_LEVEL_STORAGE_KEY pattern in HintModal", "persistHintLevel callback pattern", "Stage result interfaces"],
+      "implementation_approach": "Add EXTRACTION_STATE_STORAGE_KEY constant. After each stage completion, serialize the accumulated results to AsyncStorage. On pipeline start, check for existing state and offer to resume. Clear state on successful completion or explicit reset.",
+      "status": "draft",
+      "created_at": "2025-12-22T10:40:00.000Z"
+    },
+    {
+      "id": "ci-003",
+      "type": "code_improvements",
+      "title": "Add Constraint Feasibility Pre-validation Endpoint",
+      "description": "Expose the explain_constraint_conflicts function from hint_engine.py as an API endpoint, allowing the app to validate puzzle constraints before attempting to solve. This catches impossible puzzles early.",
+      "rationale": "The explain_constraint_conflicts function already performs sophisticated feasibility analysis (checking if sum constraints are achievable given cell counts and pip ranges). Currently only accessible through the provide_hints tool. Exposing via API follows the existing cv-service endpoint pattern.",
+      "builds_upon": ["hint_engine.py constraint analysis", "provide_hints tool"],
+      "estimated_effort": "small",
+      "affected_files": ["pips-agent/api_server.py", "pips-agent/utils/hint_engine.py"],
+      "existing_patterns": ["FastAPI endpoint pattern from cv-service", "explain_constraint_conflicts function", "YAML parsing from provide_hints"],
+      "implementation_approach": "Add /validate-constraints POST endpoint to pips-agent/api_server.py that accepts puzzle specification and returns list of feasibility issues. Reuse existing parsing and explain_constraint_conflicts logic. Return empty issues array if puzzle is feasible.",
+      "status": "draft",
+      "created_at": "2025-12-22T10:40:00.000Z"
+    },
+    {
+      "id": "ci-004",
+      "type": "code_improvements",
+      "title": "Add Debug Response Export Function",
+      "description": "Add a utility function to export extraction debug data (raw model responses, consensus details, timing) to a shareable format. This enables users to report extraction issues with full diagnostic data.",
+      "rationale": "The extraction pipeline already collects comprehensive debug information when saveDebugResponses is enabled. This data structure exists but there's no way to export/share it. Adding export follows the existing pattern of debug data collection.",
+      "builds_upon": ["Pipeline debug info structure", "ExtractionResult.debug interface"],
+      "estimated_effort": "trivial",
+      "affected_files": ["pips-solver/src/services/extraction/pipeline.ts", "pips-solver/src/services/extraction/index.ts"],
+      "existing_patterns": ["debug info structure in ExtractionResult", "saveDebugResponses config option", "JSON serialization patterns"],
+      "implementation_approach": "Add exportDebugData(result: ExtractionResult): string function that serializes debug info to JSON with timestamps and version info. Add generateDebugReport(result) that creates a human-readable markdown summary. Both functions should handle missing debug data gracefully.",
+      "status": "draft",
+      "created_at": "2025-12-22T10:40:00.000Z"
+    },
+    {
+      "id": "ci-005",
+      "type": "code_improvements",
+      "title": "Add Cross-Stage Confidence Warnings to ConfidenceSummary",
+      "description": "Enhance the ConfidenceSummary component to display cross-stage validation hints generated by the pipeline (high variance warnings, bottleneck indicators) directly in the UI.",
+      "rationale": "The pipeline already generates detailed confidence hints via generateConfidenceHints() including variance warnings and bottleneck identification. The ConfidenceSummary component displays per-stage scores but doesn't show these insights. The ConfidenceBreakdown component shows a pattern for displaying warnings.",
+      "builds_upon": ["generateConfidenceHints function in pipeline.ts", "ConfidenceSummary component", "ConfidenceBreakdown warning patterns"],
+      "estimated_effort": "small",
+      "affected_files": ["pips-solver/src/app/components/ui/ConfidenceIndicator.tsx"],
+      "existing_patterns": ["borderlineWarningStyle in ConfidenceBreakdown", "lowestWarningStyle display pattern", "isBorderline prop pattern"],
+      "implementation_approach": "Extend ConfidenceSummaryProps to accept hints?: string[] and varianceWarning?: boolean. Add conditional rendering for hints below the confidence bars using the existing warning style patterns from ConfidenceBreakdown. Highlight the lowest stage with the existing isLowest pattern.",
+      "status": "draft",
+      "created_at": "2025-12-22T10:40:00.000Z"
+    }
+  ]
+}

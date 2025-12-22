@@ -1,0 +1,135 @@
+{
+  "ui_ux_improvements": [
+    {
+      "id": "uiux-001",
+      "type": "ui_ux_improvements",
+      "title": "Add Accessibility Labels Throughout App",
+      "description": "Add comprehensive accessibility support including accessibilityLabel, accessibilityRole, and accessibilityHint attributes to all interactive elements across the React Native app",
+      "rationale": "Screen reader users cannot navigate most of the app. ExtractionComparisonModal.tsx is the ONLY component with comprehensive accessibility (80+ attributes found). All other screens and components lack accessibility support, creating an inconsistent and largely inaccessible experience.",
+      "category": "accessibility",
+      "affected_components": [
+        "pips-solver/src/app/components/ui/Button.tsx",
+        "pips-solver/src/app/screens/HomeScreen.tsx",
+        "pips-solver/src/app/screens/SolveScreen.tsx",
+        "pips-solver/src/app/screens/builder/Step1GridAlignment.tsx",
+        "pips-solver/src/app/components/AIVerificationModal.tsx",
+        "pips-solver/src/app/components/GridRenderer.tsx",
+        "pips-solver/src/app/components/HintModal.tsx"
+      ],
+      "screenshots": [],
+      "current_state": "ExtractionComparisonModal.tsx has excellent accessibility with 80+ attributes (accessibilityLabel, accessibilityRole, accessibilityHint). However, all other components including Button.tsx, HomeScreen.tsx, SolveScreen.tsx, AIVerificationModal.tsx, HintModal.tsx, and all builder steps have ZERO accessibility attributes.",
+      "proposed_change": "1. Add accessibilityLabel to all Button components describing their action (e.g., 'Solve puzzle', 'Import YAML'). 2. Add accessibilityRole='button' to TouchableOpacity/Pressable elements. 3. Add accessibilityHint for complex interactions (e.g., 'Double tap to open puzzle'). 4. Mark decorative elements with accessible={false}. 5. Add accessibilityLabel to grid cells describing their content (e.g., 'Row 2, Column 3, Region A, pip value 5'). 6. Update GridRenderer to announce cell values when revealed in step-by-step mode.",
+      "user_benefit": "Users with visual impairments can navigate and use the puzzle solver app with screen readers (VoiceOver/TalkBack). This also helps users with motor impairments who rely on switch control or voice commands.",
+      "status": "draft",
+      "created_at": "2025-12-22T03:25:00.000Z"
+    },
+    {
+      "id": "uiux-002",
+      "type": "ui_ux_improvements",
+      "title": "ConfidenceIndicator Uses Hardcoded iOS Colors Instead of Theme",
+      "description": "Replace hardcoded iOS system colors (#34C759, #FF9500, #FF3B30) in ConfidenceIndicator.tsx with the app's semantic theme colors (colors.semantic.jade, amber, coral)",
+      "rationale": "The ConfidenceIndicator component breaks visual consistency by using iOS-specific colors instead of the established 'Tactile Game Table' design system colors. This creates a jarring visual inconsistency with the rest of the app's refined aesthetic.",
+      "category": "visual",
+      "affected_components": [
+        "pips-solver/src/app/components/ConfidenceIndicator.tsx"
+      ],
+      "screenshots": [],
+      "current_state": "ConfidenceIndicator.tsx lines 21-27 use hardcoded iOS colors: #34C759 (green), #FF9500 (orange), #FF3B30 (red). These don't match the app's theme tokens which define colors.semantic.jade (#7ECFB3), colors.semantic.amber (#E8C547), and colors.semantic.coral (#E85D75). Also lines 60-95 use additional hardcoded colors: '#fff', '#888', '#333', '#ccc'.",
+      "proposed_change": "Import colors from theme/tokens.ts and replace: 1) '#34C759' -> colors.semantic.jade, 2) '#FF9500' -> colors.semantic.amber (or colors.accent.brass), 3) '#FF3B30' -> colors.semantic.coral, 4) '#fff' -> colors.text.primary, 5) '#888' -> colors.text.tertiary, 6) '#333' -> colors.surface.slate, 7) '#ccc' -> colors.text.secondary",
+      "user_benefit": "Consistent visual language across the app creates a more polished, professional experience. Users won't experience jarring color shifts when viewing confidence indicators.",
+      "status": "draft",
+      "created_at": "2025-12-22T03:25:00.000Z"
+    },
+    {
+      "id": "uiux-003",
+      "type": "ui_ux_improvements",
+      "title": "Increase Touch Targets in Grid Controls to Meet Accessibility Guidelines",
+      "description": "Increase touch target sizes in Step1GridAlignment.tsx row/column control buttons from 36x36 to minimum 44x44 pixels to meet WCAG touch target accessibility guidelines",
+      "rationale": "The current 36x36 pixel touch targets for row/column increment/decrement buttons are below the WCAG 2.5.5 AAA minimum of 44x44 pixels. This makes the controls difficult to use for users with motor impairments or on smaller screens.",
+      "category": "accessibility",
+      "affected_components": [
+        "pips-solver/src/app/screens/builder/Step1GridAlignment.tsx"
+      ],
+      "screenshots": [],
+      "current_state": "Step1GridAlignment.tsx line 538-542 defines controlButton with width: 36, height: 36. This is 8 pixels below the minimum 44x44 recommended by WCAG for touch targets. The -/+ buttons for adjusting rows and columns are difficult to tap precisely.",
+      "proposed_change": "1. Update styles.controlButton: width: 44, height: 44 (was 36x36). 2. Increase fontSize in controlButtonText from 20 to 22 to maintain visual balance. 3. Alternatively, add hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} to TouchableOpacity to expand touch area without changing visual size. 4. Adjust controlRow gap to account for larger button sizes.",
+      "user_benefit": "Users with motor impairments, tremors, or those using the app on small screens can more easily tap the row/column adjustment controls without frustration or accidental mis-taps.",
+      "status": "draft",
+      "created_at": "2025-12-22T03:25:00.000Z"
+    },
+    {
+      "id": "uiux-004",
+      "type": "ui_ux_improvements",
+      "title": "Increase Domino Half Touch Targets in AI Verification Modal",
+      "description": "Increase the touch target size for domino pip editing in AIVerificationModal from 22x22 to minimum 44x44 pixels while maintaining the compact visual display",
+      "rationale": "The domino half touch targets in the AI Verification Modal are only 22x22 pixels (dominoHalf style), less than half the recommended minimum. Users trying to edit pip values by tapping or long-pressing must be extremely precise, leading to frustration and errors.",
+      "category": "usability",
+      "affected_components": [
+        "pips-solver/src/app/components/AIVerificationModal.tsx"
+      ],
+      "screenshots": [],
+      "current_state": "AIVerificationModal.tsx lines 1658-1661 define dominoHalf with width: 22, height: 22. The TouchableOpacity wrapper (dominoHalfTouchable) also constrains to this small size. Users must tap with high precision to cycle pip values (0-6) using tap/long-press gestures.",
+      "proposed_change": "1. Keep visual dominoHalf size at 22x22 for compact display. 2. Add hitSlop={{ top: 11, bottom: 11, left: 11, right: 11 }} to the TouchableOpacity wrapper to expand touch area to 44x44. 3. Add visual feedback on touch (slight scale animation using withTiming(0.95)). 4. Consider adding a tooltip or visual indicator showing the current tap/long-press interaction pattern.",
+      "user_benefit": "Users can more easily edit domino pip values without needing pixel-perfect precision. Reduces frustration when correcting AI extraction errors, leading to faster puzzle setup.",
+      "status": "draft",
+      "created_at": "2025-12-22T03:25:00.000Z"
+    },
+    {
+      "id": "uiux-005",
+      "type": "ui_ux_improvements",
+      "title": "Add Loading Spinner Animation to Button Component",
+      "description": "Replace the static 'Loading...' text in the Button component with an animated ActivityIndicator spinner for better visual feedback during async operations",
+      "rationale": "The Button component currently just shows 'Loading...' text when in loading state, which provides minimal visual feedback. An animated spinner is more universally recognizable as a loading indicator and provides continuous visual feedback that something is happening.",
+      "category": "interaction",
+      "affected_components": [
+        "pips-solver/src/app/components/ui/Button.tsx"
+      ],
+      "screenshots": [],
+      "current_state": "Button.tsx line 128 shows: {loading ? 'Loading...' : title}. This is a static text replacement with no animation. The theme defines animation utilities in animations.ts but they're not used for loading feedback.",
+      "proposed_change": "1. Import ActivityIndicator from 'react-native'. 2. Replace line 128 with conditional rendering that includes both spinner and optional text: {loading ? (<View style={styles.loadingContainer}><ActivityIndicator size='small' color={variantStyles.text.color} style={{ marginRight: spacing[2] }} /><Text style={[styles.text, variantStyles.text]}>{title}</Text></View>) : (<Text>{title}</Text>)}. 3. Add styles.loadingContainer: { flexDirection: 'row', alignItems: 'center' }. 4. The spinner inherits the text color from the button variant for visual consistency.",
+      "user_benefit": "Users receive immediate, animated visual feedback when triggering async operations like AI extraction or puzzle solving, reducing uncertainty about whether their action was registered.",
+      "status": "draft",
+      "created_at": "2025-12-22T03:25:00.000Z"
+    }
+  ],
+  "metadata": {
+    "generated_by": "ui_ux_ideation_agent",
+    "generated_at": "2025-12-22T03:25:00.000Z",
+    "updated_at": "2025-12-22T10:42:00.000Z",
+    "project": "pips-solver",
+    "analysis_method": "static_code_analysis",
+    "files_analyzed": [
+      "pips-solver/src/app/components/ui/Button.tsx",
+      "pips-solver/src/app/components/ui/Card.tsx",
+      "pips-solver/src/app/components/ui/Text.tsx",
+      "pips-solver/src/app/components/ConfidenceIndicator.tsx",
+      "pips-solver/src/app/components/AIVerificationModal.tsx",
+      "pips-solver/src/app/components/ExtractionComparisonModal.tsx",
+      "pips-solver/src/app/components/HintModal.tsx",
+      "pips-solver/src/app/components/GridRenderer.tsx",
+      "pips-solver/src/app/screens/HomeScreen.tsx",
+      "pips-solver/src/app/screens/SolveScreen.tsx",
+      "pips-solver/src/app/screens/SettingsScreen.tsx",
+      "pips-solver/src/app/screens/builder/Step1GridAlignment.tsx",
+      "pips-solver/src/theme/tokens.ts",
+      "pips-solver/src/theme/animations.ts"
+    ],
+    "note": "Visual verification with device/simulator recommended for all issues. This is a React Native/Expo app - Puppeteer browser automation not applicable.",
+    "key_findings": {
+      "accessibility": "Only ExtractionComparisonModal.tsx has comprehensive accessibility (80+ attributes). All other components lack accessibility support.",
+      "theme_consistency": "ConfidenceIndicator.tsx uses hardcoded iOS colors instead of theme tokens.",
+      "touch_targets": "Multiple components have touch targets below 44x44 WCAG minimum.",
+      "loading_states": "Button component shows static 'Loading...' text instead of animated spinner.",
+      "interactive_elements": "185 TouchableOpacity/Pressable instances across 13 files - mostly lacking accessibility."
+    }
+  },
+  "summary": {
+    "total_ideas": 5,
+    "by_category": {
+      "accessibility": 2,
+      "visual": 1,
+      "usability": 1,
+      "interaction": 1
+    }
+  }
+}

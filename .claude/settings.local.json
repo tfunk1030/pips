@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:docs.claude.com)",
+      "Bash(pip install:*)",
+      "Bash(python -c \"import sys; sys.path.insert\\(0, ''..''\\); from claude_agent_sdk import ClaudeSDKClient; print\\(''✓ Claude SDK imported successfully''\\)\")",
+      "Bash(python -c \"import sys; sys.path.insert\\(0, ''..''\\); from claude_agent_sdk import ClaudeSDKClient; print\\(''Claude SDK imported successfully''\\)\")",
+      "Bash(python:*)",
+      "Bash(npx eas-cli:*)",
+      "Skill(receiving-code-review)",
+      "Skill(using-superpowers)",
+      "Skill(ui-design-system)",
+      "Skill(frontend-design)",
+      "Skill(senior-architect)",
+      "Skill(ux-researcher-designer)",
+      "Skill(senior-computer-vision)",
+      "Skill(brainstorming)",
+      "Bash(npx eslint:*)",
+      "Skill(remembering-conversations)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "WebFetch(domain:ai.google.dev)",
+      "WebFetch(domain:platform.openai.com)",
+      "Skill(code-review)",
+      "Skill(all-tools)"
+    ]
+  },
+  "enabledMcpjsonServers": [
+    "github",
+    "filesystem",
+    "DeepGraph React MCP",
+    "DeepGraph TypeScript MCP",
+    "context7",
+    "memory",
+    "executeautomation-playwright-server",
+    "fetch"
+  ],
+  "enableAllProjectMcpServers": true
+}

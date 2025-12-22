@@ -1,0 +1,25 @@
+{
+  "file_path": "extract_dominoes.py",
+  "main_branch_history": [],
+  "task_views": {
+    "002-add-domino-tray-preprocessing": {
+      "task_id": "002-add-domino-tray-preprocessing",
+      "branch_point": {
+        "commit_hash": "ca61919181c01c78dca29dadbfe07f8be975945b",
+        "content": "import cv2\nimport numpy as np\n\nIMG = \"IMG_2050.png\"\n\nimg = cv2.imread(IMG)\ngray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)\n_,th = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY_INV)\n\ncnts,_ = cv2.findContours(th, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)\n\ndominoes = []\nfor c in cnts:\n    x,y,w,h = cv2.boundingRect(c)\n    if 120 < w < 240 and 50 < h < 100:\n        tile = img[y:y+h, x:x+w]\n        left = tile[:, :w//2]\n        right = tile[:, w//2:]\n\n        def count_pips(half):\n            g = cv2.cvtColor(half, cv2.COLOR_BGR2GRAY)\n            _,t = cv2.threshold(g, 150, 255, cv2.THRESH_BINARY_INV)\n            cnts,_ = cv2.findContours(t, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)\n            return sum(1 for c in cnts if 10 < cv2.contourArea(c) < 200)\n\n        a = count_pips(left)\n        b = count_pips(right)\n        dominoes.append((a,b))\n\nprint(\"Dominoes:\", dominoes)\n",
+        "timestamp": "2025-12-22T03:09:11.890448"
+      },
+      "worktree_state": null,
+      "task_intent": {
+        "title": "002-add-domino-tray-preprocessing",
+        "description": "Apply image preprocessing pipeline (CLAHE, brightness normalization, white balance) to cropped domino tray images before AI extraction to improve domino pip detection accuracy, especially in low-light photos.",
+        "from_plan": true
+      },
+      "commits_behind_main": 0,
+      "status": "active",
+      "merged_at": null
+    }
+  },
+  "created_at": "2025-12-22T03:09:11.890448",
+  "last_updated": "2025-12-22T03:09:11.941937"
+}

@@ -1,0 +1,28 @@
+{
+  "file_path": ".auto-claude/specs/001-enhance-ai-visual-pips-board-extraction-accuracy/build-progress.txt",
+  "main_branch_history": [],
+  "task_views": {
+    "005-add-image-stats-diagnostic-endpoint": {
+      "task_id": "005-add-image-stats-diagnostic-endpoint",
+      "branch_point": {
+        "commit_hash": "faf3f69f9b2794c6a85ffd2581461d3d68bdf8ef",
+        "content": "",
+        "timestamp": "2025-12-22T03:09:16.372053"
+      },
+      "worktree_state": {
+        "content": "=== AUTO-BUILD PROGRESS ===\n\nProject: Enhance AI Visual Pips Board Extraction Accuracy\nSpec: 001-enhance-ai-visual-pips-board-extraction-accuracy\nWorkspace: managed by orchestrator\nStarted: 2025-12-21\n\nWorkflow Type: feature\nRationale: Feature enhancement improving existing AI extraction accuracy while adding new capabilities (enhanced validation, better UI feedback, improved preprocessing). Involves changes across pips-solver and cv-service with coordinated improvements.\n\nSession 1 (Planner):\n- Completed deep codebase investigation\n- Analyzed 5-stage extraction pipeline pattern\n- Identified multi-model ensemble consensus voting pattern\n- Documented Zod validation patterns and JSON parsing utilities\n- Created implementation_plan.json\n- Phases: 6\n- Total subtasks: 17\n- Created init.sh\n- Created build-progress.txt\n\nPhase Summary:\n- Phase 1 (Extraction Prompt Engineering): 5 subtasks, no dependencies\n  - Improve prompts for grid geometry, cell detection, region mapping, constraints, dominoes\n- Phase 2 (Cross-Stage Validation): 3 subtasks, depends on Phase 1\n  - Enhance grid validator, add inter-stage validation, improve confidence aggregation\n- Phase 3 (CV Service Preprocessing): 3 subtasks, no dependencies\n  - Improve grid detection, better cropping, add preprocessing endpoint\n- Phase 4 (Frontend UI/UX): 4 subtasks, depends on Phase 1 & 2\n  - Add confidence indicators, visual diff, cell correction UI, low-confidence warnings\n- Phase 5 (CV-AI Integration): 2 subtasks, depends on Phase 3\n  - Enhance cvExtraction.ts, add fallback logic\n- Phase 6 (Integration Testing): 2 subtasks, depends on Phase 4 & 5\n  - End-to-end verification, low-confidence flow testing\n\nServices Involved:\n- pips-solver: React Native/Expo frontend with AI extraction logic\n- cv-service: Python/FastAPI backend for image preprocessing\n\nParallelism Analysis:\n- Max parallel phases: 2\n- Recommended workers: 2\n- Parallel groups:\n  - Phase 1 (pips-solver prompts) + Phase 3 (cv-service) can run simultaneously\n- Speedup estimate: 1.5x faster than sequential\n\nKey Files to Modify:\npips-solver:\n  - src/services/extraction/stages/gridGeometry.ts\n  - src/services/extraction/stages/cellDetection.ts\n  - src/services/extraction/stages/regionMapping.ts\n  - src/services/extraction/stages/constraintExtraction.ts\n  - src/services/extraction/stages/dominoExtraction.ts\n  - src/services/extraction/validation/gridValidator.ts\n  - src/services/extraction/pipeline.ts\n  - src/services/cvExtraction.ts\n  - src/app/components/AIVerificationModal.tsx\n  - src/app/screens/OverlayBuilderScreen.tsx\n\ncv-service:\n  - main.py\n  - hybrid_extraction.py\n\nPatterns to Follow:\n- 5-stage pipeline with context passing: Grid \u2192 Cells \u2192 Regions \u2192 Constraints \u2192 Dominoes\n- Multi-model ensemble with confidence-weighted consensus voting\n- Use safeParse() for Zod validation of all AI responses\n- Use parseJSONWithFallback() for AI response parsing\n- ProgressCallback for reporting stage progress with confidence\n\n=== STARTUP COMMAND ===\n\nTo continue building this spec, run:\n\n  source auto-claude/.venv/bin/activate && python auto-claude/run.py --spec 001 --parallel 2\n\nOr manually:\n\n  # Terminal 1: CV Service\n  cd cv-service && uvicorn main:app --host 0.0.0.0 --port 8080 --reload\n\n  # Terminal 2: Expo Frontend\n  cd pips-solver && npm run start\n\n=== END SESSION 1 (PLANNER) ===\n\nNext: Coder agent will pick up implementation from subtask-1-1\n",
+        "last_modified": "2025-12-22T03:30:38.588834"
+      },
+      "task_intent": {
+        "title": "005-add-image-stats-diagnostic-endpoint",
+        "description": "Create a _calculate_image_stats function and expose it as a standalone API endpoint that returns brightness, contrast, dynamic range, color balance, and saturation metrics without requiring preprocessing. This helps users diagnose image quality issues before extraction.",
+        "from_plan": true
+      },
+      "commits_behind_main": 0,
+      "status": "active",
+      "merged_at": null
+    }
+  },
+  "created_at": "2025-12-22T03:09:17.049769",
+  "last_updated": "2025-12-22T03:09:17.151615"
+}

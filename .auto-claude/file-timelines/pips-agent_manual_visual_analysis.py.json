@@ -1,0 +1,25 @@
+{
+  "file_path": "pips-agent/manual_visual_analysis.py",
+  "main_branch_history": [],
+  "task_views": {
+    "005-add-image-stats-diagnostic-endpoint": {
+      "task_id": "005-add-image-stats-diagnostic-endpoint",
+      "branch_point": {
+        "commit_hash": "faf3f69f9b2794c6a85ffd2581461d3d68bdf8ef",
+        "content": "",
+        "timestamp": "2025-12-22T03:09:16.372053"
+      },
+      "worktree_state": null,
+      "task_intent": {
+        "title": "005-add-image-stats-diagnostic-endpoint",
+        "description": "Create a _calculate_image_stats function and expose it as a standalone API endpoint that returns brightness, contrast, dynamic range, color balance, and saturation metrics without requiring preprocessing. This helps users diagnose image quality issues before extraction.",
+        "from_plan": true
+      },
+      "commits_behind_main": 0,
+      "status": "active",
+      "merged_at": null
+    }
+  },
+  "created_at": "2025-12-22T03:09:23.409474",
+  "last_updated": "2025-12-22T03:09:23.499586"
+}
