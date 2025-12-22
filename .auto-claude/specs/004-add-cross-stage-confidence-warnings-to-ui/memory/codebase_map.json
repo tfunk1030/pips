@@ -1,0 +1,35 @@
+{
+  "discovered_files": {
+    "src/extraction/types.ts": {
+      "description": "Extraction pipeline types file with ExtractionStage (union type), StageConfidence, ConfidenceHint, HintSeverity, ExtractedCell, and ExtractionResult interfaces. All confidence-related types are here.",
+      "category": "types",
+      "discovered_at": "2025-12-22T08:16:33.747001+00:00"
+    },
+    "src/app/components/ui/ConfidenceSummary.tsx": {
+      "description": "Composite component combining ConfidenceIndicator and ConfidenceHintsList in a card layout. Features: expandable/collapsible hints section with LayoutAnimation, warning count badge, 'No warnings' state with checkmark, full accessibility support. Uses the same styling patterns as sibling components.",
+      "category": "ui-component",
+      "discovered_at": "2025-12-22T08:25:34.358658+00:00"
+    },
+    "src/app/screens/ExtractionResultScreen.tsx": {
+      "description": "New ExtractionResultScreen component for displaying extraction results with puzzle grid preview, confidence summary, stage breakdown toggle, and Accept/Retry actions. Navigates to Solve screen when accepted.",
+      "category": "component",
+      "discovered_at": "2025-12-22T08:32:03.088329+00:00"
+    },
+    "src/app/hooks/useExtraction.ts": {
+      "description": "Custom useExtraction hook that wraps the extraction pipeline with loading states. Uses mock data via getRandomMockResult() during development. Calls generateConfidenceHints and calculateOverallConfidence from pipeline.ts to ensure hints are freshly generated. Provides isExtracting, extractFromImage, retry, and clear functions.",
+      "category": "hook",
+      "discovered_at": "2025-12-22T08:41:39.899956+00:00"
+    },
+    "src/extraction/__tests__/pipeline.test.ts": {
+      "description": "Comprehensive test file for extraction pipeline with 49 tests covering generateConfidenceHints and calculateOverallConfidence. Tests include: low confidence detection at each stage, variance calculation/thresholds, hint message formatting, severity determination, and edge cases. Uses Jest with ts-jest for TypeScript testing.",
+      "category": "testing",
+      "discovered_at": "2025-12-22T08:50:59.657168+00:00"
+    },
+    "src/extraction/__tests__/integration.test.ts": {
+      "description": "Integration test file with 37 tests covering the full extraction-to-display flow. Tests mock scenarios data integrity, pipeline consistency, UI display requirements (color coding, hints, grid preview), navigation flow, and accessibility. Combined with pipeline.test.ts (49 tests), provides 86 tests total for extraction feature.",
+      "category": "testing",
+      "discovered_at": "2025-12-22T08:57:11.451248+00:00"
+    }
+  },
+  "last_updated": "2025-12-22T08:57:11.451248+00:00"
+}
