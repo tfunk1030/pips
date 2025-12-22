@@ -4,7 +4,7 @@
  * Enables users to review per-model results and see disagreements highlighted.
  */
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef } from 'react';
 import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, Pressable } from 'react-native';
 import type {
   RawResponses,
@@ -21,6 +21,11 @@ import {
   type CellDisagreement,
   type DisagreementSeverity,
   type CellCoordinate,
+  type Disagreement,
+  type GridDimensionDisagreement,
+  type ConstraintDisagreement,
+  type DominoDisagreement,
+  sortDisagreementsBySeverity,
 } from '../../services/extraction/validation/gridValidator';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -86,6 +91,9 @@ interface Props {
 
 /** Tab types for the comparison view */
 type TabType = 'summary' | string; // 'summary' or model name
+
+/** Severity filter state */
+type SeverityFilters = Record<DisagreementSeverity, boolean>;
 
 // ════════════════════════════════════════════════════════════════════════════
 // Subcomponents
@@ -252,12 +260,326 @@ function formatDisagreementType(type: string): string {
 }
 
 /**
+ * Severity filter toggle chips
+ */
+function SeverityFilterBar({
+  filters,
+  onToggle,
+  summary,
+}: {
+  filters: SeverityFilters;
+  onToggle: (severity: DisagreementSeverity) => void;
+  summary: DisagreementSummary;
+}) {
+  const severities: DisagreementSeverity[] = ['critical', 'warning', 'info'];
+
+  return (
+    <View style={styles.filterBar}>
+      <Text style={styles.filterLabel}>Show:</Text>
+      {severities.map((severity) => {
+        const count = summary[severity];
+        const isActive = filters[severity];
+        const colors = SEVERITY_COLORS[severity];
+
+        return (
+          <Pressable
+            key={severity}
+            style={[
+              styles.filterChip,
+              isActive && { backgroundColor: colors.bg, borderColor: colors.border },
+              !isActive && styles.filterChipInactive,
+            ]}
+            onPress={() => onToggle(severity)}
+          >
+            <View style={[styles.filterDot, { backgroundColor: colors.border }]} />
+            <Text style={[
+              styles.filterChipText,
+              isActive && { color: colors.text },
+              !isActive && styles.filterChipTextInactive,
+            ]}>
+              {severity.charAt(0).toUpperCase() + severity.slice(1)} ({count})
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+/**
+ * Format disagreement values for display based on type
+ */
+function formatDisagreementValues(disagreement: Disagreement): Record<string, string> {
+  const formatted: Record<string, string> = {};
+
+  if ('coordinate' in disagreement) {
+    // CellDisagreement - format detections
+    const cellDisagreement = disagreement as CellDisagreement;
+    for (const [model, detection] of Object.entries(cellDisagreement.detections)) {
+      if (disagreement.type === 'hole_position') {
+        formatted[model] = detection.isHole ? '# (hole)' : '· (cell)';
+      } else {
+        formatted[model] = detection.region || 'null';
+      }
+    }
+  } else if ('dimension' in disagreement) {
+    // GridDimensionDisagreement
+    const dimDisagreement = disagreement as GridDimensionDisagreement;
+    for (const [model, value] of Object.entries(dimDisagreement.values)) {
+      formatted[model] = String(value);
+    }
+  } else if ('region' in disagreement) {
+    // ConstraintDisagreement
+    const constDisagreement = disagreement as ConstraintDisagreement;
+    for (const [model, constraint] of Object.entries(constDisagreement.values)) {
+      if (constraint === null) {
+        formatted[model] = 'none';
+      } else if (disagreement.type === 'constraint_type') {
+        formatted[model] = constraint.type || 'none';
+      } else if (disagreement.type === 'constraint_value') {
+        formatted[model] = constraint.value !== undefined ? String(constraint.value) : 'undefined';
+      } else if (disagreement.type === 'constraint_operator') {
+        formatted[model] = constraint.op || '==';
+      }
+    }
+  } else {
+    // DominoDisagreement
+    const dominoDisagreement = disagreement as DominoDisagreement;
+    for (const [model, value] of Object.entries(dominoDisagreement.values)) {
+      if (typeof value === 'number') {
+        formatted[model] = String(value);
+      } else if (typeof value === 'boolean') {
+        formatted[model] = value ? '✓ present' : '✗ missing';
+      } else if (Array.isArray(value)) {
+        formatted[model] = `${value.length} dominoes`;
+      }
+    }
+  }
+
+  return formatted;
+}
+
+/**
+ * Get location info for a disagreement
+ */
+function getDisagreementLocation(disagreement: Disagreement): string | null {
+  if ('coordinate' in disagreement) {
+    const coord = (disagreement as CellDisagreement).coordinate;
+    return `Cell (${coord.row}, ${coord.col})`;
+  } else if ('region' in disagreement) {
+    return `Region ${(disagreement as ConstraintDisagreement).region}`;
+  } else if ('dimension' in disagreement) {
+    return (disagreement as GridDimensionDisagreement).dimension === 'rows' ? 'Rows' : 'Columns';
+  }
+  return null;
+}
+
+/**
+ * Single disagreement list item
+ */
+function DisagreementListItem({
+  disagreement,
+  onPress,
+}: {
+  disagreement: Disagreement;
+  onPress?: () => void;
+}) {
+  const severityColor = SEVERITY_COLORS[disagreement.severity];
+  const location = getDisagreementLocation(disagreement);
+  const values = formatDisagreementValues(disagreement);
+  const isNavigable = 'coordinate' in disagreement;
+
+  const content = (
+    <View style={[styles.disagreementItem, { borderLeftColor: severityColor.border }]}>
+      {/* Header row with type and location */}
+      <View style={styles.disagreementItemHeader}>
+        <View style={styles.disagreementItemHeaderLeft}>
+          <Text style={styles.disagreementItemType}>
+            {formatDisagreementType(disagreement.type)}
+          </Text>
+          {location && (
+            <Text style={styles.disagreementItemLocation}>{location}</Text>
+          )}
+        </View>
+        <View style={[styles.disagreementItemSeverityBadge, { backgroundColor: severityColor.bg }]}>
+          <Text style={[styles.disagreementItemSeverityText, { color: severityColor.text }]}>
+            {disagreement.severity.toUpperCase()}
+          </Text>
+        </View>
+      </View>
+
+      {/* Model values */}
+      <View style={styles.disagreementItemValues}>
+        {Object.entries(values).map(([model, value]) => (
+          <View key={model} style={styles.disagreementItemValueRow}>
+            <Text style={styles.disagreementItemModelName}>{formatModelName(model)}</Text>
+            <Text style={styles.disagreementItemModelValue}>{value}</Text>
+          </View>
+        ))}
+      </View>
+
+      {/* Navigation hint for cell-based disagreements */}
+      {isNavigable && (
+        <View style={styles.disagreementItemNav}>
+          <Text style={styles.disagreementItemNavText}>Tap to view in grid →</Text>
+        </View>
+      )}
+    </View>
+  );
+
+  if (isNavigable && onPress) {
+    return (
+      <Pressable onPress={onPress}>
+        {content}
+      </Pressable>
+    );
+  }
+
+  return content;
+}
+
+/**
+ * Grouped disagreements section
+ */
+function DisagreementGroup({
+  title,
+  disagreements,
+  onDisagreementPress,
+}: {
+  title: string;
+  disagreements: Disagreement[];
+  onDisagreementPress?: (disagreement: Disagreement) => void;
+}) {
+  if (disagreements.length === 0) return null;
+
+  return (
+    <View style={styles.disagreementGroup}>
+      <View style={styles.disagreementGroupHeader}>
+        <Text style={styles.disagreementGroupTitle}>{title}</Text>
+        <View style={styles.disagreementGroupCountBadge}>
+          <Text style={styles.disagreementGroupCountText}>{disagreements.length}</Text>
+        </View>
+      </View>
+      {disagreements.map((disagreement) => (
+        <DisagreementListItem
+          key={disagreement.id}
+          disagreement={disagreement}
+          onPress={() => onDisagreementPress?.(disagreement)}
+        />
+      ))}
+    </View>
+  );
+}
+
+/**
+ * Diff Summary Panel - shows all disagreements in a filterable list
+ */
+function DiffSummaryPanel({
+  comparison,
+  filters,
+  onToggleFilter,
+  onDisagreementPress,
+}: {
+  comparison: ComparisonResult;
+  filters: SeverityFilters;
+  onToggleFilter: (severity: DisagreementSeverity) => void;
+  onDisagreementPress: (disagreement: Disagreement) => void;
+}) {
+  // Filter disagreements by active severity filters
+  const filteredDisagreements = useMemo(() => {
+    return sortDisagreementsBySeverity(
+      comparison.allDisagreements.filter(d => filters[d.severity])
+    );
+  }, [comparison.allDisagreements, filters]);
+
+  // Group filtered disagreements by type
+  const groupedDisagreements = useMemo(() => {
+    const filtered = {
+      gridDimensions: comparison.disagreementsByType.gridDimensions.filter(d => filters[d.severity]),
+      holePositions: comparison.disagreementsByType.holePositions.filter(d => filters[d.severity]),
+      regionAssignments: comparison.disagreementsByType.regionAssignments.filter(d => filters[d.severity]),
+      constraints: comparison.disagreementsByType.constraints.filter(d => filters[d.severity]),
+      dominoes: comparison.disagreementsByType.dominoes.filter(d => filters[d.severity]),
+    };
+    return filtered;
+  }, [comparison.disagreementsByType, filters]);
+
+  const hasVisibleDisagreements = filteredDisagreements.length > 0;
+  const totalFiltered = filteredDisagreements.length;
+  const totalAll = comparison.allDisagreements.length;
+
+  return (
+    <View style={styles.diffSummaryPanel}>
+      {/* Filter controls */}
+      <SeverityFilterBar
+        filters={filters}
+        onToggle={onToggleFilter}
+        summary={comparison.summary}
+      />
+
+      {/* Results count */}
+      <Text style={styles.diffSummaryResultCount}>
+        {totalFiltered === totalAll
+          ? `Showing all ${totalAll} disagreement${totalAll !== 1 ? 's' : ''}`
+          : `Showing ${totalFiltered} of ${totalAll} disagreement${totalAll !== 1 ? 's' : ''}`}
+      </Text>
+
+      {/* Grouped disagreement list */}
+      {hasVisibleDisagreements ? (
+        <View style={styles.diffSummaryList}>
+          <DisagreementGroup
+            title="Grid Dimensions"
+            disagreements={groupedDisagreements.gridDimensions}
+            onDisagreementPress={onDisagreementPress}
+          />
+          <DisagreementGroup
+            title="Hole Positions"
+            disagreements={groupedDisagreements.holePositions}
+            onDisagreementPress={onDisagreementPress}
+          />
+          <DisagreementGroup
+            title="Region Assignments"
+            disagreements={groupedDisagreements.regionAssignments}
+            onDisagreementPress={onDisagreementPress}
+          />
+          <DisagreementGroup
+            title="Constraints"
+            disagreements={groupedDisagreements.constraints}
+            onDisagreementPress={onDisagreementPress}
+          />
+          <DisagreementGroup
+            title="Dominoes"
+            disagreements={groupedDisagreements.dominoes}
+            onDisagreementPress={onDisagreementPress}
+          />
+        </View>
+      ) : (
+        <View style={styles.diffSummaryEmpty}>
+          <Text style={styles.diffSummaryEmptyText}>
+            No disagreements match the current filters.
+          </Text>
+          <Text style={styles.diffSummaryEmptyHint}>
+            Try enabling more severity levels above.
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+/**
  * Summary view showing overall comparison statistics
  */
 function SummaryView({
   comparison,
+  filters,
+  onToggleFilter,
+  onDisagreementPress,
 }: {
   comparison: ComparisonResult;
+  filters: SeverityFilters;
+  onToggleFilter: (severity: DisagreementSeverity) => void;
+  onDisagreementPress: (disagreement: Disagreement) => void;
 }) {
   const { summary, modelsCompared, isUnanimous } = comparison;
 
@@ -287,7 +609,7 @@ function SummaryView({
         </View>
       </View>
 
-      {/* Disagreement Summary */}
+      {/* Disagreement Summary - Quick Stats */}
       {!isUnanimous && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Disagreements by Severity</Text>
@@ -299,11 +621,16 @@ function SummaryView({
         </View>
       )}
 
-      {/* Disagreement Types Summary */}
+      {/* Detailed Diff Summary Panel with Filter and Navigation */}
       {!isUnanimous && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>By Category</Text>
-          <DisagreementCategorySummary comparison={comparison} />
+          <Text style={styles.sectionTitle}>All Disagreements</Text>
+          <DiffSummaryPanel
+            comparison={comparison}
+            filters={filters}
+            onToggleFilter={onToggleFilter}
+            onDisagreementPress={onDisagreementPress}
+          />
         </View>
       )}
     </View>
@@ -333,32 +660,6 @@ function SeveritySummaryItem({
       <View style={[styles.severityDot, { backgroundColor: colors[severity] }]} />
       <Text style={styles.severityLabel}>{label}</Text>
       <Text style={styles.severityCount}>{count}</Text>
-    </View>
-  );
-}
-
-/**
- * Summary of disagreements by category
- */
-function DisagreementCategorySummary({ comparison }: { comparison: ComparisonResult }) {
-  const { disagreementsByType } = comparison;
-
-  const categories = [
-    { label: 'Grid Dimensions', count: disagreementsByType.gridDimensions.length },
-    { label: 'Hole Positions', count: disagreementsByType.holePositions.length },
-    { label: 'Region Assignments', count: disagreementsByType.regionAssignments.length },
-    { label: 'Constraints', count: disagreementsByType.constraints.length },
-    { label: 'Dominoes', count: disagreementsByType.dominoes.length },
-  ].filter((c) => c.count > 0);
-
-  return (
-    <View style={styles.categoryList}>
-      {categories.map((cat) => (
-        <View key={cat.label} style={styles.categoryItem}>
-          <Text style={styles.categoryLabel}>{cat.label}</Text>
-          <Text style={styles.categoryCount}>{cat.count}</Text>
-        </View>
-      ))}
     </View>
   );
 }
@@ -852,6 +1153,13 @@ export default function ExtractionComparisonModal({
     disagreements: CellDisagreement[];
   } | null>(null);
 
+  // State for severity filters (all enabled by default)
+  const [severityFilters, setSeverityFilters] = useState<SeverityFilters>({
+    critical: true,
+    warning: true,
+    info: true,
+  });
+
   // Compute comparison result from raw responses
   const comparison = useMemo<ComparisonResult | null>(() => {
     if (!rawResponses) return null;
@@ -871,6 +1179,32 @@ export default function ExtractionComparisonModal({
   const handleCloseCellPopup = useCallback(() => {
     setSelectedCell(null);
   }, []);
+
+  // Handle severity filter toggle
+  const handleToggleSeverityFilter = useCallback((severity: DisagreementSeverity) => {
+    setSeverityFilters(prev => ({
+      ...prev,
+      [severity]: !prev[severity],
+    }));
+  }, []);
+
+  // Handle disagreement navigation - switch to first model tab and show cell popup
+  const handleDisagreementPress = useCallback((disagreement: Disagreement) => {
+    if ('coordinate' in disagreement) {
+      const cellDisagreement = disagreement as CellDisagreement;
+      // Switch to first model tab to see the grid
+      if (comparison && comparison.modelsCompared.length > 0) {
+        setSelectedTab(comparison.modelsCompared[0]);
+      }
+      // Show the cell detail popup for this disagreement
+      const key = cellKey(cellDisagreement.coordinate.row, cellDisagreement.coordinate.col);
+      const allDisagreementsAtCell = comparison?.cellDisagreementMap.get(key) || [cellDisagreement];
+      setSelectedCell({
+        coordinate: cellDisagreement.coordinate,
+        disagreements: allDisagreementsAtCell,
+      });
+    }
+  }, [comparison]);
 
   // Build tab list: summary + one per model
   const tabs = useMemo<TabType[]>(() => {
@@ -981,7 +1315,12 @@ export default function ExtractionComparisonModal({
           contentContainerStyle={styles.contentContainer}
         >
           {selectedTab === 'summary' ? (
-            <SummaryView comparison={comparison} />
+            <SummaryView
+              comparison={comparison}
+              filters={severityFilters}
+              onToggleFilter={handleToggleSeverityFilter}
+              onDisagreementPress={handleDisagreementPress}
+            />
           ) : currentModelResult ? (
             <ModelResultView
               modelResult={currentModelResult}
@@ -1197,29 +1536,6 @@ const styles = StyleSheet.create({
     color: '#ccc',
   },
   severityCount: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-
-  // Category List
-  categoryList: {
-    gap: 8,
-  },
-  categoryItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#2a2a2a',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  categoryLabel: {
-    fontSize: 14,
-    color: '#ccc',
-  },
-  categoryCount: {
     fontSize: 14,
     fontWeight: 'bold',
     color: '#fff',
@@ -1621,5 +1937,180 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff',
     fontFamily: 'Courier',
+  },
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Diff Summary Panel Styles
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // Filter Bar
+  filterBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+  },
+  filterLabel: {
+    fontSize: 13,
+    color: '#888',
+    marginRight: 4,
+  },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#444',
+  },
+  filterChipInactive: {
+    backgroundColor: 'transparent',
+    opacity: 0.5,
+  },
+  filterChipText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  filterChipTextInactive: {
+    color: '#888',
+  },
+  filterDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+
+  // Diff Summary Panel
+  diffSummaryPanel: {
+    marginTop: 8,
+  },
+  diffSummaryResultCount: {
+    fontSize: 12,
+    color: '#888',
+    marginBottom: 16,
+    fontStyle: 'italic',
+  },
+  diffSummaryList: {
+    gap: 20,
+  },
+  diffSummaryEmpty: {
+    alignItems: 'center',
+    padding: 24,
+    backgroundColor: '#2a2a2a',
+    borderRadius: 8,
+  },
+  diffSummaryEmptyText: {
+    fontSize: 14,
+    color: '#888',
+    textAlign: 'center',
+  },
+  diffSummaryEmptyHint: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+
+  // Disagreement Group
+  disagreementGroup: {
+    gap: 8,
+  },
+  disagreementGroupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  disagreementGroupTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#aaa',
+  },
+  disagreementGroupCountBadge: {
+    backgroundColor: '#444',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  disagreementGroupCountText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+
+  // Disagreement Item
+  disagreementItem: {
+    backgroundColor: '#2a2a2a',
+    borderRadius: 8,
+    padding: 12,
+    borderLeftWidth: 3,
+    marginBottom: 8,
+  },
+  disagreementItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
+  disagreementItemHeaderLeft: {
+    flex: 1,
+    marginRight: 8,
+  },
+  disagreementItemType: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+    marginBottom: 2,
+  },
+  disagreementItemLocation: {
+    fontSize: 12,
+    color: '#888',
+    fontFamily: 'Courier',
+  },
+  disagreementItemSeverityBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  disagreementItemSeverityText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  disagreementItemValues: {
+    gap: 4,
+  },
+  disagreementItemValueRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#1a1a1a',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 4,
+  },
+  disagreementItemModelName: {
+    fontSize: 12,
+    color: '#888',
+  },
+  disagreementItemModelValue: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#fff',
+    fontFamily: 'Courier',
+  },
+  disagreementItemNav: {
+    marginTop: 8,
+    alignItems: 'flex-end',
+  },
+  disagreementItemNavText: {
+    fontSize: 11,
+    color: '#4CAF50',
+    fontStyle: 'italic',
   },
 });
