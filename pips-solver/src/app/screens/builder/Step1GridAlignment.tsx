@@ -9,7 +9,6 @@ import {
   LayoutChangeEvent,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -18,7 +17,7 @@ import Svg, { Circle, Line, Rect } from 'react-native-svg';
 import { BuilderAction, GridBounds, OverlayBuilderState } from '../../../model/overlayTypes';
 import { constrainBounds, hitTestCell } from '../../../utils/gridCalculations';
 import ConfidenceIndicator from '../../components/ConfidenceIndicator';
-import { Button } from '../../components/ui';
+import { Body, Button, Label } from '../../components/ui';
 
 interface StageConfidence {
   board?: number;
@@ -77,7 +76,7 @@ export default function Step1GridAlignment({
   if (!image) {
     return (
       <View style={styles.container}>
-        <Text style={styles.emptyText}>No image selected</Text>
+        <Body color="secondary" align="center" style={styles.emptyText}>No image selected</Body>
         <Button
           title="Select Image"
           variant="primary"
@@ -120,14 +119,14 @@ export default function Step1GridAlignment({
       {/* Controls */}
       <View style={styles.controls}>
         <View style={styles.controlRow}>
-          <Text style={styles.controlLabel}>Rows</Text>
+          <Label color="secondary" style={styles.controlLabel}>Rows</Label>
           <Button
             title="−"
             variant="secondary"
             size="small"
             onPress={() => handleRowChange(-1)}
           />
-          <Text style={styles.controlValue}>{grid.rows}</Text>
+          <Body style={styles.controlValue}>{grid.rows}</Body>
           <Button
             title="+"
             variant="secondary"
@@ -137,14 +136,14 @@ export default function Step1GridAlignment({
         </View>
 
         <View style={styles.controlRow}>
-          <Text style={styles.controlLabel}>Cols</Text>
+          <Label color="secondary" style={styles.controlLabel}>Cols</Label>
           <Button
             title="−"
             variant="secondary"
             size="small"
             onPress={() => handleColChange(-1)}
           />
-          <Text style={styles.controlValue}>{grid.cols}</Text>
+          <Body style={styles.controlValue}>{grid.cols}</Body>
           <Button
             title="+"
             variant="secondary"
@@ -157,7 +156,7 @@ export default function Step1GridAlignment({
       {/* AI Confidence Indicator */}
       {state.aiStatus === 'done' && state.aiConfidence?.grid && (
         <View style={styles.confidenceSection}>
-          <Text style={styles.confidenceTitle}>AI Extraction Confidence</Text>
+          <Label size="small" color="secondary" style={styles.confidenceTitle}>AI Extraction Confidence</Label>
           <ConfidenceIndicator label="Grid Layout" confidence={state.aiConfidence.grid} compact />
         </View>
       )}
@@ -172,12 +171,12 @@ export default function Step1GridAlignment({
             loading={!!aiProgress}
             style={styles.aiButton}
           />
-          <Text style={styles.aiHint}>AI will detect grid, regions, constraints, and dominoes</Text>
+          <Body size="small" color="secondary" align="center" style={styles.aiHint}>AI will detect grid, regions, constraints, and dominoes</Body>
 
           {/* Per-stage confidence indicators during extraction */}
           {aiProgress && stageConfidence && (stageConfidence.board !== undefined || stageConfidence.dominoes !== undefined) && (
             <View style={styles.stageConfidenceContainer}>
-              <Text style={styles.stageConfidenceTitle}>Extraction Progress</Text>
+              <Label size="small" color="secondary" style={styles.stageConfidenceTitle}>Extraction Progress</Label>
               <View style={styles.stageConfidenceIndicators}>
                 <ConfidenceIndicator
                   label="Board"
@@ -195,7 +194,7 @@ export default function Step1GridAlignment({
         </View>
       )}
 
-      <Text style={styles.hint}>Drag edges to align grid. Tap cells to mark holes.</Text>
+      <Body size="small" color="secondary" align="center" style={styles.hint}>Drag edges to align grid. Tap cells to mark holes.</Body>
 
       <Button
         title="Choose Different Image"
@@ -499,9 +498,6 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   emptyText: {
-    color: '#888',
-    fontSize: 16,
-    textAlign: 'center',
     marginTop: 40,
   },
   pickButton: {
@@ -529,21 +525,14 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   controlLabel: {
-    color: '#888',
-    fontSize: 14,
     marginRight: 4,
   },
   controlValue: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
     width: 30,
     textAlign: 'center',
+    fontWeight: '600',
   },
   hint: {
-    color: '#888',
-    fontSize: 13,
-    textAlign: 'center',
     marginTop: 12,
   },
   aiSection: {
@@ -555,10 +544,7 @@ const styles = StyleSheet.create({
     minWidth: 200,
   },
   aiHint: {
-    color: '#888',
-    fontSize: 12,
     marginTop: 8,
-    textAlign: 'center',
   },
   confidenceSection: {
     marginTop: 16,
@@ -568,9 +554,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   confidenceTitle: {
-    color: '#888',
-    fontSize: 12,
-    fontWeight: '600',
     marginBottom: 8,
     textTransform: 'uppercase',
   },
@@ -584,9 +567,6 @@ const styles = StyleSheet.create({
     borderColor: '#333',
   },
   stageConfidenceTitle: {
-    color: '#888',
-    fontSize: 11,
-    fontWeight: '600',
     marginBottom: 8,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
