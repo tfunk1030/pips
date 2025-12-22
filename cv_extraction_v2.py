@@ -11,6 +11,8 @@ Key features:
 - Shape analysis (vertex count, corner detection)
 - Contour filtering by area, aspect ratio, and shape characteristics
 - Support for varying approximation accuracy based on contour perimeter
+- Convex hull analysis for concave region detection and characterization
+- Convexity defect analysis for identifying indentations and complex shapes
 """
 
 import cv2
@@ -38,6 +40,8 @@ class ApproximatedContour:
         is_closed: Whether the contour is closed
         shape_type: Detected shape type ("triangle", "quadrilateral", "polygon", etc.)
         confidence: Confidence in the shape detection (0.0 to 1.0)
+        hull_analysis: Optional convex hull analysis for concave region detection
+        convexity_class: Classification based on convexity ("convex", "concave", etc.)
     """
     original_contour: np.ndarray
     approximated_contour: np.ndarray
@@ -51,10 +55,12 @@ class ApproximatedContour:
     is_closed: bool = True
     shape_type: str = "polygon"
     confidence: float = 1.0
+    hull_analysis: Optional["ConvexHullAnalysis"] = None
+    convexity_class: str = "unknown"
 
     def to_dict(self) -> Dict:
         """Convert to dictionary for JSON serialization."""
-        return {
+        result = {
             "approximated_vertex_count": self.approximated_vertex_count,
             "original_vertex_count": self.original_vertex_count,
             "epsilon": round(self.epsilon, 4),
@@ -64,8 +70,12 @@ class ApproximatedContour:
             "centroid": [round(c, 2) for c in self.centroid],
             "is_closed": self.is_closed,
             "shape_type": self.shape_type,
-            "confidence": round(self.confidence, 4)
+            "confidence": round(self.confidence, 4),
+            "convexity_class": self.convexity_class
         }
+        if self.hull_analysis is not None:
+            result["hull_analysis"] = self.hull_analysis.to_dict()
+        return result
 
 
 @dataclass
@@ -97,6 +107,97 @@ class ContourExtractionResult:
             "method": self.method,
             "epsilon_mode": self.epsilon_mode,
             "confidence": round(self.confidence, 4)
+        }
+
+
+@dataclass
+class ConvexityDefect:
+    """
+    Represents a single convexity defect (indentation) in a contour.
+
+    Convexity defects are points where the contour deviates inward from
+    its convex hull. They help identify concave regions and complex shapes.
+
+    Attributes:
+        start_point: Starting point of the defect on the contour
+        end_point: Ending point of the defect on the contour
+        farthest_point: Point on the contour farthest from the hull
+        depth: Distance from farthest point to the hull (in pixels)
+        start_index: Index of start point in the contour
+        end_index: Index of end point in the contour
+        farthest_index: Index of farthest point in the contour
+        angle: Angle of the defect (in degrees)
+    """
+    start_point: Tuple[int, int]
+    end_point: Tuple[int, int]
+    farthest_point: Tuple[int, int]
+    depth: float
+    start_index: int
+    end_index: int
+    farthest_index: int
+    angle: float = 0.0
+
+    def to_dict(self) -> Dict:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "start_point": list(self.start_point),
+            "end_point": list(self.end_point),
+            "farthest_point": list(self.farthest_point),
+            "depth": round(self.depth, 2),
+            "angle": round(self.angle, 2)
+        }
+
+
+@dataclass
+class ConvexHullAnalysis:
+    """
+    Result of convex hull analysis for a contour.
+
+    Provides detailed information about the convex hull and any
+    concavity characteristics of the original contour.
+
+    Attributes:
+        contour: Original contour analyzed
+        hull: Convex hull of the contour
+        hull_points: Hull as array of points (for drawing)
+        is_convex: Whether the original contour is convex
+        contour_area: Area of the original contour
+        hull_area: Area of the convex hull
+        solidity: Ratio of contour area to hull area (1.0 = perfectly convex)
+        defects: List of convexity defects (indentations)
+        defect_count: Number of significant defects
+        max_defect_depth: Maximum depth of any defect
+        avg_defect_depth: Average defect depth
+        concavity_score: Overall concavity measure (0.0 = convex, 1.0 = highly concave)
+        complexity_score: Measure of contour complexity
+    """
+    contour: np.ndarray
+    hull: np.ndarray
+    hull_points: np.ndarray
+    is_convex: bool
+    contour_area: float
+    hull_area: float
+    solidity: float
+    defects: List[ConvexityDefect] = field(default_factory=list)
+    defect_count: int = 0
+    max_defect_depth: float = 0.0
+    avg_defect_depth: float = 0.0
+    concavity_score: float = 0.0
+    complexity_score: float = 0.0
+
+    def to_dict(self) -> Dict:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "is_convex": self.is_convex,
+            "contour_area": round(self.contour_area, 2),
+            "hull_area": round(self.hull_area, 2),
+            "solidity": round(self.solidity, 4),
+            "defect_count": self.defect_count,
+            "max_defect_depth": round(self.max_defect_depth, 2),
+            "avg_defect_depth": round(self.avg_defect_depth, 2),
+            "concavity_score": round(self.concavity_score, 4),
+            "complexity_score": round(self.complexity_score, 4),
+            "defects": [d.to_dict() for d in self.defects]
         }
 
 
@@ -238,6 +339,400 @@ def calculate_contour_centroid(contour: np.ndarray) -> Tuple[float, float]:
     return (cx, cy)
 
 
+def compute_convex_hull(
+    contour: np.ndarray,
+    return_points: bool = True
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Compute the convex hull of a contour.
+
+    The convex hull is the smallest convex polygon that encloses all points
+    of the contour. It's useful for:
+    - Detecting concave regions by comparing hull to original contour
+    - Simplifying shape analysis
+    - Finding convexity defects
+
+    Args:
+        contour: Input contour as numpy array
+        return_points: If True, also return hull as array of points
+
+    Returns:
+        Tuple of (hull_indices, hull_points):
+        - hull_indices: Convex hull as indices into the contour (for defects)
+        - hull_points: Convex hull as array of points (for drawing)
+    """
+    if contour is None or len(contour) < 3:
+        return np.array([]), np.array([])
+
+    # Get hull as indices (needed for convexityDefects)
+    hull_indices = cv2.convexHull(contour, returnPoints=False)
+
+    # Get hull as points (needed for drawing and area calculation)
+    hull_points = cv2.convexHull(contour, returnPoints=True)
+
+    return hull_indices, hull_points
+
+
+def calculate_defect_angle(
+    start: Tuple[int, int],
+    end: Tuple[int, int],
+    farthest: Tuple[int, int]
+) -> float:
+    """
+    Calculate the angle of a convexity defect.
+
+    The angle is formed by the vectors from the farthest point to the
+    start and end points of the defect.
+
+    Args:
+        start: Start point of the defect
+        end: End point of the defect
+        farthest: Farthest (deepest) point of the defect
+
+    Returns:
+        Angle in degrees (0-180)
+    """
+    # Vectors from farthest point to start and end
+    v1 = np.array([start[0] - farthest[0], start[1] - farthest[1]])
+    v2 = np.array([end[0] - farthest[0], end[1] - farthest[1]])
+
+    # Calculate angle using dot product
+    len1 = np.linalg.norm(v1)
+    len2 = np.linalg.norm(v2)
+
+    if len1 == 0 or len2 == 0:
+        return 0.0
+
+    cos_angle = np.dot(v1, v2) / (len1 * len2)
+    # Clamp to avoid numerical issues
+    cos_angle = np.clip(cos_angle, -1.0, 1.0)
+
+    angle_rad = np.arccos(cos_angle)
+    angle_deg = np.degrees(angle_rad)
+
+    return angle_deg
+
+
+def find_convexity_defects(
+    contour: np.ndarray,
+    hull_indices: np.ndarray,
+    min_depth: float = 5.0
+) -> List[ConvexityDefect]:
+    """
+    Find convexity defects (indentations) in a contour.
+
+    Convexity defects are regions where the contour deviates inward from
+    its convex hull. They are essential for:
+    - Detecting concave shapes
+    - Identifying complex region boundaries
+    - Splitting merged regions at concavity points
+
+    Args:
+        contour: Input contour
+        hull_indices: Convex hull as indices (from cv2.convexHull with returnPoints=False)
+        min_depth: Minimum depth (in pixels) to consider a defect significant
+
+    Returns:
+        List of ConvexityDefect objects sorted by depth (deepest first)
+    """
+    defects_list = []
+
+    if contour is None or len(contour) < 4:
+        return defects_list
+
+    if hull_indices is None or len(hull_indices) < 3:
+        return defects_list
+
+    try:
+        # Find convexity defects
+        defects = cv2.convexityDefects(contour, hull_indices)
+
+        if defects is None:
+            return defects_list
+
+        for i in range(defects.shape[0]):
+            s, e, f, d = defects[i, 0]
+
+            # Depth is in fixed-point format (1/256 of a pixel)
+            depth = d / 256.0
+
+            if depth < min_depth:
+                continue
+
+            # Get the actual points
+            start_point = tuple(contour[s][0])
+            end_point = tuple(contour[e][0])
+            farthest_point = tuple(contour[f][0])
+
+            # Calculate angle at the defect
+            angle = calculate_defect_angle(start_point, end_point, farthest_point)
+
+            defect = ConvexityDefect(
+                start_point=start_point,
+                end_point=end_point,
+                farthest_point=farthest_point,
+                depth=depth,
+                start_index=int(s),
+                end_index=int(e),
+                farthest_index=int(f),
+                angle=angle
+            )
+            defects_list.append(defect)
+
+    except cv2.error:
+        # convexityDefects can fail on certain contour configurations
+        pass
+
+    # Sort by depth (deepest first)
+    defects_list.sort(key=lambda d: d.depth, reverse=True)
+
+    return defects_list
+
+
+def analyze_convex_hull(
+    contour: np.ndarray,
+    min_defect_depth: float = 5.0
+) -> ConvexHullAnalysis:
+    """
+    Perform comprehensive convex hull analysis on a contour.
+
+    This function computes the convex hull and analyzes the contour's
+    concavity characteristics, including:
+    - Solidity (ratio of contour area to hull area)
+    - Convexity defects (indentations)
+    - Concavity and complexity scores
+
+    Use cases:
+    - Detecting irregular/concave puzzle regions
+    - Identifying shapes that may need to be split
+    - Classifying shape complexity
+
+    Args:
+        contour: Input contour as numpy array
+        min_defect_depth: Minimum depth for defect detection
+
+    Returns:
+        ConvexHullAnalysis object with hull properties and defect analysis
+
+    Example:
+        >>> import cv2
+        >>> import numpy as np
+        >>> # Create an L-shaped contour (concave)
+        >>> cnt = np.array([[[0,0]], [[100,0]], [[100,50]], [[50,50]],
+        ...                 [[50,100]], [[0,100]]], dtype=np.int32)
+        >>> analysis = analyze_convex_hull(cnt)
+        >>> print(f"Solidity: {analysis.solidity:.2f}, Defects: {analysis.defect_count}")
+    """
+    if contour is None or len(contour) < 3:
+        return ConvexHullAnalysis(
+            contour=contour if contour is not None else np.array([]),
+            hull=np.array([]),
+            hull_points=np.array([]),
+            is_convex=False,
+            contour_area=0.0,
+            hull_area=0.0,
+            solidity=0.0
+        )
+
+    # Compute convex hull
+    hull_indices, hull_points = compute_convex_hull(contour)
+
+    # Check if contour is convex
+    is_convex = cv2.isContourConvex(contour)
+
+    # Calculate areas
+    contour_area = cv2.contourArea(contour)
+    hull_area = cv2.contourArea(hull_points) if len(hull_points) > 0 else 0.0
+
+    # Calculate solidity (1.0 = perfectly convex)
+    solidity = contour_area / hull_area if hull_area > 0 else 0.0
+
+    # Find convexity defects
+    defects = []
+    if not is_convex and len(hull_indices) >= 3:
+        defects = find_convexity_defects(contour, hull_indices, min_defect_depth)
+
+    # Calculate defect statistics
+    defect_count = len(defects)
+    max_defect_depth = max((d.depth for d in defects), default=0.0)
+    avg_defect_depth = np.mean([d.depth for d in defects]) if defects else 0.0
+
+    # Calculate concavity score (0.0 = convex, 1.0 = highly concave)
+    # Based on solidity and defect characteristics
+    if is_convex:
+        concavity_score = 0.0
+    else:
+        # Factor 1: Inverse of solidity (lower solidity = more concave)
+        solidity_factor = 1.0 - solidity
+
+        # Factor 2: Normalized defect depth relative to contour size
+        perimeter = cv2.arcLength(contour, True)
+        depth_factor = min(1.0, max_defect_depth / (perimeter * 0.1)) if perimeter > 0 else 0.0
+
+        # Factor 3: Number of defects (normalized)
+        defect_factor = min(1.0, defect_count / 5.0)
+
+        # Weighted combination
+        concavity_score = (
+            0.4 * solidity_factor +
+            0.35 * depth_factor +
+            0.25 * defect_factor
+        )
+
+    # Calculate complexity score
+    # Based on vertex count, defects, and shape irregularity
+    vertex_count = len(contour)
+    complexity_score = min(1.0, (
+        0.3 * min(1.0, vertex_count / 50.0) +
+        0.3 * (1.0 - solidity) +
+        0.2 * min(1.0, defect_count / 3.0) +
+        0.2 * min(1.0, max_defect_depth / 20.0)
+    ))
+
+    return ConvexHullAnalysis(
+        contour=contour,
+        hull=hull_indices,
+        hull_points=hull_points,
+        is_convex=is_convex,
+        contour_area=contour_area,
+        hull_area=hull_area,
+        solidity=solidity,
+        defects=defects,
+        defect_count=defect_count,
+        max_defect_depth=max_defect_depth,
+        avg_defect_depth=avg_defect_depth,
+        concavity_score=concavity_score,
+        complexity_score=complexity_score
+    )
+
+
+def split_concave_contour_at_defects(
+    contour: np.ndarray,
+    defects: List[ConvexityDefect],
+    max_splits: int = 2,
+    min_split_depth: float = 10.0
+) -> List[np.ndarray]:
+    """
+    Split a concave contour at its deepest convexity defects.
+
+    This is useful for separating merged regions that appear as a single
+    concave shape. The function splits at the deepest defect points to
+    create more convex sub-regions.
+
+    Args:
+        contour: Input contour to split
+        defects: List of ConvexityDefect objects
+        max_splits: Maximum number of splits to perform
+        min_split_depth: Minimum defect depth to consider for splitting
+
+    Returns:
+        List of sub-contours (may be 1 if no splits performed)
+    """
+    if contour is None or len(contour) < 6:
+        return [contour] if contour is not None else []
+
+    # Filter defects by depth and limit count
+    significant_defects = [
+        d for d in defects
+        if d.depth >= min_split_depth
+    ][:max_splits]
+
+    if not significant_defects:
+        return [contour]
+
+    # For simple implementation, we'll create a mask and use watershed-like
+    # approach to split at defect points
+    sub_contours = []
+
+    # Sort defect indices for splitting
+    defect_indices = sorted([d.farthest_index for d in significant_defects])
+
+    # Split contour at defect points
+    prev_idx = 0
+    for idx in defect_indices:
+        if idx > prev_idx + 2:  # Need at least 3 points for a valid contour
+            segment = contour[prev_idx:idx + 1]
+            if len(segment) >= 3:
+                sub_contours.append(segment)
+            prev_idx = idx
+
+    # Add remaining segment
+    if prev_idx < len(contour) - 2:
+        segment = np.vstack([contour[prev_idx:], contour[:defect_indices[0] + 1]])
+        if len(segment) >= 3:
+            sub_contours.append(segment)
+
+    # If splitting resulted in no valid contours, return original
+    if not sub_contours:
+        return [contour]
+
+    return sub_contours
+
+
+def classify_region_by_convexity(
+    analysis: ConvexHullAnalysis
+) -> Tuple[str, float]:
+    """
+    Classify a region based on its convex hull analysis.
+
+    Returns a classification label and confidence based on the
+    contour's convexity characteristics.
+
+    Args:
+        analysis: ConvexHullAnalysis result
+
+    Returns:
+        Tuple of (classification, confidence):
+        - classification: One of "convex", "slightly_concave", "concave",
+                         "highly_concave", "complex"
+        - confidence: Confidence in the classification (0.0 to 1.0)
+    """
+    if analysis.is_convex:
+        return "convex", 0.95
+
+    solidity = analysis.solidity
+    defect_count = analysis.defect_count
+    concavity = analysis.concavity_score
+
+    if solidity >= 0.95:
+        return "convex", 0.9  # Nearly convex
+
+    if solidity >= 0.85 and defect_count <= 1:
+        return "slightly_concave", 0.85
+
+    if solidity >= 0.7 and defect_count <= 3:
+        return "concave", 0.8
+
+    if solidity >= 0.5:
+        return "highly_concave", 0.75
+
+    return "complex", 0.7
+
+
+def analyze_contours_batch_convexity(
+    contours: List[np.ndarray],
+    min_defect_depth: float = 5.0
+) -> List[Tuple[np.ndarray, ConvexHullAnalysis, str]]:
+    """
+    Analyze convexity for a batch of contours.
+
+    Args:
+        contours: List of contours to analyze
+        min_defect_depth: Minimum depth for defect detection
+
+    Returns:
+        List of tuples (contour, analysis, classification)
+    """
+    results = []
+
+    for contour in contours:
+        analysis = analyze_convex_hull(contour, min_defect_depth)
+        classification, _ = classify_region_by_convexity(analysis)
+        results.append((contour, analysis, classification))
+
+    return results
+
+
 def filter_contours_by_area(
     contours: List[np.ndarray],
     min_area: float = 100.0,
@@ -318,7 +813,9 @@ def approximate_contours_batch(
     min_area: float = 100.0,
     max_area: Optional[float] = None,
     min_aspect: float = 0.2,
-    max_aspect: float = 5.0
+    max_aspect: float = 5.0,
+    analyze_convexity: bool = False,
+    min_defect_depth: float = 5.0
 ) -> List[ApproximatedContour]:
     """
     Approximate multiple contours with filtering.
@@ -338,6 +835,8 @@ def approximate_contours_batch(
         max_area: Maximum area to keep contours (None = no limit)
         min_aspect: Minimum aspect ratio filter
         max_aspect: Maximum aspect ratio filter
+        analyze_convexity: Whether to perform convex hull analysis
+        min_defect_depth: Minimum defect depth for convexity analysis
 
     Returns:
         List of ApproximatedContour objects
@@ -372,6 +871,13 @@ def approximate_contours_batch(
         # Detect shape type
         shape_type, shape_confidence = detect_shape_type(cnt, approx)
 
+        # Perform convex hull analysis if requested
+        hull_analysis = None
+        convexity_class = "unknown"
+        if analyze_convexity:
+            hull_analysis = analyze_convex_hull(cnt, min_defect_depth)
+            convexity_class, _ = classify_region_by_convexity(hull_analysis)
+
         # Create result object
         result = ApproximatedContour(
             original_contour=cnt,
@@ -385,7 +891,9 @@ def approximate_contours_batch(
             centroid=centroid,
             is_closed=True,
             shape_type=shape_type,
-            confidence=shape_confidence
+            confidence=shape_confidence,
+            hull_analysis=hull_analysis,
+            convexity_class=convexity_class
         )
 
         results.append(result)
@@ -407,6 +915,8 @@ def extract_contours_with_approximation(
     canny_high: int = 150,
     use_threshold: bool = True,
     threshold_mode: str = "adaptive",
+    analyze_convexity: bool = False,
+    min_defect_depth: float = 5.0,
     debug_dir: Optional[str] = None
 ) -> ContourExtractionResult:
     """
@@ -418,6 +928,7 @@ def extract_contours_with_approximation(
     2. Contour detection with cv2.findContours
     3. Polygon approximation with cv2.approxPolyDP
     4. Filtering and shape analysis
+    5. Optional convex hull analysis for concave region detection
 
     Args:
         image: Input image (BGR or grayscale)
@@ -433,6 +944,8 @@ def extract_contours_with_approximation(
         canny_high: Canny high threshold
         use_threshold: Whether to apply thresholding
         threshold_mode: "adaptive" or "otsu" thresholding
+        analyze_convexity: Whether to perform convex hull analysis
+        min_defect_depth: Minimum defect depth for convexity analysis
         debug_dir: Optional directory for debug images
 
     Returns:
@@ -508,7 +1021,9 @@ def extract_contours_with_approximation(
         min_area=min_area,
         max_area=max_area if max_area else image_area * 0.9,
         min_aspect=min_aspect,
-        max_aspect=max_aspect
+        max_aspect=max_aspect,
+        analyze_convexity=analyze_convexity,
+        min_defect_depth=min_defect_depth
     )
 
     # Calculate overall confidence based on results
@@ -551,6 +1066,32 @@ def extract_contours_with_approximation(
                 1
             )
         cv2.imwrite(str(out_dir / "cv_v2_contours_approximated.png"), debug_approx)
+
+        # Draw convex hull analysis if enabled
+        if analyze_convexity:
+            debug_hull = image.copy() if len(image.shape) == 3 else cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+            for ac in approximated:
+                if ac.hull_analysis is not None:
+                    # Draw original contour in red
+                    cv2.drawContours(debug_hull, [ac.original_contour], -1, (0, 0, 255), 1)
+                    # Draw convex hull in green
+                    if len(ac.hull_analysis.hull_points) > 0:
+                        cv2.drawContours(debug_hull, [ac.hull_analysis.hull_points], -1, (0, 255, 0), 2)
+                    # Draw defect points in blue
+                    for defect in ac.hull_analysis.defects:
+                        cv2.circle(debug_hull, defect.farthest_point, 4, (255, 0, 0), -1)
+                    # Label with convexity class
+                    x, y, bw, bh = ac.bounding_rect
+                    cv2.putText(
+                        debug_hull,
+                        f"{ac.convexity_class} (s={ac.hull_analysis.solidity:.2f})",
+                        (x, y - 5),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.4,
+                        (255, 255, 0),
+                        1
+                    )
+            cv2.imwrite(str(out_dir / "cv_v2_convex_hull.png"), debug_hull)
 
     return ContourExtractionResult(
         contours=approximated,
@@ -730,6 +1271,17 @@ if __name__ == "__main__":
         action="store_true",
         help="Only extract quadrilaterals"
     )
+    parser.add_argument(
+        "--analyze-convexity",
+        action="store_true",
+        help="Perform convex hull analysis for concave region detection"
+    )
+    parser.add_argument(
+        "--min-defect-depth",
+        type=float,
+        default=5.0,
+        help="Minimum defect depth for convexity analysis (pixels)"
+    )
     args = parser.parse_args()
 
     img = cv2.imread(args.image)
@@ -751,6 +1303,8 @@ if __name__ == "__main__":
             img,
             epsilon_ratio=args.epsilon_ratio,
             min_area=args.min_area,
+            analyze_convexity=args.analyze_convexity,
+            min_defect_depth=args.min_defect_depth,
             debug_dir=args.debug_dir
         )
 
@@ -759,8 +1313,11 @@ if __name__ == "__main__":
         print(f"Confidence: {result.confidence:.3f}")
 
         for i, c in enumerate(result.contours):
+            convexity_info = ""
+            if args.analyze_convexity and c.hull_analysis is not None:
+                convexity_info = f" [{c.convexity_class}, solidity={c.hull_analysis.solidity:.2f}, defects={c.hull_analysis.defect_count}]"
             print(f"  {i+1}: {c.shape_type} ({c.approximated_vertex_count} vertices) "
-                  f"area={c.area:.0f} confidence={c.confidence:.2f}")
+                  f"area={c.area:.0f} confidence={c.confidence:.2f}{convexity_info}")
 
         # Output JSON
         output_file = Path(args.debug_dir) / "contours.json"
