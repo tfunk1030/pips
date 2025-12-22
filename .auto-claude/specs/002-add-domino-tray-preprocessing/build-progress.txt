@@ -1,0 +1,42 @@
+# Build Progress: Add Domino Tray Preprocessing
+# Spec: 002-add-domino-tray-preprocessing
+# Started: 2025-12-22
+
+## Summary
+Apply image preprocessing pipeline (CLAHE, brightness normalization, white balance) to
+domino tray images before extraction to improve pip detection in low-light photos.
+
+## Phase Status
+
+### Phase 1: Core Preprocessing Module [PENDING]
+- [ ] 1.1 Create preprocessing module with CLAHE function
+- [ ] 1.2 Add brightness normalization function
+- [ ] 1.3 Add white balance function
+- [ ] 1.4 Create combined preprocessing pipeline function
+
+### Phase 2: Integration with Domino Extraction [PENDING]
+- [ ] 2.1 Refactor extract_dominoes.py to use preprocessing
+- [ ] 2.2 Add preprocessing to individual domino tile extraction
+
+### Phase 3: Debug and Visualization Tools [PENDING]
+- [ ] 3.1 Add debug output for preprocessing stages
+- [ ] 3.2 Create comparison visualization script
+
+### Phase 4: Testing and Validation [PENDING]
+- [ ] 4.1 Create unit tests for preprocessing functions
+- [ ] 4.2 Validate with existing domino images (IMG_2050.png, IMG_2051.png)
+
+## Key Files
+- preprocess.py (NEW) - Core preprocessing module
+- extract_dominoes.py - Updated to use preprocessing
+- compare_preprocessing.py (NEW) - Visualization tool
+- tests/test_preprocess.py (NEW) - Unit tests
+
+## Notes
+- Existing extract_dominoes.py uses basic thresholding for pip detection
+- CLAHE should improve local contrast for pips in varying lighting
+- White balance will help correct color cast from different light sources
+- Brightness normalization ensures consistent threshold values work across images
+
+## Session Log
+[2025-12-22] Created implementation plan with 4 phases, 10 subtasks

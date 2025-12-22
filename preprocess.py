@@ -116,3 +116,138 @@ def normalize_brightness(
     result = cv2.cvtColor(hsv_normalized, cv2.COLOR_HSV2BGR)
 
     return result
+
+
+def apply_white_balance(
+    image: np.ndarray,
+    method: str = "gray_world"
+) -> np.ndarray:
+    """
+    Apply white balance correction to an image.
+
+    Corrects color cast in images by adjusting channel gains. Supports multiple
+    white balance algorithms.
+
+    Args:
+        image: Input BGR image (numpy array).
+        method: White balance algorithm to use. Options:
+            - "gray_world": Assumes average scene color should be gray. Scales
+              each channel to have the same mean value. Works well for most
+              natural scenes with varied colors.
+            - "white_patch": Assumes the brightest pixels should be white.
+              Scales channels based on the maximum values. Works well when
+              there's a known white reference in the image.
+            Default is "gray_world".
+
+    Returns:
+        Color-corrected BGR image.
+
+    Raises:
+        ValueError: If image is None or empty.
+        ValueError: If method is not recognized.
+    """
+    if image is None or image.size == 0:
+        raise ValueError("Input image is None or empty")
+
+    valid_methods = ("gray_world", "white_patch")
+    if method not in valid_methods:
+        raise ValueError(f"method must be one of {valid_methods}, got '{method}'")
+
+    if method == "gray_world":
+        return _white_balance_gray_world(image)
+    else:  # white_patch
+        return _white_balance_white_patch(image)
+
+
+def _white_balance_gray_world(image: np.ndarray) -> np.ndarray:
+    """
+    Apply gray-world white balance assumption.
+
+    The gray-world assumption states that the average color of a scene should
+    be gray (neutral). This function scales each color channel so their means
+    become equal.
+
+    Args:
+        image: Input BGR image (numpy array).
+
+    Returns:
+        Color-corrected BGR image.
+    """
+    # Convert to float32 for accurate computation
+    img_float = image.astype(np.float32)
+
+    # Calculate mean of each channel
+    b_mean = np.mean(img_float[:, :, 0])
+    g_mean = np.mean(img_float[:, :, 1])
+    r_mean = np.mean(img_float[:, :, 2])
+
+    # Calculate overall mean (target gray value)
+    overall_mean = (b_mean + g_mean + r_mean) / 3.0
+
+    # Avoid division by zero
+    if b_mean < 1e-6 or g_mean < 1e-6 or r_mean < 1e-6:
+        # Return original if any channel is essentially black
+        return image.copy()
+
+    # Calculate scaling factors for each channel
+    b_scale = overall_mean / b_mean
+    g_scale = overall_mean / g_mean
+    r_scale = overall_mean / r_mean
+
+    # Apply scaling to each channel
+    result = img_float.copy()
+    result[:, :, 0] = img_float[:, :, 0] * b_scale
+    result[:, :, 1] = img_float[:, :, 1] * g_scale
+    result[:, :, 2] = img_float[:, :, 2] * r_scale
+
+    # Clip to valid range and convert back to uint8
+    result = np.clip(result, 0, 255).astype(np.uint8)
+
+    return result
+
+
+def _white_balance_white_patch(image: np.ndarray) -> np.ndarray:
+    """
+    Apply white-patch white balance assumption.
+
+    The white-patch assumption states that the brightest pixels in an image
+    should be white. This function scales each channel based on its maximum
+    value to achieve white balance.
+
+    Args:
+        image: Input BGR image (numpy array).
+
+    Returns:
+        Color-corrected BGR image.
+    """
+    # Convert to float32 for accurate computation
+    img_float = image.astype(np.float32)
+
+    # Find maximum value in each channel (using 99th percentile to avoid outliers)
+    b_max = np.percentile(img_float[:, :, 0], 99)
+    g_max = np.percentile(img_float[:, :, 1], 99)
+    r_max = np.percentile(img_float[:, :, 2], 99)
+
+    # Target maximum (white point)
+    target_max = 255.0
+
+    # Avoid division by zero
+    if b_max < 1e-6 or g_max < 1e-6 or r_max < 1e-6:
+        # Return original if any channel has very low max value
+        return image.copy()
+
+    # Calculate scaling factors for each channel
+    b_scale = target_max / b_max
+    g_scale = target_max / g_max
+    r_scale = target_max / r_max
+
+    # Apply scaling to each channel
+    result = img_float.copy()
+    result[:, :, 0] = img_float[:, :, 0] * b_scale
+    result[:, :, 1] = img_float[:, :, 1] * g_scale
+    result[:, :, 2] = img_float[:, :, 2] * r_scale
+
+    # Clip to valid range and convert back to uint8
+    result = np.clip(result, 0, 255).astype(np.uint8)
+
+    return result
