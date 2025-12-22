@@ -9,7 +9,16 @@ const config = {
   },
   transform: {
     '^.+\\.tsx?$': ['ts-jest', {
-      tsconfig: 'tsconfig.json',
+      tsconfig: {
+        jsx: 'react-jsx',
+        esModuleInterop: true,
+        allowJs: true,
+        strict: true,
+        skipLibCheck: true,
+        paths: {
+          '@/*': ['./src/*'],
+        },
+      },
     }],
   },
   setupFilesAfterEnv: [],

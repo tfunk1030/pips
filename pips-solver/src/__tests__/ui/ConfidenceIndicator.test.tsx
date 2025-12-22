@@ -1,24 +1,26 @@
 /**
- * Tests for ConfidenceIndicator component
+ * Tests for Themed ConfidenceIndicator UI component
  *
  * Verifies that color thresholds match the spec:
- * - high: >= 0.85 (green #10b981)
- * - medium: >= 0.70 (amber #f59e0b)
- * - low: < 0.70 (red #ef4444)
+ * - high: >= 0.85 (jade #00A878)
+ * - medium: >= 0.70 (brass #C9A227)
+ * - low: < 0.70 (coral #FF6B6B)
  */
 
 import {
   getConfidenceLevel,
   getConfidenceColor,
+  getConfidenceClassName,
   getConfidenceMessage,
   isBorderlineConfidence,
   CONFIDENCE_THRESHOLDS,
   CONFIDENCE_COLORS,
+  CONFIDENCE_CLASS_NAMES,
   CONFIDENCE_MESSAGES,
   ConfidenceLevel,
-} from '../app/components/ConfidenceIndicator';
+} from '../../app/components/ui/ConfidenceIndicator';
 
-describe('ConfidenceIndicator', () => {
+describe('Themed ConfidenceIndicator (ui)', () => {
   describe('CONFIDENCE_THRESHOLDS', () => {
     it('should have high threshold at 0.85', () => {
       expect(CONFIDENCE_THRESHOLDS.high).toBe(0.85);
@@ -29,17 +31,31 @@ describe('ConfidenceIndicator', () => {
     });
   });
 
-  describe('CONFIDENCE_COLORS', () => {
-    it('should use green (#10b981) for high confidence', () => {
-      expect(CONFIDENCE_COLORS.high).toBe('#10b981');
+  describe('CONFIDENCE_COLORS (jade/brass/coral theme)', () => {
+    it('should use jade (#00A878) for high confidence', () => {
+      expect(CONFIDENCE_COLORS.high).toBe('#00A878');
     });
 
-    it('should use amber (#f59e0b) for medium confidence', () => {
-      expect(CONFIDENCE_COLORS.medium).toBe('#f59e0b');
+    it('should use brass (#C9A227) for medium confidence', () => {
+      expect(CONFIDENCE_COLORS.medium).toBe('#C9A227');
     });
 
-    it('should use red (#ef4444) for low confidence', () => {
-      expect(CONFIDENCE_COLORS.low).toBe('#ef4444');
+    it('should use coral (#FF6B6B) for low confidence', () => {
+      expect(CONFIDENCE_COLORS.low).toBe('#FF6B6B');
+    });
+  });
+
+  describe('CONFIDENCE_CLASS_NAMES', () => {
+    it('should have confidence-jade class for high', () => {
+      expect(CONFIDENCE_CLASS_NAMES.high).toBe('confidence-jade');
+    });
+
+    it('should have confidence-brass class for medium', () => {
+      expect(CONFIDENCE_CLASS_NAMES.medium).toBe('confidence-brass');
+    });
+
+    it('should have confidence-coral class for low', () => {
+      expect(CONFIDENCE_CLASS_NAMES.low).toBe('confidence-coral');
     });
   });
 
@@ -88,26 +104,49 @@ describe('ConfidenceIndicator', () => {
     });
   });
 
-  describe('getConfidenceColor', () => {
-    it('should return green for high confidence scores', () => {
-      expect(getConfidenceColor(0.90)).toBe('#10b981');
-      expect(getConfidenceColor(0.85)).toBe('#10b981');
+  describe('getConfidenceColor (themed)', () => {
+    it('should return jade for high confidence scores', () => {
+      expect(getConfidenceColor(0.90)).toBe('#00A878');
+      expect(getConfidenceColor(0.85)).toBe('#00A878');
     });
 
-    it('should return amber for medium confidence scores', () => {
-      expect(getConfidenceColor(0.75)).toBe('#f59e0b');
-      expect(getConfidenceColor(0.70)).toBe('#f59e0b');
+    it('should return brass for medium confidence scores', () => {
+      expect(getConfidenceColor(0.75)).toBe('#C9A227');
+      expect(getConfidenceColor(0.70)).toBe('#C9A227');
     });
 
-    it('should return red for low confidence scores', () => {
-      expect(getConfidenceColor(0.50)).toBe('#ef4444');
-      expect(getConfidenceColor(0.69)).toBe('#ef4444');
+    it('should return coral for low confidence scores', () => {
+      expect(getConfidenceColor(0.50)).toBe('#FF6B6B');
+      expect(getConfidenceColor(0.69)).toBe('#FF6B6B');
     });
 
     it('should accept confidence level strings directly', () => {
-      expect(getConfidenceColor('high' as ConfidenceLevel)).toBe('#10b981');
-      expect(getConfidenceColor('medium' as ConfidenceLevel)).toBe('#f59e0b');
-      expect(getConfidenceColor('low' as ConfidenceLevel)).toBe('#ef4444');
+      expect(getConfidenceColor('high' as ConfidenceLevel)).toBe('#00A878');
+      expect(getConfidenceColor('medium' as ConfidenceLevel)).toBe('#C9A227');
+      expect(getConfidenceColor('low' as ConfidenceLevel)).toBe('#FF6B6B');
+    });
+  });
+
+  describe('getConfidenceClassName', () => {
+    it('should return jade class for high confidence scores', () => {
+      expect(getConfidenceClassName(0.90)).toBe('confidence-jade');
+      expect(getConfidenceClassName(0.85)).toBe('confidence-jade');
+    });
+
+    it('should return brass class for medium confidence scores', () => {
+      expect(getConfidenceClassName(0.75)).toBe('confidence-brass');
+      expect(getConfidenceClassName(0.70)).toBe('confidence-brass');
+    });
+
+    it('should return coral class for low confidence scores', () => {
+      expect(getConfidenceClassName(0.50)).toBe('confidence-coral');
+      expect(getConfidenceClassName(0.69)).toBe('confidence-coral');
+    });
+
+    it('should accept confidence level strings directly', () => {
+      expect(getConfidenceClassName('high' as ConfidenceLevel)).toBe('confidence-jade');
+      expect(getConfidenceClassName('medium' as ConfidenceLevel)).toBe('confidence-brass');
+      expect(getConfidenceClassName('low' as ConfidenceLevel)).toBe('confidence-coral');
     });
   });
 
@@ -153,23 +192,26 @@ describe('ConfidenceIndicator', () => {
     });
   });
 
-  describe('Spec compliance', () => {
-    it('should match spec high threshold of 0.85', () => {
-      // From spec: high >= 0.85 should be green
+  describe('Spec compliance (jade/brass/coral theme)', () => {
+    it('should match spec high threshold of 0.85 with jade color', () => {
+      // From spec: high >= 0.85 should be jade (green)
       expect(getConfidenceLevel(0.85)).toBe('high');
-      expect(getConfidenceColor(0.85)).toBe('#10b981');
+      expect(getConfidenceColor(0.85)).toBe('#00A878');
+      expect(getConfidenceClassName(0.85)).toBe('confidence-jade');
     });
 
-    it('should match spec medium threshold of 0.70', () => {
-      // From spec: medium >= 0.70 should be amber
+    it('should match spec medium threshold of 0.70 with brass color', () => {
+      // From spec: medium >= 0.70 should be brass (amber/gold)
       expect(getConfidenceLevel(0.70)).toBe('medium');
-      expect(getConfidenceColor(0.70)).toBe('#f59e0b');
+      expect(getConfidenceColor(0.70)).toBe('#C9A227');
+      expect(getConfidenceClassName(0.70)).toBe('confidence-brass');
     });
 
-    it('should match spec low threshold (below 0.70)', () => {
-      // From spec: low < 0.70 should be red
+    it('should match spec low threshold (below 0.70) with coral color', () => {
+      // From spec: low < 0.70 should be coral (red)
       expect(getConfidenceLevel(0.69)).toBe('low');
-      expect(getConfidenceColor(0.69)).toBe('#ef4444');
+      expect(getConfidenceColor(0.69)).toBe('#FF6B6B');
+      expect(getConfidenceClassName(0.69)).toBe('confidence-coral');
     });
   });
 });
