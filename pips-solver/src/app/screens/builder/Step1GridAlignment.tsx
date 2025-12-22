@@ -151,7 +151,7 @@ export default function Step1GridAlignment({
           >
             {aiProgress ? (
               <View style={styles.aiButtonLoading}>
-                <ActivityIndicator size="small" color="#fff" />
+                <ActivityIndicator size="small" color={tokens.colors.text.inverse} />
                 <Text style={styles.aiButtonText}>{aiProgress}</Text>
               </View>
             ) : (
@@ -464,7 +464,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   emptyText: {
-    color: '#888',
+    color: tokens.colors.text.muted,
     fontSize: 16,
     textAlign: 'center',
     marginTop: 40,
@@ -478,7 +478,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   pickButtonText: {
-    color: '#fff',
+    color: tokens.colors.text.inverse,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -503,7 +503,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   controlLabel: {
-    color: '#888',
+    color: tokens.colors.text.muted,
     fontSize: 14,
     marginRight: 4,
   },
@@ -516,19 +516,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   controlButtonText: {
-    color: '#fff',
+    color: tokens.colors.text.inverse,
     fontSize: 20,
     fontWeight: '600',
   },
   controlValue: {
-    color: '#fff',
+    color: tokens.colors.text.inverse,
     fontSize: 18,
     fontWeight: '600',
     width: 30,
     textAlign: 'center',
   },
   hint: {
-    color: '#888',
+    color: tokens.colors.text.muted,
     fontSize: 13,
     textAlign: 'center',
     marginTop: 12,
@@ -539,7 +539,7 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   newImageButtonText: {
-    color: '#007AFF',
+    color: tokens.colors.text.link,
     fontSize: 14,
   },
   aiSection: {
@@ -563,12 +563,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   aiButtonText: {
-    color: '#fff',
+    color: tokens.colors.text.inverse,
     fontSize: 16,
     fontWeight: '600',
   },
   aiHint: {
-    color: '#888',
+    color: tokens.colors.text.muted,
     fontSize: 12,
     marginTop: 8,
     textAlign: 'center',
@@ -581,7 +581,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   confidenceTitle: {
-    color: '#888',
+    color: tokens.colors.text.muted,
     fontSize: 12,
     fontWeight: '600',
     marginBottom: 8,
