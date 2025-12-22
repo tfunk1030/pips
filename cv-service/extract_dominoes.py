@@ -9,6 +9,32 @@ import cv2
 import numpy as np
 from typing import Tuple, Optional
 import os
+from pydantic import BaseModel, Field
+
+
+class PipDetectionResult(BaseModel):
+    """
+    Result of pip detection for a single domino tile.
+
+    Contains the detected pip counts for both halves of the domino
+    along with confidence scores indicating detection reliability.
+    """
+
+    left_pips: int = Field(..., ge=0, le=6, description="Pip count on left half")
+    right_pips: int = Field(..., ge=0, le=6, description="Pip count on right half")
+    left_confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence score for left half detection")
+    right_confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence score for right half detection")
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "left_pips": 3,
+                "right_pips": 5,
+                "left_confidence": 0.92,
+                "right_confidence": 0.87
+            }
+        }
+    }
 
 
 # Debug output directory - set via environment variable
