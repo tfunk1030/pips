@@ -10,6 +10,7 @@ import type {
   RawResponses,
   BoardModelResponse,
   DominoModelResponse,
+  ConstraintDef,
 } from '../../model/overlayTypes';
 import {
   compareCellDetections,
@@ -17,6 +18,37 @@ import {
   type DisagreementSummary,
   type NormalizedModelResult,
 } from '../../services/extraction/validation/gridValidator';
+
+// ════════════════════════════════════════════════════════════════════════════
+// Constants
+// ════════════════════════════════════════════════════════════════════════════
+
+/** Color palette for regions matching DEFAULT_PALETTE in overlayTypes */
+const REGION_COLORS: Record<string, string> = {
+  'A': '#FF9800', // Orange
+  'B': '#009688', // Teal
+  'C': '#9C27B0', // Purple
+  'D': '#E91E63', // Pink
+  'E': '#4CAF50', // Green
+  'F': '#2196F3', // Blue
+  'G': '#FF5722', // Deep Orange
+  'H': '#607D8B', // Blue Gray
+  'I': '#795548', // Brown
+  'J': '#00BCD4', // Cyan
+  '.': '#444',    // Unlabeled
+};
+
+/** Get color for a region label */
+function getRegionColor(region: string | null): string {
+  if (!region || region === '.') return REGION_COLORS['.'];
+  return REGION_COLORS[region] || '#888';
+}
+
+/** Timing data for a model response */
+interface ModelTiming {
+  responseMs: number;
+  parseMs: number;
+}
 
 // ════════════════════════════════════════════════════════════════════════════
 // Types
@@ -225,12 +257,268 @@ function DisagreementCategorySummary({ comparison }: { comparison: ComparisonRes
 }
 
 /**
- * Model-specific result view (placeholder for subtask 3.2)
+ * Grid visualization component showing holes and cells
+ */
+function GridVisualization({
+  holes,
+  rows,
+  cols,
+}: {
+  holes: boolean[][];
+  rows: number;
+  cols: number;
+}) {
+  return (
+    <View style={styles.gridVisualization}>
+      {holes.map((row, rowIndex) => (
+        <View key={rowIndex} style={styles.gridRow}>
+          {row.map((isHole, colIndex) => (
+            <View
+              key={colIndex}
+              style={[
+                styles.gridCell,
+                isHole ? styles.gridCellHole : styles.gridCellValid,
+              ]}
+            >
+              <Text style={[styles.gridCellText, isHole && styles.gridCellTextHole]}>
+                {isHole ? '#' : '·'}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/**
+ * Region visualization component with color-coded cells
+ */
+function RegionVisualization({
+  regions,
+  holes,
+  rows,
+  cols,
+}: {
+  regions: (string | null)[][];
+  holes?: boolean[][];
+  rows: number;
+  cols: number;
+}) {
+  return (
+    <View style={styles.gridVisualization}>
+      {regions.map((row, rowIndex) => (
+        <View key={rowIndex} style={styles.gridRow}>
+          {row.map((region, colIndex) => {
+            const isHole = holes?.[rowIndex]?.[colIndex] || region === null;
+            const bgColor = isHole ? '#333' : getRegionColor(region);
+
+            return (
+              <View
+                key={colIndex}
+                style={[
+                  styles.gridCell,
+                  styles.gridCellRegion,
+                  { backgroundColor: bgColor },
+                ]}
+              >
+                <Text style={[
+                  styles.regionCellText,
+                  isHole && styles.gridCellTextHole,
+                ]}>
+                  {isHole ? '#' : region || '.'}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/**
+ * Format constraint for display
+ */
+function formatConstraint(constraint: ConstraintDef): string {
+  if (constraint.type === 'none') return 'None';
+  if (constraint.type === 'all_equal') return 'All Equal';
+  if (constraint.type === 'all_different') return 'All Different';
+  if (constraint.type === 'sum') {
+    const op = constraint.op || '==';
+    const value = constraint.value ?? '?';
+    return `Sum ${op} ${value}`;
+  }
+  return constraint.type;
+}
+
+/**
+ * Constraints list component
+ */
+function ConstraintsList({
+  constraints,
+}: {
+  constraints: Record<string, ConstraintDef>;
+}) {
+  const entries = Object.entries(constraints);
+
+  if (entries.length === 0) {
+    return <Text style={styles.textSmall}>No constraints detected</Text>;
+  }
+
+  // Filter out 'none' type constraints
+  const activeConstraints = entries.filter(([_, c]) => c.type !== 'none');
+
+  if (activeConstraints.length === 0) {
+    return <Text style={styles.textSmall}>No constraints detected</Text>;
+  }
+
+  return (
+    <View style={styles.constraintList}>
+      {activeConstraints.map(([region, constraint]) => (
+        <View key={region} style={styles.constraintItem}>
+          <View style={[styles.constraintRegionBadge, { backgroundColor: getRegionColor(region) }]}>
+            <Text style={styles.constraintRegionText}>{region}</Text>
+          </View>
+          <Text style={styles.constraintValue}>{formatConstraint(constraint)}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/**
+ * Dominoes list component with pip visualization
+ */
+function DominoesList({
+  dominoes,
+}: {
+  dominoes: [number, number][];
+}) {
+  // Count pip frequency for summary
+  const pipCounts = new Map<number, number>();
+  for (const [a, b] of dominoes) {
+    pipCounts.set(a, (pipCounts.get(a) || 0) + 1);
+    pipCounts.set(b, (pipCounts.get(b) || 0) + 1);
+  }
+
+  return (
+    <View style={styles.dominoListContainer}>
+      {/* Pip count summary */}
+      <View style={styles.pipSummary}>
+        {Array.from(pipCounts.entries())
+          .sort((a, b) => a[0] - b[0])
+          .map(([pip, count]) => (
+            <View key={pip} style={styles.pipBadge}>
+              <Text style={styles.pipValue}>{pip}</Text>
+              <Text style={styles.pipCount}>×{count}</Text>
+            </View>
+          ))}
+      </View>
+
+      {/* Domino tiles */}
+      <View style={styles.dominoGrid}>
+        {dominoes.map((domino, i) => (
+          <View key={i} style={styles.dominoTile}>
+            <View style={styles.dominoHalf}>
+              <Text style={styles.dominoPipText}>{domino[0]}</Text>
+            </View>
+            <View style={styles.dominoDivider} />
+            <View style={styles.dominoHalf}>
+              <Text style={styles.dominoPipText}>{domino[1]}</Text>
+            </View>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+/**
+ * Confidence display component
+ */
+function ConfidenceDisplay({
+  confidence,
+}: {
+  confidence: { board?: number; dominoes?: number };
+}) {
+  const items: { label: string; value: number | undefined }[] = [
+    { label: 'Board', value: confidence.board },
+    { label: 'Dominoes', value: confidence.dominoes },
+  ];
+
+  const validItems = items.filter(item => item.value !== undefined);
+
+  if (validItems.length === 0) {
+    return <Text style={styles.textSmall}>No confidence data</Text>;
+  }
+
+  return (
+    <View style={styles.confidenceContainer}>
+      {validItems.map(({ label, value }) => (
+        <View key={label} style={styles.confidenceItem}>
+          <Text style={styles.confidenceLabel}>{label}</Text>
+          <View style={styles.confidenceBarContainer}>
+            <View
+              style={[
+                styles.confidenceBar,
+                { width: `${Math.round((value || 0) * 100)}%` },
+                getConfidenceColor(value || 0),
+              ]}
+            />
+          </View>
+          <Text style={styles.confidenceValue}>{Math.round((value || 0) * 100)}%</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/**
+ * Get confidence bar color based on value
+ */
+function getConfidenceColor(value: number): { backgroundColor: string } {
+  if (value >= 0.8) return { backgroundColor: '#4CAF50' };
+  if (value >= 0.6) return { backgroundColor: '#8BC34A' };
+  if (value >= 0.4) return { backgroundColor: '#f9a825' };
+  return { backgroundColor: '#d32f2f' };
+}
+
+/**
+ * Timing display component
+ */
+function TimingDisplay({
+  timing,
+}: {
+  timing: ModelTiming;
+}) {
+  return (
+    <View style={styles.timingContainer}>
+      <View style={styles.timingItem}>
+        <Text style={styles.timingLabel}>Response</Text>
+        <Text style={styles.timingValue}>{timing.responseMs}ms</Text>
+      </View>
+      <View style={styles.timingItem}>
+        <Text style={styles.timingLabel}>Parse</Text>
+        <Text style={styles.timingValue}>{timing.parseMs}ms</Text>
+      </View>
+      <View style={styles.timingItem}>
+        <Text style={styles.timingLabel}>Total</Text>
+        <Text style={styles.timingValue}>{timing.responseMs + timing.parseMs}ms</Text>
+      </View>
+    </View>
+  );
+}
+
+/**
+ * Model-specific result view showing full extraction details
  */
 function ModelResultView({
   modelResult,
+  timing,
 }: {
   modelResult: NormalizedModelResult;
+  timing?: ModelTiming;
 }) {
   if (!modelResult.success) {
     return (
@@ -241,34 +529,72 @@ function ModelResultView({
     );
   }
 
-  // Placeholder for detailed model result display (subtask 3.2)
+  const { dimensions, holes, regions, constraints, dominoes, confidence } = modelResult;
+  const rows = dimensions?.rows || 0;
+  const cols = dimensions?.cols || 0;
+
   return (
     <View style={styles.modelResultContainer}>
+      {/* Grid Dimensions */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Grid Dimensions</Text>
         <Text style={styles.text}>
-          {modelResult.dimensions?.rows || '?'} rows × {modelResult.dimensions?.cols || '?'} columns
+          {rows} rows × {cols} columns
         </Text>
       </View>
 
-      {modelResult.dominoes && (
+      {/* Grid with Holes */}
+      {holes && holes.length > 0 && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Dominoes ({modelResult.dominoes.length})</Text>
-          <View style={styles.dominoContainer}>
-            {modelResult.dominoes.map((domino, i) => (
-              <Text key={i} style={styles.domino}>
-                [{domino[0]},{domino[1]}]
-              </Text>
-            ))}
-          </View>
+          <Text style={styles.sectionTitle}>Shape (# = hole)</Text>
+          <GridVisualization holes={holes} rows={rows} cols={cols} />
         </View>
       )}
 
-      <View style={styles.section}>
-        <Text style={styles.textSmall}>
-          Full model result display coming in subtask 3.2
-        </Text>
-      </View>
+      {/* Regions */}
+      {regions && regions.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Regions</Text>
+          <RegionVisualization
+            regions={regions}
+            holes={holes}
+            rows={rows}
+            cols={cols}
+          />
+        </View>
+      )}
+
+      {/* Constraints */}
+      {constraints && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Constraints</Text>
+          <ConstraintsList constraints={constraints} />
+        </View>
+      )}
+
+      {/* Dominoes */}
+      {dominoes && dominoes.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Dominoes ({dominoes.length})</Text>
+          <DominoesList dominoes={dominoes} />
+        </View>
+      )}
+
+      {/* Confidence Scores */}
+      {confidence && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Confidence</Text>
+          <ConfidenceDisplay confidence={confidence} />
+        </View>
+      )}
+
+      {/* Timing Info */}
+      {timing && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Timing</Text>
+          <TimingDisplay timing={timing} />
+        </View>
+      )}
     </View>
   );
 }
@@ -350,6 +676,25 @@ export default function ExtractionComparisonModal({
     return comparison.modelResults.find((r) => r.model === selectedTab) || null;
   }, [selectedTab, comparison]);
 
+  // Get timing data for current model
+  const currentModelTiming = useMemo((): ModelTiming | undefined => {
+    if (selectedTab === 'summary' || !rawResponses) return undefined;
+
+    // Look for timing in board responses first
+    const boardResponse = rawResponses.board.find(r => r.model === selectedTab);
+    if (boardResponse?.timing) {
+      return boardResponse.timing;
+    }
+
+    // Fall back to domino responses
+    const dominoResponse = rawResponses.dominoes.find(r => r.model === selectedTab);
+    if (dominoResponse?.timing) {
+      return dominoResponse.timing;
+    }
+
+    return undefined;
+  }, [selectedTab, rawResponses]);
+
   // Early return if no data
   if (!rawResponses || !comparison) {
     return (
@@ -411,7 +756,7 @@ export default function ExtractionComparisonModal({
           {selectedTab === 'summary' ? (
             <SummaryView comparison={comparison} />
           ) : currentModelResult ? (
-            <ModelResultView modelResult={currentModelResult} />
+            <ModelResultView modelResult={currentModelResult} timing={currentModelTiming} />
           ) : (
             <View style={styles.emptyState}>
               <Text style={styles.emptyText}>No data for this model</Text>
@@ -655,6 +1000,196 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 4,
+    fontFamily: 'Courier',
+  },
+
+  // Grid Visualization
+  gridVisualization: {
+    backgroundColor: '#000',
+    padding: 8,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  gridRow: {
+    flexDirection: 'row',
+  },
+  gridCell: {
+    width: 28,
+    height: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    margin: 1,
+    borderRadius: 2,
+  },
+  gridCellValid: {
+    backgroundColor: '#2a2a2a',
+  },
+  gridCellHole: {
+    backgroundColor: '#1a1a1a',
+  },
+  gridCellRegion: {
+    // backgroundColor set dynamically
+  },
+  gridCellText: {
+    fontSize: 14,
+    fontFamily: 'Courier',
+    color: '#fff',
+  },
+  gridCellTextHole: {
+    color: '#555',
+  },
+  regionCellText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#fff',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 1,
+  },
+
+  // Constraints List
+  constraintList: {
+    gap: 8,
+  },
+  constraintItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#2a2a2a',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+  },
+  constraintRegionBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  constraintRegionText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  constraintValue: {
+    fontSize: 14,
+    color: '#ccc',
+  },
+
+  // Dominoes List
+  dominoListContainer: {
+    gap: 12,
+  },
+  pipSummary: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 4,
+  },
+  pipBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2a2a2a',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  pipValue: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  pipCount: {
+    fontSize: 11,
+    color: '#888',
+  },
+  dominoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  dominoTile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#333',
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  dominoHalf: {
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dominoDivider: {
+    width: 1,
+    height: '100%',
+    backgroundColor: '#555',
+  },
+  dominoPipText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+
+  // Confidence Display
+  confidenceContainer: {
+    gap: 10,
+  },
+  confidenceItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  confidenceLabel: {
+    width: 70,
+    fontSize: 13,
+    color: '#888',
+  },
+  confidenceBarContainer: {
+    flex: 1,
+    height: 8,
+    backgroundColor: '#333',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  confidenceBar: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  confidenceValue: {
+    width: 40,
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#fff',
+    textAlign: 'right',
+  },
+
+  // Timing Display
+  timingContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  timingItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#2a2a2a',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  timingLabel: {
+    fontSize: 12,
+    color: '#888',
+  },
+  timingValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#4CAF50',
     fontFamily: 'Courier',
   },
 
