@@ -1084,6 +1084,213 @@ def split_domino_halves(
     return left_half, right_half
 
 
+def detect_domino_pips(
+    image: np.ndarray,
+    auto_rotate: bool = True,
+    use_hough_primary: bool = True,
+    fallback_to_contours: bool = True
+) -> PipDetectionResult:
+    """
+    Main pip detection function for a complete domino tile.
+
+    This is the primary entry point for detecting pip values on a domino.
+    It handles the full pipeline: rotation detection/correction, splitting
+    into halves, pip detection on each half, and confidence scoring.
+
+    Args:
+        image: Input BGR or grayscale image of a domino tile.
+            Should contain a single domino, ideally cropped from a puzzle.
+        auto_rotate: If True, automatically detect and correct domino rotation
+            before splitting into halves. Recommended for rotated dominoes.
+        use_hough_primary: If True, use HoughCircles as the primary detection
+            method. If False, use contour-based detection primarily.
+        fallback_to_contours: If True and HoughCircles detection fails or
+            returns suspicious results, try contour-based detection as fallback.
+
+    Returns:
+        PipDetectionResult containing:
+        - left_pips: Pip count on left half (0-6)
+        - right_pips: Pip count on right half (0-6)
+        - left_confidence: Confidence score for left half (0.0-1.0)
+        - right_confidence: Confidence score for right half (0.0-1.0)
+
+    Raises:
+        ValueError: If image is None or empty.
+
+    Notes:
+        - For best results, input image should be a clearly visible domino tile
+        - Confidence scores reflect detection reliability based on pip circularity,
+          size consistency, and count validation
+        - Low confidence (<0.7) suggests uncertain detection that may need review
+        - Blank dominoes (0 pips) return high confidence when no pips detected
+    """
+    if image is None or image.size == 0:
+        raise ValueError("Input image is empty or None")
+
+    # Work with a copy to avoid modifying original
+    working_image = image.copy()
+
+    # Step 1: Rotation detection and correction (optional)
+    if auto_rotate:
+        try:
+            angle, center, size, box_points, contour = detect_rotation_angle_from_image(working_image)
+            # Only rotate if angle is significant (> 5 degrees)
+            if abs(angle) > 5.0:
+                working_image = rotate_domino(working_image, angle, expand_canvas=True)
+        except ValueError:
+            # No contours found or other issue - continue without rotation
+            pass
+
+    # Step 2: Split domino into left and right halves
+    # Use small padding to avoid the center divider line
+    try:
+        left_half, right_half = split_domino_halves(working_image, padding=2)
+    except ValueError:
+        # If splitting fails, return low confidence result
+        return PipDetectionResult(
+            left_pips=0,
+            right_pips=0,
+            left_confidence=0.0,
+            right_confidence=0.0
+        )
+
+    # Step 3: Detect pips on each half
+    def detect_pips_on_half(half_image: np.ndarray) -> Tuple[int, float]:
+        """
+        Detect pips on a single domino half and calculate confidence.
+
+        Returns tuple of (pip_count, confidence_score).
+        """
+        pip_count = 0
+        confidence = 0.0
+        detection_info = {}
+
+        if use_hough_primary:
+            # Try HoughCircles first (adaptive version)
+            try:
+                pip_count, circles, detection_info = detect_pips_hough_adaptive(
+                    half_image,
+                    param2_range=(15, 40, 5),
+                    max_pips=6
+                )
+            except ValueError:
+                pip_count = 0
+                detection_info = {}
+
+            # Fallback to contours if Hough failed or returned invalid count
+            if fallback_to_contours and (pip_count == 0 or not validate_pip_count(pip_count)):
+                try:
+                    contour_count, contours, contour_info = detect_pips_contours(
+                        half_image,
+                        min_circularity=0.5
+                    )
+                    # Use contour result if it's valid and Hough wasn't
+                    if validate_pip_count(contour_count) and (
+                        pip_count == 0 or not validate_pip_count(pip_count)
+                    ):
+                        pip_count = contour_count
+                        detection_info = contour_info
+                except ValueError:
+                    pass
+        else:
+            # Use contour-based detection primarily
+            try:
+                pip_count, contours, detection_info = detect_pips_contours(
+                    half_image,
+                    min_circularity=0.5
+                )
+            except ValueError:
+                pip_count = 0
+                detection_info = {}
+
+            # Fallback to Hough if contours failed
+            if fallback_to_contours and (pip_count == 0 or not validate_pip_count(pip_count)):
+                try:
+                    hough_count, circles, hough_info = detect_pips_hough_adaptive(
+                        half_image,
+                        param2_range=(15, 40, 5),
+                        max_pips=6
+                    )
+                    if validate_pip_count(hough_count) and (
+                        pip_count == 0 or not validate_pip_count(pip_count)
+                    ):
+                        pip_count = hough_count
+                        detection_info = hough_info
+                except ValueError:
+                    pass
+
+        # Clamp pip count to valid range (0-6)
+        # If detection returned more than 6, it's likely over-detection
+        clamped_pip_count = max(0, min(6, pip_count))
+
+        # Calculate confidence score
+        # Extract circularity and size variance from detection info
+        if "circularities" in detection_info and detection_info["circularities"]:
+            avg_circularity = float(np.mean(detection_info["circularities"]))
+        elif "mean_radius" in detection_info and detection_info.get("radii"):
+            # For Hough detection, estimate circularity based on radius consistency
+            # Consistent radii suggest circular shapes
+            radii = detection_info["radii"]
+            if len(radii) > 1:
+                radius_std = float(np.std(radii))
+                mean_radius = float(np.mean(radii))
+                # Convert radius consistency to pseudo-circularity
+                if mean_radius > 0:
+                    avg_circularity = max(0.5, 1.0 - (radius_std / mean_radius))
+                else:
+                    avg_circularity = 0.7
+            else:
+                avg_circularity = 0.8  # Single detection, assume decent circularity
+        else:
+            avg_circularity = 0.7  # Default if no circularity data
+
+        # Get size variance
+        if "area_variance" in detection_info:
+            # Normalize area variance to 0-1 range
+            mean_area = detection_info.get("mean_area", 100)
+            if mean_area > 0:
+                normalized_variance = detection_info["area_variance"] / (mean_area ** 2)
+            else:
+                normalized_variance = 0.0
+        elif "radius_variance" in detection_info:
+            # Normalize radius variance
+            mean_radius = detection_info.get("mean_radius", 10)
+            if mean_radius > 0:
+                normalized_variance = detection_info["radius_variance"] / (mean_radius ** 2)
+            else:
+                normalized_variance = 0.0
+        else:
+            normalized_variance = 0.1  # Default low variance
+
+        # Clamp normalized variance to reasonable range
+        normalized_variance = min(normalized_variance, 1.0)
+
+        # Calculate final confidence
+        confidence = calculate_confidence(
+            pip_count=clamped_pip_count,
+            circularity=avg_circularity,
+            size_variance=normalized_variance
+        )
+
+        # Apply penalty if we had to clamp the pip count
+        if pip_count != clamped_pip_count:
+            confidence *= 0.7  # Reduce confidence for clamped results
+
+        return clamped_pip_count, confidence
+
+    # Detect pips on both halves
+    left_pips, left_confidence = detect_pips_on_half(left_half)
+    right_pips, right_confidence = detect_pips_on_half(right_half)
+
+    # Create and return result
+    return PipDetectionResult(
+        left_pips=left_pips,
+        right_pips=right_pips,
+        left_confidence=round(left_confidence, 3),
+        right_confidence=round(right_confidence, 3)
+    )
+
+
 def detect_pips_hough_adaptive(
     image: np.ndarray,
     param2_range: Tuple[int, int, int] = (20, 40, 5),
