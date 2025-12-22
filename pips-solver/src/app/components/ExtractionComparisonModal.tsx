@@ -4,8 +4,8 @@
  * Enables users to review per-model results and see disagreements highlighted.
  */
 
-import React, { useState, useMemo, useCallback, useRef } from 'react';
-import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, Pressable } from 'react-native';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, Pressable, ActivityIndicator } from 'react-native';
 import type {
   RawResponses,
   BoardModelResponse,
@@ -240,6 +240,109 @@ function CellDetailPopup({
       </Pressable>
     </Modal>
   );
+}
+
+/**
+ * Loading spinner component for comparison computation
+ */
+function LoadingState({ message }: { message?: string }) {
+  return (
+    <View style={styles.loadingContainer}>
+      <ActivityIndicator size="large" color="#4CAF50" />
+      <Text style={styles.loadingText}>{message || 'Computing comparison...'}</Text>
+      <Text style={styles.loadingHint}>Analyzing model responses</Text>
+    </View>
+  );
+}
+
+/**
+ * Error state component with retry option
+ */
+function ErrorState({
+  error,
+  onRetry,
+  onClose,
+}: {
+  error: string;
+  onRetry: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <View style={styles.errorStateContainer}>
+      <View style={styles.errorStateIcon}>
+        <Text style={styles.errorStateIconText}>⚠️</Text>
+      </View>
+      <Text style={styles.errorStateTitle}>Comparison Failed</Text>
+      <Text style={styles.errorStateMessage}>{error}</Text>
+      <View style={styles.errorStateButtons}>
+        <TouchableOpacity style={styles.errorStateRetryButton} onPress={onRetry}>
+          <Text style={styles.errorStateButtonText}>Try Again</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.errorStateCloseButton} onPress={onClose}>
+          <Text style={styles.errorStateButtonText}>Close</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+/**
+ * Empty state for when no disagreements are found (all models agree)
+ */
+function NoDisagreementsState({ modelCount }: { modelCount: number }) {
+  return (
+    <View style={styles.noDisagreementsContainer}>
+      <View style={styles.noDisagreementsIcon}>
+        <Text style={styles.noDisagreementsIconText}>✓</Text>
+      </View>
+      <Text style={styles.noDisagreementsTitle}>All Models Agree</Text>
+      <Text style={styles.noDisagreementsMessage}>
+        All {modelCount} models produced identical extraction results.
+      </Text>
+      <Text style={styles.noDisagreementsHint}>
+        This indicates high confidence in the extraction accuracy.
+      </Text>
+    </View>
+  );
+}
+
+/**
+ * Validate rawResponses structure to ensure it's not corrupted
+ */
+function validateRawResponses(rawResponses: RawResponses | null): { valid: boolean; error?: string } {
+  if (!rawResponses) {
+    return { valid: false, error: 'No raw responses available' };
+  }
+
+  if (!Array.isArray(rawResponses.board)) {
+    return { valid: false, error: 'Board responses are missing or invalid' };
+  }
+
+  if (!Array.isArray(rawResponses.dominoes)) {
+    return { valid: false, error: 'Domino responses are missing or invalid' };
+  }
+
+  if (rawResponses.board.length === 0 && rawResponses.dominoes.length === 0) {
+    return { valid: false, error: 'No model responses were captured' };
+  }
+
+  // Check that each board response has required fields
+  for (let i = 0; i < rawResponses.board.length; i++) {
+    const response = rawResponses.board[i];
+    if (!response || typeof response.model !== 'string') {
+      return { valid: false, error: `Board response ${i + 1} is missing model identifier` };
+    }
+  }
+
+  // Check that each domino response has required fields
+  for (let i = 0; i < rawResponses.dominoes.length; i++) {
+    const response = rawResponses.dominoes[i];
+    if (!response || typeof response.model !== 'string') {
+      return { valid: false, error: `Domino response ${i + 1} is missing model identifier` };
+    }
+  }
+
+  return { valid: true };
 }
 
 /**
@@ -583,17 +686,34 @@ function SummaryView({
 }) {
   const { summary, modelsCompared, isUnanimous } = comparison;
 
+  // Show dedicated state for when all models agree
+  if (isUnanimous) {
+    return (
+      <View style={styles.summaryContainer}>
+        {/* Models Compared */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Models Compared</Text>
+          <View style={styles.modelList}>
+            {modelsCompared.map((model) => (
+              <View key={model} style={styles.modelChip}>
+                <Text style={styles.modelChipText}>{formatModelName(model)}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {/* No Disagreements State */}
+        <NoDisagreementsState modelCount={modelsCompared.length} />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.summaryContainer}>
       {/* Status Banner */}
-      <View style={[
-        styles.statusBanner,
-        isUnanimous ? styles.statusBannerSuccess : styles.statusBannerWarning
-      ]}>
+      <View style={[styles.statusBanner, styles.statusBannerWarning]}>
         <Text style={styles.statusText}>
-          {isUnanimous
-            ? '✓ All models agree'
-            : `⚠ ${summary.total} disagreement${summary.total !== 1 ? 's' : ''} found`}
+          ⚠ {summary.total} disagreement{summary.total !== 1 ? 's' : ''} found
         </Text>
       </View>
 
@@ -610,29 +730,25 @@ function SummaryView({
       </View>
 
       {/* Disagreement Summary - Quick Stats */}
-      {!isUnanimous && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Disagreements by Severity</Text>
-          <View style={styles.severityRow}>
-            <SeveritySummaryItem label="Critical" count={summary.critical} severity="critical" />
-            <SeveritySummaryItem label="Warning" count={summary.warning} severity="warning" />
-            <SeveritySummaryItem label="Info" count={summary.info} severity="info" />
-          </View>
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Disagreements by Severity</Text>
+        <View style={styles.severityRow}>
+          <SeveritySummaryItem label="Critical" count={summary.critical} severity="critical" />
+          <SeveritySummaryItem label="Warning" count={summary.warning} severity="warning" />
+          <SeveritySummaryItem label="Info" count={summary.info} severity="info" />
         </View>
-      )}
+      </View>
 
       {/* Detailed Diff Summary Panel with Filter and Navigation */}
-      {!isUnanimous && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>All Disagreements</Text>
-          <DiffSummaryPanel
-            comparison={comparison}
-            filters={filters}
-            onToggleFilter={onToggleFilter}
-            onDisagreementPress={onDisagreementPress}
-          />
-        </View>
-      )}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>All Disagreements</Text>
+        <DiffSummaryPanel
+          comparison={comparison}
+          filters={filters}
+          onToggleFilter={onToggleFilter}
+          onDisagreementPress={onDisagreementPress}
+        />
+      </View>
     </View>
   );
 }
@@ -1160,15 +1276,57 @@ export default function ExtractionComparisonModal({
     info: true,
   });
 
-  // Compute comparison result from raw responses
-  const comparison = useMemo<ComparisonResult | null>(() => {
-    if (!rawResponses) return null;
+  // Loading and error states
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [comparison, setComparison] = useState<ComparisonResult | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
 
-    return compareCellDetections(
-      rawResponses.board,
-      rawResponses.dominoes
-    );
+  // Validate raw responses first
+  const validationResult = useMemo(() => {
+    return validateRawResponses(rawResponses);
   }, [rawResponses]);
+
+  // Compute comparison result from raw responses with error handling
+  useEffect(() => {
+    // Skip if not visible or validation failed
+    if (!visible || !validationResult.valid || !rawResponses) {
+      setComparison(null);
+      setError(null);
+      return;
+    }
+
+    // Reset states
+    setIsLoading(true);
+    setError(null);
+
+    // Use a small timeout to show loading state for large computations
+    const timeoutId = setTimeout(() => {
+      try {
+        const result = compareCellDetections(
+          rawResponses.board,
+          rawResponses.dominoes
+        );
+        setComparison(result);
+        setError(null);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error during comparison';
+        setError(errorMessage);
+        setComparison(null);
+      } finally {
+        setIsLoading(false);
+      }
+    }, 0); // Defer to next tick to allow loading state to render
+
+    return () => clearTimeout(timeoutId);
+  }, [rawResponses, visible, validationResult.valid, retryKey]);
+
+  // Handle retry
+  const handleRetry = useCallback(() => {
+    setError(null);
+    setComparison(null);
+    setRetryKey(prev => prev + 1);
+  }, []);
 
   // Handle cell press to show details popup
   const handleCellPress = useCallback((coordinate: CellCoordinate, disagreements: CellDisagreement[]) => {
@@ -1256,8 +1414,8 @@ export default function ExtractionComparisonModal({
     return undefined;
   }, [selectedTab, rawResponses]);
 
-  // Early return if no data
-  if (!rawResponses || !comparison) {
+  // Early return: No raw responses provided
+  if (!rawResponses) {
     return (
       <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
         <View style={styles.container}>
@@ -1270,7 +1428,98 @@ export default function ExtractionComparisonModal({
               Debug responses were not captured for this extraction.
             </Text>
             <Text style={styles.emptyTextSmall}>
-              Enable "Save Debug Responses" in settings to compare model outputs.
+              Enable "Model Comparison Mode" in settings to compare model outputs.
+            </Text>
+          </View>
+          <View style={styles.buttons}>
+            <TouchableOpacity style={[styles.button, styles.closeButton]} onPress={onClose}>
+              <Text style={styles.buttonText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    );
+  }
+
+  // Early return: Validation failed (corrupted data)
+  if (!validationResult.valid) {
+    return (
+      <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <Text style={styles.title}>Extraction Comparison</Text>
+            <Text style={styles.subtitle}>Data validation failed</Text>
+          </View>
+          <View style={styles.content}>
+            <ErrorState
+              error={validationResult.error || 'Invalid data format'}
+              onRetry={handleRetry}
+              onClose={onClose}
+            />
+          </View>
+        </View>
+      </Modal>
+    );
+  }
+
+  // Early return: Loading state
+  if (isLoading) {
+    return (
+      <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <Text style={styles.title}>Extraction Comparison</Text>
+            <Text style={styles.subtitle}>Processing...</Text>
+          </View>
+          <View style={styles.content}>
+            <LoadingState />
+          </View>
+          <View style={styles.buttons}>
+            <TouchableOpacity style={[styles.button, styles.closeButton]} onPress={onClose}>
+              <Text style={styles.buttonText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    );
+  }
+
+  // Early return: Error during comparison
+  if (error) {
+    return (
+      <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <Text style={styles.title}>Extraction Comparison</Text>
+            <Text style={styles.subtitle}>Error occurred</Text>
+          </View>
+          <View style={styles.content}>
+            <ErrorState
+              error={error}
+              onRetry={handleRetry}
+              onClose={onClose}
+            />
+          </View>
+        </View>
+      </Modal>
+    );
+  }
+
+  // Early return: Comparison failed to compute
+  if (!comparison) {
+    return (
+      <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <Text style={styles.title}>Extraction Comparison</Text>
+            <Text style={styles.subtitle}>Unable to compare</Text>
+          </View>
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyText}>
+              Could not generate comparison from model responses.
+            </Text>
+            <Text style={styles.emptyTextSmall}>
+              The model responses may be incomplete or in an unexpected format.
             </Text>
           </View>
           <View style={styles.buttons}>
@@ -2111,6 +2360,127 @@ const styles = StyleSheet.create({
   disagreementItemNavText: {
     fontSize: 11,
     color: '#4CAF50',
+    fontStyle: 'italic',
+  },
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Loading State Styles
+  // ══════════════════════════════════════════════════════════════════════════
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 40,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#fff',
+    marginTop: 16,
+    fontWeight: '500',
+  },
+  loadingHint: {
+    fontSize: 13,
+    color: '#888',
+    marginTop: 8,
+  },
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Error State Styles
+  // ══════════════════════════════════════════════════════════════════════════
+  errorStateContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 40,
+  },
+  errorStateIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(211, 47, 47, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  errorStateIconText: {
+    fontSize: 32,
+  },
+  errorStateTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#d32f2f',
+    marginBottom: 8,
+  },
+  errorStateMessage: {
+    fontSize: 14,
+    color: '#f88',
+    textAlign: 'center',
+    marginBottom: 24,
+    paddingHorizontal: 20,
+  },
+  errorStateButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  errorStateRetryButton: {
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  errorStateCloseButton: {
+    backgroundColor: '#666',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  errorStateButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // No Disagreements State Styles
+  // ══════════════════════════════════════════════════════════════════════════
+  noDisagreementsContainer: {
+    alignItems: 'center',
+    padding: 32,
+    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(76, 175, 80, 0.3)',
+    marginTop: 16,
+  },
+  noDisagreementsIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(76, 175, 80, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  noDisagreementsIconText: {
+    fontSize: 32,
+    color: '#4CAF50',
+  },
+  noDisagreementsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#4CAF50',
+    marginBottom: 8,
+  },
+  noDisagreementsMessage: {
+    fontSize: 14,
+    color: '#ccc',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  noDisagreementsHint: {
+    fontSize: 12,
+    color: '#888',
+    textAlign: 'center',
     fontStyle: 'italic',
   },
 });
