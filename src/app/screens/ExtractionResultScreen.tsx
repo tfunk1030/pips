@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
+  ActivityIndicator,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import Svg, { Rect, Text as SvgText, G } from 'react-native-svg';
@@ -15,6 +16,7 @@ import { RootStackParamList } from '../navigation/RootNavigator';
 import ConfidenceSummary from '../components/ui/ConfidenceSummary';
 import { ExtractionResult, StageConfidence } from '../../extraction/types';
 import { PuzzleSpec } from '../../model/types';
+import { useExtraction } from '../hooks';
 
 // Enable LayoutAnimation for Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -175,10 +177,13 @@ function StageConfidenceBreakdown({
  * - Shows ConfidenceSummary component with all hints
  * - Provides 'Accept & Solve' and 'Retry Extraction' actions
  * - Shows individual stage confidence breakdown on request
+ * - Loading state shown during extraction retry
  */
 export default function ExtractionResultScreen({ route, navigation }: Props) {
-  const { extractionResult, sourceImageUri } = route.params;
+  const { extractionResult: initialResult, sourceImageUri } = route.params;
+  const [extractionResult, setExtractionResult] = useState<ExtractionResult>(initialResult);
   const [showStageBreakdown, setShowStageBreakdown] = useState(false);
+  const { isExtracting, extractFromImage } = useExtraction();
 
   const toggleStageBreakdown = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -225,11 +230,19 @@ export default function ExtractionResultScreen({ route, navigation }: Props) {
     });
   };
 
-  const handleRetryExtraction = () => {
-    // Navigate back to retry extraction
-    // In a real implementation, this would go back to the camera/image picker
-    navigation.goBack();
-  };
+  const handleRetryExtraction = useCallback(async () => {
+    if (!sourceImageUri) {
+      // Navigate back if no source image available
+      navigation.goBack();
+      return;
+    }
+
+    // Re-run extraction with the same image and update local state
+    // This allows the user to retry without leaving the screen
+    const newResult = await extractFromImage(sourceImageUri);
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExtractionResult(newResult);
+  }, [sourceImageUri, extractFromImage, navigation]);
 
   // Handle failed extraction
   if (!extractionResult.success) {
@@ -249,11 +262,29 @@ export default function ExtractionResultScreen({ route, navigation }: Props) {
           style={styles.confidenceSummary}
         />
 
-        <TouchableOpacity style={styles.primaryButton} onPress={handleRetryExtraction}>
-          <Text style={styles.primaryButtonText}>Retry Extraction</Text>
+        <TouchableOpacity
+          style={styles.primaryButton}
+          onPress={handleRetryExtraction}
+          disabled={isExtracting}
+          accessibilityRole="button"
+          accessibilityLabel="Retry extraction"
+          accessibilityState={{ disabled: isExtracting }}
+        >
+          {isExtracting ? (
+            <View style={styles.buttonLoadingContent}>
+              <ActivityIndicator size="small" color="#fff" />
+              <Text style={styles.primaryButtonText}>Extracting...</Text>
+            </View>
+          ) : (
+            <Text style={styles.primaryButtonText}>Retry Extraction</Text>
+          )}
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.secondaryButton} onPress={() => navigation.goBack()}>
+        <TouchableOpacity
+          style={styles.secondaryButton}
+          onPress={() => navigation.goBack()}
+          disabled={isExtracting}
+        >
           <Text style={styles.secondaryButtonText}>Cancel</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -320,12 +351,31 @@ export default function ExtractionResultScreen({ route, navigation }: Props) {
         <TouchableOpacity
           style={styles.secondaryButton}
           onPress={handleRetryExtraction}
+          disabled={isExtracting}
           accessibilityRole="button"
           accessibilityLabel="Retry extraction with a new image"
+          accessibilityState={{ disabled: isExtracting }}
         >
-          <Text style={styles.secondaryButtonText}>Retry Extraction</Text>
+          {isExtracting ? (
+            <View style={styles.buttonLoadingContent}>
+              <ActivityIndicator size="small" color="#4a60c4" />
+              <Text style={styles.secondaryButtonText}>Extracting...</Text>
+            </View>
+          ) : (
+            <Text style={styles.secondaryButtonText}>Retry Extraction</Text>
+          )}
         </TouchableOpacity>
       </View>
+
+      {/* Loading Overlay */}
+      {isExtracting && (
+        <View style={styles.loadingOverlay}>
+          <View style={styles.loadingCard}>
+            <ActivityIndicator size="large" color="#4a60c4" />
+            <Text style={styles.loadingText}>Re-extracting puzzle...</Text>
+          </View>
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -486,5 +536,38 @@ const styles = StyleSheet.create({
     color: '#e6e6e6',
     fontSize: 14,
     lineHeight: 20,
+  },
+  buttonLoadingContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(12, 16, 33, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingCard: {
+    backgroundColor: '#1a1b26',
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
+    gap: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  loadingText: {
+    color: '#e6e6e6',
+    fontSize: 16,
+    fontWeight: '500',
   },
 });
