@@ -83,6 +83,83 @@ def decode_image(base64_str: str) -> np.ndarray:
     return img
 
 
+def _calculate_image_stats(img: np.ndarray) -> dict:
+    """
+    Calculate comprehensive image quality statistics.
+
+    Args:
+        img: OpenCV image in BGR format (numpy array)
+
+    Returns:
+        Dictionary containing:
+        - brightness: Mean luminance value (0-255)
+        - contrast: Standard deviation of luminance
+        - dynamic_range: Object with min and max luminance values
+        - color_balance: Object with R, G, B means and ratios
+        - saturation: Object with mean, min, max saturation from HSV
+    """
+    # Convert to grayscale for luminance calculations
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+    # Brightness: mean luminance (0-255)
+    brightness = float(np.mean(gray))
+
+    # Contrast: standard deviation of luminance
+    contrast = float(np.std(gray))
+
+    # Dynamic range: min and max luminance values
+    dynamic_range = {
+        "min": int(np.min(gray)),
+        "max": int(np.max(gray))
+    }
+
+    # Color balance: mean values for R, G, B channels and ratios
+    # OpenCV uses BGR order
+    b_mean = float(np.mean(img[:, :, 0]))
+    g_mean = float(np.mean(img[:, :, 1]))
+    r_mean = float(np.mean(img[:, :, 2]))
+
+    # Calculate ratios relative to the average of all channels
+    total_mean = (r_mean + g_mean + b_mean) / 3.0
+
+    # Avoid division by zero for completely black images
+    if total_mean > 0:
+        r_ratio = r_mean / total_mean
+        g_ratio = g_mean / total_mean
+        b_ratio = b_mean / total_mean
+    else:
+        r_ratio = 1.0
+        g_ratio = 1.0
+        b_ratio = 1.0
+
+    color_balance = {
+        "r_mean": round(r_mean, 2),
+        "g_mean": round(g_mean, 2),
+        "b_mean": round(b_mean, 2),
+        "r_ratio": round(r_ratio, 3),
+        "g_ratio": round(g_ratio, 3),
+        "b_ratio": round(b_ratio, 3)
+    }
+
+    # Saturation: calculated from HSV color space
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    saturation_channel = hsv[:, :, 1]  # S channel (0-255)
+
+    saturation = {
+        "mean": round(float(np.mean(saturation_channel)), 2),
+        "min": int(np.min(saturation_channel)),
+        "max": int(np.max(saturation_channel))
+    }
+
+    return {
+        "brightness": round(brightness, 2),
+        "contrast": round(contrast, 2),
+        "dynamic_range": dynamic_range,
+        "color_balance": color_balance,
+        "saturation": saturation
+    }
+
+
 def cells_to_grid(cells: List[Tuple[int, int, int, int]]) -> Tuple[int, int, List[CellBounds], str]:
     """
     Convert cell bounding boxes to grid structure with hole detection.
