@@ -4,7 +4,7 @@
 - Phase 1 (Extraction Pipeline): COMPLETED (3/3 subtasks)
 - Phase 2 (UI Components): COMPLETED (3/3 subtasks)
 - Phase 3 (Extraction Results Screen): COMPLETED (2/2 subtasks)
-- Phase 4 (Integration and Testing): PENDING (0/3 subtasks)
+- Phase 4 (Integration and Testing): IN PROGRESS (1/3 subtasks)
 
 ## Completed Subtasks
 - [x] 1.1 - Define TypeScript types (ExtractionStage, StageConfidence, ConfidenceHint, ExtractionResult)
@@ -15,9 +15,9 @@
 - [x] 2.3 - Create ConfidenceSummary composite component
 - [x] 3.1 - Create ExtractionResultScreen
 - [x] 3.2 - Add navigation route for ExtractionResultScreen
+- [x] 4.1 - Wire up extraction pipeline to UI
 
 ## Next Up
-- [ ] 4.1 - Wire up extraction pipeline to UI
 - [ ] 4.2 - Add unit tests for generateConfidenceHints
 - [ ] 4.3 - Manual integration testing with mock data
 
@@ -28,3 +28,8 @@
 - 2024-12-22: Created ExtractionResultScreen.tsx with grid preview, confidence summary, stage breakdown toggle, and action buttons
 - Fixed accessibility role issue in ConfidenceSummary.tsx ('region' -> 'accessible' prop)
 - Added ExtractionResult route to RootNavigator with extractionResult and sourceImageUri params
+- 2024-12-22: Subtask 4.1 completed (commit b4a4187):
+  - Created useExtraction hook (src/app/hooks/useExtraction.ts) wrapping pipeline with loading states
+  - Added "Scan Puzzle" button to HomeScreen with loading indicator
+  - Added retry functionality to ExtractionResultScreen with loading overlay
+  - Hook uses generateConfidenceHints and calculateOverallConfidence from pipeline.ts
