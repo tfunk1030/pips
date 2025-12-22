@@ -292,5 +292,252 @@ class TestComponentThresholds:
             assert thresholds["medium"] > thresholds["low"], f"{component}: medium should be > low"
 
 
+class TestGeometryConfidence:
+    """Test geometry confidence calculation from main.py."""
+
+    def test_geometry_confidence_valid_range(self):
+        """Test _calculate_geometry_confidence returns values in [0.0, 1.0]."""
+        from main import _calculate_geometry_confidence
+
+        # Create a test image with grid pattern
+        img = create_test_image(400, 400, saturation=120, with_grid=True)
+
+        # Create some mock cells
+        cells = [
+            (100, 100, 50, 50),
+            (160, 100, 50, 50),
+            (220, 100, 50, 50),
+            (100, 160, 50, 50),
+            (160, 160, 50, 50),
+            (220, 160, 50, 50),
+        ]
+
+        confidence, breakdown = _calculate_geometry_confidence(img, cells, rows=2, cols=3)
+
+        assert 0.0 <= confidence <= 1.0, f"Confidence {confidence} out of range"
+        for factor, score in breakdown.items():
+            assert 0.0 <= score <= 1.0, f"Breakdown {factor}={score} out of range"
+
+    def test_geometry_confidence_empty_cells(self):
+        """Test _calculate_geometry_confidence with empty cells returns 0.0."""
+        from main import _calculate_geometry_confidence
+
+        img = create_test_image(400, 400, saturation=120, with_grid=True)
+
+        confidence, breakdown = _calculate_geometry_confidence(img, cells=[], rows=0, cols=0)
+
+        assert confidence == 0.0, "Empty cells should return 0.0 confidence"
+        assert all(v == 0.0 for v in breakdown.values()), "All breakdown scores should be 0.0"
+
+    def test_geometry_confidence_breakdown_factors(self):
+        """Test all expected breakdown factors are present."""
+        from main import _calculate_geometry_confidence
+
+        img = create_test_image(400, 400, saturation=120, with_grid=True)
+        cells = [(100, 100, 50, 50), (160, 100, 50, 50)]
+
+        confidence, breakdown = _calculate_geometry_confidence(img, cells, rows=1, cols=2)
+
+        expected_factors = [
+            "saturation",
+            "area_ratio",
+            "aspect_ratio",
+            "relative_size",
+            "edge_clarity",
+            "contrast"
+        ]
+        for factor in expected_factors:
+            assert factor in breakdown, f"Missing breakdown factor: {factor}"
+
+    def test_geometry_confidence_consistent_cells_higher(self):
+        """Test consistent cell sizes produce higher confidence."""
+        from main import _calculate_geometry_confidence
+
+        img = create_test_image(400, 400, saturation=120, with_grid=True)
+
+        # Consistent cell sizes
+        consistent_cells = [
+            (100, 100, 50, 50),
+            (160, 100, 50, 50),
+            (220, 100, 50, 50),
+        ]
+
+        # Inconsistent cell sizes
+        inconsistent_cells = [
+            (100, 100, 50, 50),
+            (160, 100, 30, 70),  # Different size
+            (220, 100, 80, 30),  # Very different size
+        ]
+
+        conf_consistent, breakdown_consistent = _calculate_geometry_confidence(
+            img, consistent_cells, rows=1, cols=3
+        )
+        conf_inconsistent, breakdown_inconsistent = _calculate_geometry_confidence(
+            img, inconsistent_cells, rows=1, cols=3
+        )
+
+        # Consistent should have higher area_ratio score
+        assert breakdown_consistent["area_ratio"] > breakdown_inconsistent["area_ratio"], \
+            "Consistent cell sizes should have higher area_ratio score"
+
+
+class TestEdgeCases:
+    """Test edge cases and boundary conditions."""
+
+    def test_confidence_zero_value(self):
+        """Test handling of 0.0 confidence."""
+        level = get_confidence_level(0.0, "puzzle_detection")
+        assert level == "low", "0.0 confidence should be 'low'"
+
+    def test_confidence_one_value(self):
+        """Test handling of 1.0 confidence."""
+        level = get_confidence_level(1.0, "puzzle_detection")
+        assert level == "high", "1.0 confidence should be 'high'"
+
+    def test_confidence_at_exact_thresholds(self):
+        """Test confidence exactly at threshold boundaries."""
+        # At high threshold (0.80 for puzzle_detection)
+        level = get_confidence_level(0.80, "puzzle_detection")
+        assert level == "high", "Exact high threshold should be 'high'"
+
+        # At medium threshold (0.65 for puzzle_detection)
+        level = get_confidence_level(0.65, "puzzle_detection")
+        assert level == "medium", "Exact medium threshold should be 'medium'"
+
+    def test_confidence_just_below_thresholds(self):
+        """Test confidence just below threshold boundaries."""
+        # Just below high (0.80 - epsilon)
+        level = get_confidence_level(0.79999, "puzzle_detection")
+        assert level == "medium", "Just below high threshold should be 'medium'"
+
+        # Just below medium (0.65 - epsilon)
+        level = get_confidence_level(0.64999, "puzzle_detection")
+        assert level == "low", "Just below medium threshold should be 'low'"
+
+    def test_invalid_component_raises_error(self):
+        """Test that invalid component name raises ValueError."""
+        with pytest.raises(ValueError) as excinfo:
+            get_confidence_level(0.5, "invalid_component")
+        assert "Unknown component" in str(excinfo.value)
+
+    def test_borderline_at_exact_threshold(self):
+        """Test borderline detection at exact threshold values."""
+        # At exactly high threshold (0.80)
+        assert is_borderline(0.80, "puzzle_detection") == True
+
+        # At exactly medium threshold (0.65)
+        assert is_borderline(0.65, "puzzle_detection") == True
+
+    def test_negative_confidence_clamped(self):
+        """Test negative confidence is handled (classified as low)."""
+        # Negative should still work (classified as low)
+        level = get_confidence_level(-0.1, "puzzle_detection")
+        assert level == "low", "Negative confidence should be 'low'"
+
+    def test_confidence_above_one(self):
+        """Test confidence above 1.0 is classified as high."""
+        level = get_confidence_level(1.5, "puzzle_detection")
+        assert level == "high", "Confidence > 1.0 should be 'high'"
+
+
+class TestSpecCompliance:
+    """Tests to verify implementation matches spec requirements."""
+
+    def test_spec_threshold_values(self):
+        """Verify threshold values match spec requirements."""
+        # Spec defines these threshold values
+        expected = {
+            "geometry_extraction": {"high": 0.85, "medium": 0.70},
+            "ocr_detection": {"high": 0.90, "medium": 0.75},
+            "puzzle_detection": {"high": 0.80, "medium": 0.65},
+            "domino_detection": {"high": 0.80, "medium": 0.65}
+        }
+
+        for component, thresholds in expected.items():
+            actual = get_threshold_values(component)
+            assert actual["high"] == thresholds["high"], \
+                f"{component} high threshold should be {thresholds['high']}"
+            assert actual["medium"] == thresholds["medium"], \
+                f"{component} medium threshold should be {thresholds['medium']}"
+            assert actual["low"] == 0.0, \
+                f"{component} low threshold should be 0.0"
+
+    def test_spec_borderline_margin(self):
+        """Verify borderline margin is 5% as per spec."""
+        from confidence_config import BORDERLINE_MARGIN
+        assert BORDERLINE_MARGIN == 0.05, "Borderline margin should be 5% (0.05)"
+
+    def test_high_confidence_threshold_accuracy_target(self):
+        """
+        Spec requirement: High confidence (>85% threshold) proven to have >90% actual accuracy.
+
+        This test verifies the threshold structure supports this requirement.
+        Statistical validation of actual accuracy requires ground truth data.
+        """
+        # Geometry uses 0.85 high threshold
+        geo_high = get_threshold_values("geometry_extraction")["high"]
+        assert geo_high >= 0.85, "Geometry high threshold should support >90% accuracy target"
+
+        # OCR uses 0.90 high threshold (higher bar due to error modes)
+        ocr_high = get_threshold_values("ocr_detection")["high"]
+        assert ocr_high >= 0.90, "OCR high threshold should support >90% accuracy target"
+
+    def test_confidence_breakdown_six_factors(self):
+        """Verify confidence breakdown includes 6 quality factors per spec."""
+        expected_factors = {
+            "saturation",
+            "area_ratio",
+            "aspect_ratio",
+            "relative_size",
+            "edge_clarity",
+            "contrast"
+        }
+
+        img = create_test_image(400, 400, saturation=120, with_grid=True)
+        bounds = (100, 100, 200, 200)
+        contour = create_contour_from_bounds(100, 100, 200, 200)
+
+        confidence, breakdown = _calculate_grid_confidence(img, bounds, contour)
+
+        actual_factors = set(breakdown.keys())
+        assert actual_factors == expected_factors, \
+            f"Breakdown factors {actual_factors} should match spec {expected_factors}"
+
+    def test_all_components_defined(self):
+        """Verify all spec-required components are defined."""
+        required = [
+            "geometry_extraction",
+            "ocr_detection",
+            "puzzle_detection",
+            "domino_detection"
+        ]
+
+        all_components = get_all_components()
+        for component in required:
+            assert component in all_components, \
+                f"Spec-required component {component} missing from CONFIDENCE_THRESHOLDS"
+
+    def test_confidence_level_mapping(self):
+        """
+        Verify confidence levels map correctly per spec:
+        - high: User can trust without review
+        - medium: Suggest review
+        - low: Requires manual verification
+        """
+        # Test across all components
+        for component in get_all_components():
+            thresholds = get_threshold_values(component)
+
+            # Above high threshold -> high
+            assert get_confidence_level(thresholds["high"] + 0.01, component) == "high"
+
+            # Between medium and high -> medium
+            mid_point = (thresholds["high"] + thresholds["medium"]) / 2
+            assert get_confidence_level(mid_point, component) == "medium"
+
+            # Below medium threshold -> low
+            assert get_confidence_level(thresholds["medium"] - 0.01, component) == "low"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
