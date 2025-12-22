@@ -111,7 +111,7 @@
           "id": "3.1",
           "title": "Add haptics to cell painting gesture",
           "description": "Integrate haptic feedback into the paintGesture. Trigger light haptic when painting starts and selection haptic when each new cell is painted during drag",
-          "status": "pending",
+          "status": "completed",
           "estimated_effort": "15 minutes",
           "files_to_modify": [
             "pips-solver/src/app/screens/builder/Step2RegionPainting.tsx"
@@ -120,13 +120,15 @@
             "Light impact haptic triggers when painting begins (onBegin)",
             "Selection haptic triggers when moving to a new cell during drag",
             "No haptic when staying on same cell (performance)"
-          ]
+          ],
+          "notes": "Integrated haptic feedback into paintGesture. Added triggerImpactLight() in onBegin for light haptic when painting starts, and triggerPaintCell() in paintCellIfNew for selection haptic when entering each new cell during drag. No haptic when staying on same cell (handled by existing paintCellIfNew logic). TypeScript compiles successfully.",
+          "updated_at": "2025-12-22T08:38:44.929611+00:00"
         },
         {
           "id": "3.2",
           "title": "Add haptics to palette color selection",
           "description": "Add haptic feedback when user selects a region color from the palette",
-          "status": "pending",
+          "status": "completed",
           "estimated_effort": "10 minutes",
           "files_to_modify": [
             "pips-solver/src/app/screens/builder/Step2RegionPainting.tsx"
@@ -134,7 +136,9 @@
           "acceptance_criteria": [
             "Selection haptic triggers when palette color is tapped",
             "Provides tactile confirmation of color selection"
-          ]
+          ],
+          "notes": "Added triggerPaletteSelect() haptic feedback to handleColorSelect function. Imported from haptics utility. TypeScript compilation verified.",
+          "updated_at": "2025-12-22T08:41:27.779871+00:00"
         }
       ]
     },
@@ -147,13 +151,15 @@
           "id": "4.1",
           "title": "Test TypeScript compilation",
           "description": "Ensure the project compiles without TypeScript errors after all haptic integrations",
-          "status": "pending",
+          "status": "completed",
           "estimated_effort": "5 minutes",
           "files_to_modify": [],
           "acceptance_criteria": [
             "npx tsc --noEmit passes without errors",
             "No type errors in modified files"
-          ]
+          ],
+          "notes": "TypeScript compilation verified successfully with `npx tsc --noEmit`. All haptic imports in Step1GridAlignment.tsx and Step2RegionPainting.tsx properly match exports from utils/haptics.ts. No type errors found.",
+          "updated_at": "2025-12-22T08:43:35.849779+00:00"
         },
         {
           "id": "4.2",
@@ -187,5 +193,5 @@
     "Haptics gracefully degrade on unsupported platforms (web)"
   ],
   "spec_file": "spec.md",
-  "last_updated": "2025-12-22T08:36:11.855916+00:00"
+  "last_updated": "2025-12-22T08:43:35.849779+00:00"
 }

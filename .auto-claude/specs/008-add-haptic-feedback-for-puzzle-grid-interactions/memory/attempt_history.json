@@ -59,11 +59,35 @@
         }
       ],
       "status": "completed"
+    },
+    "3.1": {
+      "attempts": [
+        {
+          "session": 7,
+          "timestamp": "2025-12-22T03:38:59.350773",
+          "approach": "Implemented: Integrate haptic feedback into the paintGesture. Trigger light haptic when painting starts and selec",
+          "success": true,
+          "error": null
+        }
+      ],
+      "status": "completed"
+    },
+    "3.2": {
+      "attempts": [
+        {
+          "session": 8,
+          "timestamp": "2025-12-22T03:41:35.138544",
+          "approach": "Implemented: Add haptic feedback when user selects a region color from the palette",
+          "success": true,
+          "error": null
+        }
+      ],
+      "status": "completed"
     }
   },
   "stuck_subtasks": [],
   "metadata": {
     "created_at": "2025-12-22T03:10:01.833863",
-    "last_updated": "2025-12-22T03:36:18.185016"
+    "last_updated": "2025-12-22T03:41:35.138544"
   }
 }

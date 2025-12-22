@@ -6,10 +6,10 @@
       "discovered_at": "2025-12-22T08:16:32.303913+00:00"
     },
     "pips-solver/src/app/screens/builder/Step2RegionPainting.tsx": {
-      "description": "Region painting screen with paintGesture Pan gesture for tap/drag painting cells. Uses lastPaintedCellRef to track and avoid repainting same cell during drag. Gesture uses .runOnJS(true) making it safe for haptic calls.",
-      "category": "component",
-      "discovered_at": "2025-12-22T08:16:32.574671+00:00"
+      "description": "Step2RegionPainting paintGesture now has haptic feedback: triggerImpactLight() on onBegin when painting starts, and triggerPaintCell() when entering a new cell during drag. Haptics are only triggered when moving to a new cell due to the lastPaintedCellRef tracking mechanism.",
+      "category": "haptics",
+      "discovered_at": "2025-12-22T08:38:51.575380+00:00"
     }
   },
-  "last_updated": "2025-12-22T08:16:32.574671+00:00"
+  "last_updated": "2025-12-22T08:38:51.575380+00:00"
 }
