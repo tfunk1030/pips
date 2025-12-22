@@ -13,6 +13,7 @@ import {
   AIExtractionResult,
   BuilderStep,
   createInitialBuilderState,
+  RawResponses,
 } from '../../model/overlayTypes';
 import {
   convertAIResultToBuilderState,
@@ -53,6 +54,7 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
   const [puzzleName, setPuzzleName] = useState('');
   const [aiProgress, setAIProgress] = useState<string | null>(null);
   const [pendingAIResult, setPendingAIResult] = useState<AIExtractionResult | null>(null);
+  const [pendingRawResponses, setPendingRawResponses] = useState<RawResponses | null>(null);
 
   // Load draft if provided
   useEffect(() => {
@@ -271,6 +273,10 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
     // Use new multi-model extraction for maximum accuracy
     // Enable hybrid CV mode only if a CV service URL is configured
     const hasCVService = !!settings.cvServiceUrl?.trim();
+
+    // Enable debug responses for ensemble/accurate strategies to support model comparison
+    const shouldSaveDebugResponses = strategy === 'ensemble' || strategy === 'accurate';
+
     const result = await extractPuzzleMultiModel(state.image.base64, {
       strategy,
       apiKeys: {
@@ -280,6 +286,7 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
       },
       useHybridCV: hasCVService, // Only use CV if configured
       cvServiceUrl: settings.cvServiceUrl || undefined,
+      saveDebugResponses: shouldSaveDebugResponses,
       onProgress: (progress: EnsembleProgress) => {
         // Show more detailed progress for ensemble mode
         const modelInfo = progress.modelsUsed?.length ? ` (${progress.modelsUsed.join(', ')})` : '';
@@ -322,6 +329,8 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
 
       // Show verification modal instead of immediately applying
       setPendingAIResult(result.result);
+      // Store raw responses for model comparison (if available)
+      setPendingRawResponses(result.rawResponses ?? null);
     } else {
       dispatch({ type: 'AI_ERROR', error: result.error || 'Unknown error' });
       setAIProgress(null);
@@ -372,6 +381,7 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
 
     console.log('[DEBUG] Accepted and applied AI result');
     setPendingAIResult(null);
+    setPendingRawResponses(null);
 
     // Auto-navigate to Step 2 to review regions
     dispatch({ type: 'SET_STEP', step: 2 });
@@ -380,6 +390,7 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
   const handleRejectAIResult = useCallback(() => {
     console.log('[DEBUG] User rejected AI result');
     setPendingAIResult(null);
+    setPendingRawResponses(null);
     Alert.alert(
       'Extraction Rejected',
       'You can manually build the puzzle using the step-by-step wizard.'
@@ -627,6 +638,7 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
           dominoResult={pendingAIResult.dominoes}
           onAccept={handleAcceptAIResult}
           onReject={handleRejectAIResult}
+          rawResponses={pendingRawResponses}
         />
       )}
     </SafeAreaView>
