@@ -7,6 +7,7 @@
 
 import React, { useCallback, useMemo, useState } from 'react';
 import {
+  Alert,
   Image,
   Modal,
   ScrollView,
@@ -29,11 +30,16 @@ import { colors, radii, spacing } from '../../theme';
 // View modes for the modal
 type ViewMode = 'text' | 'visual';
 
+// Dimension constraints for grid editing
+const MIN_DIMENSION = 3;
+const MAX_DIMENSION = 20;
+
 // Edit target type for tracking what's being edited
 type EditTarget =
   | { type: 'cell'; row: number; col: number }
   | { type: 'domino'; index: number; half: 0 | 1 }
   | { type: 'constraint'; regionLabel: string }
+  | { type: 'dimensions' }
   | null;
 
 // Editable results that can be modified by the user
@@ -285,6 +291,144 @@ export default function AIVerificationModal({
     });
     setHasEdits(true);
     setEditTarget(null);
+  }, []);
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // Dimension Change Handlers
+  // ════════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Handle row count change with validation and orphan cell check
+   */
+  const handleRowChange = useCallback((delta: number) => {
+    const newRows = editedBoard.rows + delta;
+
+    // Validate bounds
+    if (newRows < MIN_DIMENSION || newRows > MAX_DIMENSION) {
+      return;
+    }
+
+    // Check for orphaned cells when shrinking
+    if (delta < 0 && wouldOrphanCells(
+      editedBoard.shape,
+      editedBoard.rows,
+      editedBoard.cols,
+      newRows,
+      editedBoard.cols
+    )) {
+      Alert.alert(
+        'Remove Active Cells?',
+        'Reducing rows will remove cells that are part of the puzzle. Continue?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Remove',
+            style: 'destructive',
+            onPress: () => applyRowChange(newRows),
+          },
+        ]
+      );
+      return;
+    }
+
+    applyRowChange(newRows);
+  }, [editedBoard]);
+
+  /**
+   * Apply the row change after validation/confirmation
+   */
+  const applyRowChange = useCallback((newRows: number) => {
+    setEditedBoard(prev => {
+      const newShape = resizeShapeString(
+        prev.shape,
+        prev.rows,
+        prev.cols,
+        newRows,
+        prev.cols
+      );
+      const newRegions = resizeRegionsString(
+        prev.regions,
+        prev.rows,
+        prev.cols,
+        newRows,
+        prev.cols
+      );
+
+      return {
+        ...prev,
+        rows: newRows,
+        shape: newShape,
+        regions: newRegions,
+      };
+    });
+    setHasEdits(true);
+  }, []);
+
+  /**
+   * Handle column count change with validation and orphan cell check
+   */
+  const handleColChange = useCallback((delta: number) => {
+    const newCols = editedBoard.cols + delta;
+
+    // Validate bounds
+    if (newCols < MIN_DIMENSION || newCols > MAX_DIMENSION) {
+      return;
+    }
+
+    // Check for orphaned cells when shrinking
+    if (delta < 0 && wouldOrphanCells(
+      editedBoard.shape,
+      editedBoard.rows,
+      editedBoard.cols,
+      editedBoard.rows,
+      newCols
+    )) {
+      Alert.alert(
+        'Remove Active Cells?',
+        'Reducing columns will remove cells that are part of the puzzle. Continue?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Remove',
+            style: 'destructive',
+            onPress: () => applyColChange(newCols),
+          },
+        ]
+      );
+      return;
+    }
+
+    applyColChange(newCols);
+  }, [editedBoard]);
+
+  /**
+   * Apply the column change after validation/confirmation
+   */
+  const applyColChange = useCallback((newCols: number) => {
+    setEditedBoard(prev => {
+      const newShape = resizeShapeString(
+        prev.shape,
+        prev.rows,
+        prev.cols,
+        prev.rows,
+        newCols
+      );
+      const newRegions = resizeRegionsString(
+        prev.regions,
+        prev.rows,
+        prev.cols,
+        prev.rows,
+        newCols
+      );
+
+      return {
+        ...prev,
+        cols: newCols,
+        shape: newShape,
+        regions: newRegions,
+      };
+    });
+    setHasEdits(true);
   }, []);
 
   /**
@@ -963,6 +1107,114 @@ function getRegionLabelAtCell(regionsStr: string, row: number, col: number): str
   const char = lines[row]?.[col];
   if (!char || char === '#' || char === '.') return null;
   return char;
+}
+
+/**
+ * Resize shape string when grid dimensions change
+ * @param shapeStr - Current shape string (e.g., "OOO\nOOO\nOOO")
+ * @param currentRows - Current number of rows
+ * @param currentCols - Current number of columns
+ * @param newRows - New number of rows
+ * @param newCols - New number of columns
+ * @returns Resized shape string
+ */
+function resizeShapeString(
+  shapeStr: string,
+  currentRows: number,
+  currentCols: number,
+  newRows: number,
+  newCols: number
+): string {
+  const lines = shapeStr.split('\\n').filter(line => line.length > 0);
+
+  // Build new shape grid
+  const newLines: string[] = [];
+  for (let row = 0; row < newRows; row++) {
+    let newLine = '';
+    for (let col = 0; col < newCols; col++) {
+      if (row < currentRows && col < currentCols) {
+        // Preserve existing cell
+        newLine += lines[row]?.[col] ?? 'O';
+      } else {
+        // New cell - default to active (O)
+        newLine += 'O';
+      }
+    }
+    newLines.push(newLine);
+  }
+
+  return newLines.join('\\n');
+}
+
+/**
+ * Resize regions string when grid dimensions change
+ * @param regionsStr - Current regions string (e.g., "AAB\nABB\nCCC")
+ * @param currentRows - Current number of rows
+ * @param currentCols - Current number of columns
+ * @param newRows - New number of rows
+ * @param newCols - New number of columns
+ * @returns Resized regions string
+ */
+function resizeRegionsString(
+  regionsStr: string,
+  currentRows: number,
+  currentCols: number,
+  newRows: number,
+  newCols: number
+): string {
+  const lines = regionsStr.split('\\n').filter(line => line.length > 0);
+
+  // Build new regions grid
+  const newLines: string[] = [];
+  for (let row = 0; row < newRows; row++) {
+    let newLine = '';
+    for (let col = 0; col < newCols; col++) {
+      if (row < currentRows && col < currentCols) {
+        // Preserve existing cell
+        newLine += lines[row]?.[col] ?? 'A';
+      } else {
+        // New cell - default to first region (A)
+        newLine += 'A';
+      }
+    }
+    newLines.push(newLine);
+  }
+
+  return newLines.join('\\n');
+}
+
+/**
+ * Check if resizing dimensions would lose any non-hole cells
+ * @returns true if cells would be orphaned (lost)
+ */
+function wouldOrphanCells(
+  shapeStr: string,
+  currentRows: number,
+  currentCols: number,
+  newRows: number,
+  newCols: number
+): boolean {
+  if (newRows >= currentRows && newCols >= currentCols) {
+    return false; // Expanding only, no cells lost
+  }
+
+  const lines = shapeStr.split('\\n').filter(line => line.length > 0);
+
+  // Check cells that would be removed
+  for (let row = 0; row < currentRows; row++) {
+    for (let col = 0; col < currentCols; col++) {
+      const wouldBeRemoved = row >= newRows || col >= newCols;
+      if (wouldBeRemoved) {
+        const char = lines[row]?.[col];
+        // If this cell is not a hole (is active), it would be orphaned
+        if (char && char !== '#') {
+          return true;
+        }
+      }
+    }
+  }
+
+  return false;
 }
 
 /**
