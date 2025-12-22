@@ -23,5 +23,16 @@
       "Skill(code-review)",
       "Skill(all-tools)"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "github",
+    "filesystem",
+    "DeepGraph React MCP",
+    "DeepGraph TypeScript MCP",
+    "context7",
+    "memory",
+    "executeautomation-playwright-server",
+    "fetch"
+  ],
+  "enableAllProjectMcpServers": true
 }
