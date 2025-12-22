@@ -11,6 +11,7 @@ Key features:
 - RANSAC-style robust fitting to filter outliers and estimate grid spacing
 - Adaptive thresholding for varying lighting conditions
 - Histogram analysis fallback for when Hough detection fails
+- Intensity gradient analysis for edge-poor images
 """
 
 import cv2
@@ -18,6 +19,8 @@ import numpy as np
 from dataclasses import dataclass, field
 from typing import List, Tuple, Optional, Dict
 from pathlib import Path
+from scipy import signal
+from scipy.ndimage import uniform_filter1d
 
 
 @dataclass
@@ -321,13 +324,284 @@ def detect_grid_lines_projection(
     return h_lines, v_lines
 
 
+def detect_grid_lines_histogram(
+    gray: np.ndarray,
+    min_spacing: int = 30,
+    max_spacing: int = 200,
+    smoothing_window: int = 5,
+    gradient_threshold: float = 0.15
+) -> Tuple[np.ndarray, np.ndarray, float]:
+    """
+    Detect grid lines using histogram/intensity gradient analysis.
+
+    This is a fallback method when Hough and projection-based detection fail.
+    It analyzes the intensity gradient along rows and columns to find grid lines
+    where pixel intensity changes significantly (cell boundaries).
+
+    The method works by:
+    1. Computing row-wise and column-wise mean intensity profiles
+    2. Calculating gradients (first derivative) of these profiles
+    3. Finding local maxima in gradient magnitude (intensity transitions)
+    4. Filtering peaks by spacing constraints
+
+    Args:
+        gray: Grayscale image
+        min_spacing: Minimum distance between detected lines
+        max_spacing: Maximum distance between detected lines
+        smoothing_window: Window size for smoothing intensity profiles
+        gradient_threshold: Minimum relative gradient magnitude (0.0 to 1.0)
+
+    Returns:
+        Tuple of (horizontal_positions, vertical_positions, confidence):
+        - horizontal_positions: Y-coordinates of detected horizontal lines
+        - vertical_positions: X-coordinates of detected vertical lines
+        - confidence: Confidence score for the detection (0.0 to 1.0)
+    """
+    if gray is None or gray.size == 0:
+        return np.array([]), np.array([]), 0.0
+
+    h, w = gray.shape[:2]
+
+    # Compute mean intensity profiles along rows and columns
+    row_profile = gray.mean(axis=1).astype(np.float32)  # Horizontal lines (y positions)
+    col_profile = gray.mean(axis=0).astype(np.float32)  # Vertical lines (x positions)
+
+    def find_gradient_peaks(profile: np.ndarray, min_dist: int, max_dist: int,
+                           smooth_win: int, grad_thresh: float) -> Tuple[np.ndarray, float]:
+        """Find peaks in gradient magnitude of intensity profile."""
+        if len(profile) < 10:
+            return np.array([]), 0.0
+
+        # Smooth the profile to reduce noise
+        if smooth_win > 1:
+            smoothed = uniform_filter1d(profile, size=smooth_win, mode='reflect')
+        else:
+            smoothed = profile
+
+        # Compute gradient (first derivative)
+        gradient = np.gradient(smoothed)
+
+        # Use absolute gradient to detect both rising and falling edges
+        abs_gradient = np.abs(gradient)
+
+        # Normalize gradient
+        max_grad = abs_gradient.max()
+        if max_grad <= 0:
+            return np.array([]), 0.0
+        norm_gradient = abs_gradient / max_grad
+
+        # Find local maxima above threshold
+        # Use scipy's find_peaks if available for better peak detection
+        try:
+            peaks, properties = signal.find_peaks(
+                norm_gradient,
+                height=grad_thresh,
+                distance=min_dist,
+                prominence=grad_thresh * 0.5
+            )
+        except Exception:
+            # Fallback to simple local maxima detection
+            peaks = []
+            for i in range(1, len(norm_gradient) - 1):
+                if norm_gradient[i] > grad_thresh:
+                    if norm_gradient[i] >= norm_gradient[i-1] and norm_gradient[i] >= norm_gradient[i+1]:
+                        # Enforce minimum distance
+                        if not peaks or (i - peaks[-1]) >= min_dist:
+                            peaks.append(i)
+            peaks = np.array(peaks)
+
+        if len(peaks) == 0:
+            return np.array([]), 0.0
+
+        # Filter by maximum spacing (remove spurious peaks that create too-large cells)
+        filtered_peaks = [peaks[0]]
+        for p in peaks[1:]:
+            gap = p - filtered_peaks[-1]
+            if gap <= max_dist:
+                filtered_peaks.append(p)
+            elif gap <= max_dist * 2:
+                # Gap is double the max - might be missing a line in between
+                # Still accept this peak
+                filtered_peaks.append(p)
+        peaks = np.array(filtered_peaks)
+
+        # Calculate confidence based on consistency of spacing
+        if len(peaks) >= 2:
+            gaps = np.diff(peaks)
+            valid_gaps = gaps[(gaps >= min_dist) & (gaps <= max_dist)]
+            if len(valid_gaps) > 0:
+                spacing_std = np.std(valid_gaps) if len(valid_gaps) > 1 else 0
+                mean_spacing = np.mean(valid_gaps)
+                # Low std relative to mean = consistent spacing = higher confidence
+                consistency = 1.0 - min(spacing_std / mean_spacing, 1.0) if mean_spacing > 0 else 0.0
+                coverage = len(valid_gaps) / len(gaps) if len(gaps) > 0 else 0.0
+                confidence = (consistency * 0.6 + coverage * 0.4)
+            else:
+                confidence = 0.2  # Some peaks found but spacing not in range
+        else:
+            confidence = 0.1 if len(peaks) > 0 else 0.0
+
+        return peaks, confidence
+
+    # Find peaks in both directions
+    h_lines, h_conf = find_gradient_peaks(row_profile, min_spacing, max_spacing,
+                                          smoothing_window, gradient_threshold)
+    v_lines, v_conf = find_gradient_peaks(col_profile, min_spacing, max_spacing,
+                                          smoothing_window, gradient_threshold)
+
+    # Overall confidence is average of both directions
+    overall_confidence = (h_conf + v_conf) / 2 if (h_conf > 0 or v_conf > 0) else 0.0
+
+    return h_lines.astype(float), v_lines.astype(float), overall_confidence
+
+
+def detect_grid_lines_autocorrelation(
+    gray: np.ndarray,
+    min_spacing: int = 30,
+    max_spacing: int = 200
+) -> Tuple[Optional[float], Optional[float], float]:
+    """
+    Estimate grid cell size using autocorrelation analysis.
+
+    Autocorrelation can detect periodic patterns in the image,
+    which is useful for grids with regular cell spacing. This method
+    doesn't find individual lines but estimates the cell dimensions.
+
+    Args:
+        gray: Grayscale image
+        min_spacing: Minimum cell spacing to detect
+        max_spacing: Maximum cell spacing to detect
+
+    Returns:
+        Tuple of (cell_height, cell_width, confidence):
+        - cell_height: Estimated cell height (vertical spacing)
+        - cell_width: Estimated cell width (horizontal spacing)
+        - confidence: Confidence in the estimation (0.0 to 1.0)
+    """
+    if gray is None or gray.size == 0:
+        return None, None, 0.0
+
+    h, w = gray.shape[:2]
+
+    def find_autocorr_period(profile: np.ndarray, min_p: int, max_p: int) -> Tuple[Optional[float], float]:
+        """Find dominant period in 1D profile using autocorrelation."""
+        if len(profile) < max_p * 2:
+            return None, 0.0
+
+        # Normalize profile
+        profile = profile.astype(np.float64)
+        profile = profile - profile.mean()
+        if profile.std() == 0:
+            return None, 0.0
+        profile = profile / profile.std()
+
+        # Compute autocorrelation
+        autocorr = np.correlate(profile, profile, mode='full')
+        autocorr = autocorr[len(autocorr)//2:]  # Take positive lags only
+
+        # Normalize autocorrelation
+        autocorr = autocorr / autocorr[0] if autocorr[0] != 0 else autocorr
+
+        # Find peaks in autocorrelation (periodic signals have peaks at lag = period)
+        # Look for first significant peak after lag 0 within our spacing range
+        search_start = min_p
+        search_end = min(max_p, len(autocorr) - 1)
+
+        if search_end <= search_start:
+            return None, 0.0
+
+        autocorr_segment = autocorr[search_start:search_end]
+
+        try:
+            peaks, properties = signal.find_peaks(
+                autocorr_segment,
+                height=0.2,  # Minimum correlation of 0.2
+                distance=min_p // 2
+            )
+        except Exception:
+            # Fallback: find local maximum
+            if len(autocorr_segment) < 3:
+                return None, 0.0
+            local_max_idx = np.argmax(autocorr_segment)
+            if autocorr_segment[local_max_idx] > 0.2:
+                peaks = np.array([local_max_idx])
+            else:
+                return None, 0.0
+
+        if len(peaks) == 0:
+            return None, 0.0
+
+        # Select the peak with highest correlation value
+        peak_values = autocorr_segment[peaks]
+        best_peak_idx = peaks[np.argmax(peak_values)]
+        period = search_start + best_peak_idx
+        confidence = float(autocorr_segment[best_peak_idx])
+
+        return float(period), confidence
+
+    # Compute mean profiles
+    row_profile = gray.mean(axis=1)
+    col_profile = gray.mean(axis=0)
+
+    cell_height, h_conf = find_autocorr_period(row_profile, min_spacing, max_spacing)
+    cell_width, v_conf = find_autocorr_period(col_profile, min_spacing, max_spacing)
+
+    overall_confidence = (h_conf + v_conf) / 2 if (h_conf > 0 or v_conf > 0) else 0.0
+
+    return cell_height, cell_width, overall_confidence
+
+
+def generate_grid_lines_from_spacing(
+    image_size: Tuple[int, int],
+    cell_height: Optional[float],
+    cell_width: Optional[float],
+    offset_y: float = 0.0,
+    offset_x: float = 0.0
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Generate evenly-spaced grid lines from estimated cell dimensions.
+
+    When we have cell size estimates but not actual line positions,
+    this function generates regular grid lines at the estimated spacing.
+
+    Args:
+        image_size: (height, width) of the image
+        cell_height: Estimated cell height
+        cell_width: Estimated cell width
+        offset_y: Starting Y offset for horizontal lines
+        offset_x: Starting X offset for vertical lines
+
+    Returns:
+        Tuple of (horizontal_positions, vertical_positions)
+    """
+    h, w = image_size
+
+    h_lines = np.array([])
+    v_lines = np.array([])
+
+    if cell_height is not None and cell_height > 0:
+        n_h_lines = int(h / cell_height) + 1
+        h_lines = np.array([offset_y + i * cell_height for i in range(n_h_lines)])
+        h_lines = h_lines[(h_lines >= 0) & (h_lines < h)]
+
+    if cell_width is not None and cell_width > 0:
+        n_v_lines = int(w / cell_width) + 1
+        v_lines = np.array([offset_x + i * cell_width for i in range(n_v_lines)])
+        v_lines = v_lines[(v_lines >= 0) & (v_lines < w)]
+
+    return h_lines, v_lines
+
+
 def detect_grid_lines_adaptive(
     image: np.ndarray,
     use_hough: bool = True,
     use_projection: bool = True,
+    use_histogram_fallback: bool = True,
+    use_autocorrelation_fallback: bool = True,
     min_spacing: float = 30.0,
     max_spacing: float = 200.0,
     ransac_iterations: int = 100,
+    fallback_threshold: float = 0.3,
     debug_dir: Optional[str] = None
 ) -> GridLineResult:
     """
@@ -342,15 +616,20 @@ def detect_grid_lines_adaptive(
     2. Detect lines using Hough transform and/or projection analysis
     3. Cluster nearby lines to remove duplicates
     4. Use RANSAC to robustly estimate grid spacing from line positions
-    5. Estimate grid dimensions based on detected lines and spacing
+    5. If confidence is low, fall back to histogram gradient analysis
+    6. If still low confidence, try autocorrelation-based estimation
+    7. Estimate grid dimensions based on detected lines and spacing
 
     Args:
         image: Input image (BGR or grayscale)
         use_hough: Whether to use Hough line detection
         use_projection: Whether to use projection-based detection
+        use_histogram_fallback: Whether to use histogram analysis as fallback
+        use_autocorrelation_fallback: Whether to use autocorrelation as final fallback
         min_spacing: Minimum valid cell spacing
         max_spacing: Maximum valid cell spacing
         ransac_iterations: Number of RANSAC iterations for spacing estimation
+        fallback_threshold: Confidence threshold below which to trigger fallbacks
         debug_dir: Optional directory to save debug images
 
     Returns:
@@ -435,9 +714,99 @@ def detect_grid_lines_adaptive(
         n_iterations=ransac_iterations
     )
 
-    # Determine overall confidence
+    # Determine overall confidence from primary methods
     overall_confidence = (h_confidence + v_confidence) / 2 if h_confidence > 0 or v_confidence > 0 else 0.0
+    method = "hough_ransac" if use_hough else "projection_ransac"
 
+    # ========== FALLBACK STAGE 1: Histogram Gradient Analysis ==========
+    # If primary methods have low confidence, try histogram-based detection
+    if overall_confidence < fallback_threshold and use_histogram_fallback:
+        hist_h_lines, hist_v_lines, hist_confidence = detect_grid_lines_histogram(
+            gray,
+            min_spacing=int(min_spacing),
+            max_spacing=int(max_spacing),
+            smoothing_window=7,
+            gradient_threshold=0.12
+        )
+
+        # Use histogram results if they're better
+        if hist_confidence > overall_confidence:
+            # Merge histogram lines with existing lines
+            if len(hist_h_lines) > 0:
+                all_h_merged = np.concatenate([h_lines, hist_h_lines])
+                h_lines = cluster_lines(all_h_merged, min_distance=min_spacing * 0.4)
+            if len(hist_v_lines) > 0:
+                all_v_merged = np.concatenate([v_lines, hist_v_lines])
+                v_lines = cluster_lines(all_v_merged, min_distance=min_spacing * 0.4)
+
+            # Re-run RANSAC on merged lines
+            h_spacing, h_confidence, _ = ransac_fit_spacing(
+                h_lines,
+                min_spacing=min_spacing,
+                max_spacing=max_spacing,
+                n_iterations=ransac_iterations
+            )
+            v_spacing, v_confidence, _ = ransac_fit_spacing(
+                v_lines,
+                min_spacing=min_spacing,
+                max_spacing=max_spacing,
+                n_iterations=ransac_iterations
+            )
+            overall_confidence = (h_confidence + v_confidence) / 2
+            method = "histogram_ransac"
+
+            if debug_dir:
+                out_dir = Path(debug_dir)
+                out_dir.mkdir(parents=True, exist_ok=True)
+                # Save histogram fallback debug info
+                debug_hist = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR) if len(image.shape) == 2 else image.copy()
+                for y in hist_h_lines:
+                    cv2.line(debug_hist, (0, int(y)), (w - 1, int(y)), (255, 0, 0), 1)  # Blue for histogram lines
+                for x in hist_v_lines:
+                    cv2.line(debug_hist, (int(x), 0), (int(x), h - 1), (255, 0, 0), 1)
+                cv2.imwrite(str(out_dir / "histogram_lines.png"), debug_hist)
+
+    # ========== FALLBACK STAGE 2: Autocorrelation Analysis ==========
+    # If still low confidence, try autocorrelation to estimate cell size
+    if overall_confidence < fallback_threshold and use_autocorrelation_fallback:
+        auto_cell_h, auto_cell_w, auto_confidence = detect_grid_lines_autocorrelation(
+            gray,
+            min_spacing=int(min_spacing),
+            max_spacing=int(max_spacing)
+        )
+
+        # Use autocorrelation results if they provide better spacing estimates
+        if auto_confidence > 0.3 and (h_spacing is None or v_spacing is None or auto_confidence > overall_confidence):
+            # Generate regular grid lines from autocorrelation spacing
+            if auto_cell_h is not None and (h_spacing is None or auto_confidence > h_confidence):
+                h_spacing = auto_cell_h
+                gen_h_lines, _ = generate_grid_lines_from_spacing(
+                    (h, w), auto_cell_h, None
+                )
+                if len(gen_h_lines) > len(h_lines):
+                    h_lines = gen_h_lines
+
+            if auto_cell_w is not None and (v_spacing is None or auto_confidence > v_confidence):
+                v_spacing = auto_cell_w
+                _, gen_v_lines = generate_grid_lines_from_spacing(
+                    (h, w), None, auto_cell_w
+                )
+                if len(gen_v_lines) > len(v_lines):
+                    v_lines = gen_v_lines
+
+            overall_confidence = max(overall_confidence, auto_confidence * 0.8)  # Slight penalty for autocorr
+            method = "autocorrelation"
+
+            if debug_dir:
+                out_dir = Path(debug_dir)
+                out_dir.mkdir(parents=True, exist_ok=True)
+                # Save autocorrelation debug info
+                with open(str(out_dir / "autocorr_results.txt"), "w") as f:
+                    f.write(f"Cell height: {auto_cell_h}\n")
+                    f.write(f"Cell width: {auto_cell_w}\n")
+                    f.write(f"Confidence: {auto_confidence}\n")
+
+    # ========== Spacing Consistency ==========
     # Use consistent spacing if one direction has higher confidence
     if h_spacing is not None and v_spacing is not None:
         if h_confidence > v_confidence * 1.3:
@@ -449,7 +818,7 @@ def detect_grid_lines_adaptive(
     elif v_spacing is not None and h_spacing is None:
         h_spacing = v_spacing
 
-    # Estimate grid dimensions
+    # ========== Grid Dimension Estimation ==========
     grid_dims = None
     if h_spacing is not None and v_spacing is not None:
         n_rows = int(round(h / h_spacing)) if h_spacing > 0 else 0
@@ -457,10 +826,9 @@ def detect_grid_lines_adaptive(
         if n_rows > 0 and n_cols > 0:
             grid_dims = (n_rows, n_cols)
 
-    # Determine method used
-    method = "hough_ransac" if use_hough else "projection_ransac"
-    if overall_confidence < 0.3:
-        method = "fallback"
+    # Mark as fallback if confidence still low after all attempts
+    if overall_confidence < fallback_threshold:
+        method = "low_confidence_" + method
 
     # Save debug visualization
     if debug_dir:
