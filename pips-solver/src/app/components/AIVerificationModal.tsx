@@ -3,9 +3,10 @@
  * Shows what the AI extracted before applying it to the builder state
  */
 
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { BoardExtractionResult, DominoExtractionResult } from '../../model/overlayTypes';
+import { BoardExtractionResult, DominoExtractionResult, RawResponses } from '../../model/overlayTypes';
+import ExtractionComparisonModal from './ExtractionComparisonModal';
 
 interface Props {
   visible: boolean;
@@ -13,6 +14,8 @@ interface Props {
   dominoResult: DominoExtractionResult;
   onAccept: () => void;
   onReject: () => void;
+  /** Optional raw responses from multiple models for comparison */
+  rawResponses?: RawResponses | null;
 }
 
 export default function AIVerificationModal({
@@ -21,7 +24,28 @@ export default function AIVerificationModal({
   dominoResult,
   onAccept,
   onReject,
+  rawResponses,
 }: Props) {
+  // State for comparison modal visibility
+  const [showComparisonModal, setShowComparisonModal] = useState(false);
+
+  // Determine if multiple models were used (at least 2 different models in responses)
+  const hasMultipleModels = useMemo(() => {
+    if (!rawResponses) return false;
+
+    // Collect unique model names from board and domino responses
+    const modelNames = new Set<string>();
+
+    for (const response of rawResponses.board) {
+      modelNames.add(response.model);
+    }
+    for (const response of rawResponses.dominoes) {
+      modelNames.add(response.model);
+    }
+
+    return modelNames.size >= 2;
+  }, [rawResponses]);
+
   // Format shape and regions for display
   const formatGrid = (str: string) => {
     return str.split('\\n').map((line, i) => (
@@ -128,6 +152,18 @@ export default function AIVerificationModal({
           )}
         </ScrollView>
 
+        {/* Compare Models button - only shown when multiple models were used */}
+        {hasMultipleModels && (
+          <View style={styles.compareButtonContainer}>
+            <TouchableOpacity
+              style={[styles.button, styles.compareButton]}
+              onPress={() => setShowComparisonModal(true)}
+            >
+              <Text style={styles.buttonText}>Compare Models</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         <View style={styles.buttons}>
           <TouchableOpacity style={[styles.button, styles.rejectButton]} onPress={onReject}>
             <Text style={styles.buttonText}>Reject - I'll do it manually</Text>
@@ -137,6 +173,17 @@ export default function AIVerificationModal({
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Extraction Comparison Modal */}
+      <ExtractionComparisonModal
+        visible={showComparisonModal}
+        rawResponses={rawResponses ?? null}
+        onClose={() => setShowComparisonModal(false)}
+        onAccept={() => {
+          setShowComparisonModal(false);
+          onAccept();
+        }}
+      />
     </Modal>
   );
 }
@@ -244,5 +291,15 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  compareButtonContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#333',
+  },
+  compareButton: {
+    backgroundColor: '#2196F3',
+    flex: 0,
   },
 });
