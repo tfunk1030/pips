@@ -10,6 +10,14 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 
+from utils.hint_engine import (
+    generate_hint_level_1,
+    generate_hint_level_2,
+    generate_hint_level_3,
+    generate_hint_level_4,
+    HintResult,
+)
+
 
 # =============================================================================
 # Pydantic Models for Puzzle Specification
@@ -146,8 +154,8 @@ async def generate_hint(request: HintRequest) -> HintResponse:
         level = request.level
         puzzle_spec = request.puzzle_spec
 
-        # Placeholder hint content - will be replaced by actual hint engine in phase 2
-        hint_content = _generate_placeholder_hint(level, puzzle_spec)
+        # Generate hint using the hint engine
+        hint_content = _generate_hint_for_level(level, puzzle_spec)
 
         return HintResponse(
             success=True,
@@ -166,48 +174,53 @@ async def generate_hint(request: HintRequest) -> HintResponse:
         )
 
 
-def _generate_placeholder_hint(level: int, puzzle_spec: PuzzleSpec) -> HintContent:
+def _convert_hint_result_to_content(level: int, hint_result: HintResult) -> HintContent:
     """
-    Generate a placeholder hint based on level.
+    Convert a HintResult from the hint engine to a HintContent response model.
 
-    This function will be replaced by actual hint generation logic
-    from utils/hint_engine.py in phase 2.
+    Args:
+        level: The hint level (1-4)
+        hint_result: The result from the hint engine
+
+    Returns:
+        HintContent model suitable for API response
     """
-    hint_type = HINT_TYPES.get(level, "strategy")
+    return HintContent(
+        level=level,
+        content=hint_result.content,
+        type=hint_result.hint_type,
+        region=hint_result.region,
+        cell=hint_result.cell,
+        cells=hint_result.cells,
+    )
 
-    # Get region names from puzzle spec for context
-    region_names = list(puzzle_spec.region_constraints.keys())
-    first_region = region_names[0] if region_names else "A"
+
+def _generate_hint_for_level(level: int, puzzle_spec: PuzzleSpec) -> HintContent:
+    """
+    Generate a hint at the specified level using the hint engine.
+
+    This function dispatches to the appropriate hint level generator
+    from utils/hint_engine.py based on the requested level.
+
+    Args:
+        level: Hint level (1-4)
+        puzzle_spec: The puzzle specification
+
+    Returns:
+        HintContent with the generated hint
+    """
+    # Convert PuzzleSpec to dict for hint engine compatibility
+    puzzle_dict = puzzle_spec.model_dump()
 
     if level == 1:
-        return HintContent(
-            level=1,
-            content="Consider the constraints on each region and look for regions with limited possibilities.",
-            type="strategy",
-        )
+        hint_result = generate_hint_level_1(puzzle_dict)
     elif level == 2:
-        return HintContent(
-            level=2,
-            content=f"Focus on region '{first_region}' - its constraints significantly limit possible placements.",
-            type="direction",
-            region=first_region,
-        )
+        hint_result = generate_hint_level_2(puzzle_dict)
     elif level == 3:
-        return HintContent(
-            level=3,
-            content="Place a domino at position (0, 0) to satisfy the nearby constraints.",
-            type="cell",
-            region=first_region,
-            cell={"row": 0, "col": 0},
-        )
-    else:  # level == 4
-        return HintContent(
-            level=4,
-            content="Here are several placements that form part of the solution:",
-            type="partial_solution",
-            cells=[
-                {"row": 0, "col": 0, "value": 1},
-                {"row": 0, "col": 1, "value": 2},
-                {"row": 1, "col": 0, "value": 3},
-            ],
-        )
+        hint_result = generate_hint_level_3(puzzle_dict)
+    elif level == 4:
+        hint_result = generate_hint_level_4(puzzle_dict)
+    else:
+        raise ValueError(f"Invalid hint level: {level}")
+
+    return _convert_hint_result_to_content(level, hint_result)
