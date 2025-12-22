@@ -327,6 +327,175 @@ def preprocess_adaptive(
     return cleaned, info
 
 
+def detect_pips_hough(
+    image: np.ndarray,
+    dp: float = 1.0,
+    min_dist: Optional[int] = None,
+    param1: int = 50,
+    param2: int = 30,
+    min_radius: int = 5,
+    max_radius: int = 50
+) -> Tuple[int, np.ndarray, dict]:
+    """
+    Detect pips on a domino image using Hough Circle Transform.
+
+    Uses cv2.HoughCircles to detect circular pip shapes on a domino
+    half image. This is the primary detection method for pip counting.
+
+    Args:
+        image: Input BGR or grayscale image of a domino half.
+        dp: Inverse ratio of accumulator resolution to image resolution.
+            dp=1 means same resolution, dp=2 means half resolution.
+        min_dist: Minimum distance between detected circle centers.
+            If None, defaults to 1/6 of the minimum image dimension.
+        param1: Higher threshold for Canny edge detector (lower threshold
+            is half of this value).
+        param2: Accumulator threshold for circle centers at detection stage.
+            Smaller values = more circles detected (including false positives).
+        min_radius: Minimum circle radius to detect.
+        max_radius: Maximum circle radius to detect.
+
+    Returns:
+        Tuple of (pip_count, circles, detection_info):
+        - pip_count: Number of detected pips (circles)
+        - circles: NumPy array of detected circles as (x, y, radius) or None
+        - detection_info: Dict with detection metadata including:
+            - radii: List of detected radii
+            - mean_radius: Average radius of detected circles
+            - radius_variance: Variance in radius sizes (for confidence)
+            - image_size: Tuple of (height, width)
+    """
+    if image is None or image.size == 0:
+        raise ValueError("Input image is empty or None")
+
+    # Preprocess image for Hough detection
+    preprocessed = preprocess_for_hough(image)
+
+    # Calculate default min_dist based on image size
+    h, w = preprocessed.shape[:2]
+    if min_dist is None:
+        # Default: circles should be at least 1/6 of min dimension apart
+        min_dist = max(int(min(h, w) / 6), 10)
+
+    # Scale radius parameters based on image size
+    # For small domino images, we need to adjust radius ranges
+    img_scale = min(h, w) / 100.0  # Normalize to 100px reference
+    scaled_min_radius = max(int(min_radius * img_scale), 2)
+    scaled_max_radius = min(int(max_radius * img_scale), min(h, w) // 3)
+
+    # Ensure min_radius < max_radius
+    if scaled_min_radius >= scaled_max_radius:
+        scaled_min_radius = max(2, scaled_max_radius - 5)
+
+    # Apply Hough Circle Transform
+    circles = cv2.HoughCircles(
+        preprocessed,
+        cv2.HOUGH_GRADIENT,
+        dp=dp,
+        minDist=min_dist,
+        param1=param1,
+        param2=param2,
+        minRadius=scaled_min_radius,
+        maxRadius=scaled_max_radius
+    )
+
+    # Initialize detection info
+    detection_info = {
+        "radii": [],
+        "mean_radius": 0.0,
+        "radius_variance": 0.0,
+        "image_size": (h, w),
+        "scaled_min_radius": scaled_min_radius,
+        "scaled_max_radius": scaled_max_radius,
+        "min_dist": min_dist
+    }
+
+    # Process results
+    if circles is None:
+        save_debug_image("09_hough_no_circles.png", preprocessed)
+        return 0, None, detection_info
+
+    # Convert to integer coordinates
+    circles = np.uint16(np.around(circles))
+    detected_circles = circles[0, :]
+
+    # Extract radii for statistics
+    radii = [float(c[2]) for c in detected_circles]
+    detection_info["radii"] = radii
+    detection_info["mean_radius"] = float(np.mean(radii)) if radii else 0.0
+    detection_info["radius_variance"] = float(np.var(radii)) if len(radii) > 1 else 0.0
+
+    # Create debug visualization
+    if DEBUG_OUTPUT_DIR is not None:
+        debug_img = cv2.cvtColor(preprocessed, cv2.COLOR_GRAY2BGR)
+        for circle in detected_circles:
+            x, y, r = circle
+            # Draw outer circle
+            cv2.circle(debug_img, (x, y), r, (0, 255, 0), 2)
+            # Draw center point
+            cv2.circle(debug_img, (x, y), 2, (0, 0, 255), 3)
+        save_debug_image("09_hough_detected_circles.png", debug_img)
+
+    pip_count = len(detected_circles)
+    return pip_count, detected_circles, detection_info
+
+
+def detect_pips_hough_adaptive(
+    image: np.ndarray,
+    param2_range: Tuple[int, int, int] = (20, 40, 5),
+    max_pips: int = 6
+) -> Tuple[int, np.ndarray, dict]:
+    """
+    Detect pips using adaptive HoughCircles parameters.
+
+    Tries multiple param2 values to find the best detection result,
+    since optimal parameters vary with image quality and pip size.
+
+    Args:
+        image: Input BGR or grayscale image of a domino half.
+        param2_range: Tuple of (start, stop, step) for param2 values to try.
+            Lower values detect more circles.
+        max_pips: Maximum expected pips (default 6 for standard dominoes).
+
+    Returns:
+        Same as detect_pips_hough: (pip_count, circles, detection_info)
+    """
+    if image is None or image.size == 0:
+        raise ValueError("Input image is empty or None")
+
+    best_result = (0, None, {})
+    best_score = -1
+
+    # Try different param2 values
+    for param2 in range(param2_range[0], param2_range[1], param2_range[2]):
+        try:
+            pip_count, circles, info = detect_pips_hough(
+                image,
+                param2=param2
+            )
+
+            # Score this detection
+            # Prefer results with pip count in valid range
+            if 0 <= pip_count <= max_pips:
+                # Score based on consistency (low variance is good)
+                variance_penalty = info.get("radius_variance", 0) / 100.0
+                score = pip_count * (1 - min(variance_penalty, 0.5))
+
+                if score > best_score:
+                    best_score = score
+                    best_result = (pip_count, circles, info)
+                    info["param2_used"] = param2
+
+            # If we get a valid count with low variance, stop searching
+            if pip_count > 0 and pip_count <= max_pips and info.get("radius_variance", 999) < 10:
+                break
+
+        except Exception:
+            continue
+
+    return best_result
+
+
 # Module-level test function
 def _self_test():
     """Quick self-test to verify module imports correctly."""
@@ -347,6 +516,16 @@ def _self_test():
     # Test contour preprocessing
     contour_ready = preprocess_for_contours(test_img)
     assert contour_ready is not None
+
+    # Test Hough circle detection
+    pip_count, circles, info = detect_pips_hough(test_img)
+    assert isinstance(pip_count, int)
+    assert isinstance(info, dict)
+    assert "mean_radius" in info
+
+    # Test adaptive detection
+    pip_count_adaptive, _, _ = detect_pips_hough_adaptive(test_img)
+    assert isinstance(pip_count_adaptive, int)
 
     return True
 
