@@ -1,0 +1,37 @@
+{
+  "task_description": "Complete the diamond marker detection strategy (Strategy 3) by implementing detect_by_constraint_labels() function. Diamond-shaped markers are visual anchors at cell boundaries that enable cell position inference.",
+  "scoped_services": ["pips-agent"],
+  "files_to_modify": {
+    "pips-agent": [
+      "utils/cv_extraction_v2.py"
+    ]
+  },
+  "files_to_create": {
+    "pips-agent": [
+      "test_cv_extraction_v2.py"
+    ]
+  },
+  "files_to_reference": [
+    "pips-agent/utils/cv_extraction_v2.py (lines 32-122: detect_by_region_contours - function structure)",
+    "pips-agent/utils/cv_extraction_v2.py (lines 125-202: detect_by_color_segmentation - OpenCV operations)",
+    "pips-agent/utils/cv_extraction_v2.py (lines 273-341: Helper functions to reuse)",
+    "pips-agent/utils/cv_extraction_v2.py (lines 343-391: calculate_confidence pattern)",
+    "pips-agent/utils/cv_extraction_v2.py (lines 205-270: Multi-strategy integration)",
+    "pips-agent/test_user_puzzle_cv.py (test patterns)"
+  ],
+  "patterns": {
+    "detection_strategy": "All detection strategies return DetectionResult dataclass, use try/except, reuse helpers, support debug output",
+    "integration": "Strategies added to default list in extract_puzzle_multi_strategy(), run in parallel, best selected by confidence",
+    "testing": "Test files in root as test_*.py, validate cell count, grid dims, regions, confidence",
+    "error_handling": "Return DetectionResult with success=False and descriptive error on failure"
+  },
+  "existing_implementations": {
+    "description": "Two detection strategies already implemented: region_contours (edge-based) and color_segmentation (k-means). Both follow same pattern: load image, detect cells, estimate grid, detect regions, calculate confidence, return DetectionResult.",
+    "relevant_files": [
+      "pips-agent/utils/cv_extraction_v2.py",
+      "pips-agent/test_user_puzzle_cv.py",
+      "pips-agent/IMPROVEMENTS_IMPLEMENTED.md"
+    ]
+  },
+  "created_at": "2025-12-22T03:13:13.443575"
+}

@@ -1,0 +1,332 @@
+{
+  "feature": "Diamond Cell Inference Completion",
+  "workflow_type": "feature",
+  "workflow_rationale": "Implementing new detection strategy (Strategy 3) to complete multi-strategy grid detection system. Addresses documented technical debt and improves accuracy for diamond-marked puzzles.",
+  "phases": [
+    {
+      "id": "phase-1-core-implementation",
+      "name": "Core Diamond Detection Implementation",
+      "type": "implementation",
+      "description": "Implement detect_by_constraint_labels() function with diamond detection and cell inference logic",
+      "depends_on": [],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-1-1",
+          "description": "Implement diamond shape detection using contour analysis",
+          "service": "pips-agent",
+          "files_to_modify": ["utils/cv_extraction_v2.py"],
+          "files_to_create": [],
+          "patterns_from": ["utils/cv_extraction_v2.py (lines 32-122: detect_by_region_contours structure)"],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"from pips-agent.utils.cv_extraction_v2 import detect_by_constraint_labels; print('Function imported successfully')\"",
+            "expected": "Function imported successfully"
+          },
+          "implementation_notes": [
+            "Create detect_by_constraint_labels(image_path: str, debug_dir: str = None) -> DetectionResult",
+            "Step 1: Load image and convert to grayscale",
+            "Step 2: Apply thresholding/edge detection (cv2.threshold or cv2.Canny)",
+            "Step 3: Find contours using cv2.findContours()",
+            "Step 4: Filter for 4-vertex polygons using cv2.approxPolyDP()",
+            "Step 5: Validate diamond shape (aspect ratio ~1.0, rotated ~45 degrees, appropriate size)",
+            "Must handle image loading errors gracefully",
+            "Must use try/except wrapper like other strategies"
+          ],
+          "status": "pending"
+        },
+        {
+          "id": "subtask-1-2",
+          "description": "Implement cell position inference from detected diamonds",
+          "service": "pips-agent",
+          "files_to_modify": ["utils/cv_extraction_v2.py"],
+          "files_to_create": [],
+          "patterns_from": ["utils/cv_extraction_v2.py (lines 273-299: estimate_grid_dims helper)"],
+          "verification": {
+            "type": "manual",
+            "instructions": "Review code: diamond positions should be analyzed to determine if they mark corners or centers, then grid spacing calculated, then cell bounding boxes computed"
+          },
+          "implementation_notes": [
+            "Analyze diamond positions to determine layout pattern (corners vs centers)",
+            "Calculate grid spacing from median diamond distances (robust to outliers)",
+            "Compute cell bounding boxes (x, y, w, h) based on inferred grid",
+            "Handle edge case: <4 diamonds = cannot infer grid (return failure)",
+            "Handle edge case: irregular spacing = use median for robustness",
+            "Return DetectionResult with success=False if insufficient diamonds"
+          ],
+          "status": "pending"
+        },
+        {
+          "id": "subtask-1-3",
+          "description": "Add confidence scoring and region detection using existing helpers",
+          "service": "pips-agent",
+          "files_to_modify": ["utils/cv_extraction_v2.py"],
+          "files_to_create": [],
+          "patterns_from": [
+            "utils/cv_extraction_v2.py (lines 302-341: detect_regions_from_cells)",
+            "utils/cv_extraction_v2.py (lines 343-391: calculate_confidence)"
+          ],
+          "verification": {
+            "type": "manual",
+            "instructions": "Verify function calls estimate_grid_dims(), detect_regions_from_cells(), and calculate_confidence() helpers before returning DetectionResult"
+          },
+          "implementation_notes": [
+            "Call estimate_grid_dims(cells) to get grid dimensions",
+            "Call detect_regions_from_cells(img, cells) to group cells by color",
+            "Call calculate_confidence(cells, grid_dims) to score detection quality",
+            "Save debug image when debug_dir provided: save_debug_image(img, cells, path)",
+            "Return DetectionResult with all fields populated",
+            "Set method='constraint_labels' for tracking"
+          ],
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "phase-2-integration",
+      "name": "Multi-Strategy Integration",
+      "type": "integration",
+      "description": "Integrate constraint_labels strategy into extract_puzzle_multi_strategy() system",
+      "depends_on": ["phase-1-core-implementation"],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-2-1",
+          "description": "Add constraint_labels to default strategies list",
+          "service": "pips-agent",
+          "files_to_modify": ["utils/cv_extraction_v2.py"],
+          "files_to_create": [],
+          "patterns_from": ["utils/cv_extraction_v2.py (lines 221-222: default strategies)"],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"from pips-agent.utils.cv_extraction_v2 import extract_puzzle_multi_strategy; import inspect; src = inspect.getsource(extract_puzzle_multi_strategy); assert 'constraint_labels' in src, 'Strategy not in defaults'; print('Strategy in defaults')\"",
+            "expected": "Strategy in defaults"
+          },
+          "implementation_notes": [
+            "Update line 222: strategies = ['region_contours', 'color_segmentation', 'constraint_labels']",
+            "Add strategy execution block after color_segmentation block (line ~235)",
+            "Pattern: if 'constraint_labels' in strategies: result = detect_by_constraint_labels(image_path, output_dir); results.append(result)",
+            "Ensure integration follows exact same pattern as other strategies"
+          ],
+          "status": "pending"
+        },
+        {
+          "id": "subtask-2-2",
+          "description": "Verify multi-strategy system picks best result by confidence",
+          "service": "pips-agent",
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "manual",
+            "instructions": "Run extract_puzzle_multi_strategy() on test image, verify constraint_labels strategy runs and contributes to results, verify best strategy selected by confidence"
+          },
+          "implementation_notes": [
+            "Test that constraint_labels appears in result['all_attempts']",
+            "Verify result['method_used'] matches highest confidence strategy",
+            "Ensure no regressions to existing strategies"
+          ],
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "phase-3-testing",
+      "name": "Test Coverage",
+      "type": "implementation",
+      "description": "Create comprehensive test suite for diamond detection and integration",
+      "depends_on": ["phase-2-integration"],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-3-1",
+          "description": "Create test file with basic structure and fixtures",
+          "service": "pips-agent",
+          "files_to_modify": [],
+          "files_to_create": ["test_cv_extraction_v2.py"],
+          "patterns_from": ["test_user_puzzle_cv.py (test structure and patterns)"],
+          "verification": {
+            "type": "command",
+            "command": "python -m pytest pips-agent/test_cv_extraction_v2.py::test_basic_structure -v",
+            "expected": "test passed"
+          },
+          "implementation_notes": [
+            "Create test_cv_extraction_v2.py in pips-agent/ directory",
+            "Import pytest and cv_extraction_v2 functions",
+            "Create test_basic_structure() to verify function exists and returns DetectionResult",
+            "Follow pattern from test_user_puzzle_cv.py for file structure"
+          ],
+          "status": "pending"
+        },
+        {
+          "id": "subtask-3-2",
+          "description": "Add unit tests for diamond detection function",
+          "service": "pips-agent",
+          "files_to_modify": ["test_cv_extraction_v2.py"],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "python -m pytest pips-agent/test_cv_extraction_v2.py -k diamond -v",
+            "expected": "All diamond-related tests pass"
+          },
+          "implementation_notes": [
+            "test_detect_by_constraint_labels_basic: Returns DetectionResult with correct structure",
+            "test_detect_by_constraint_labels_no_diamonds: Returns failure when no diamonds present",
+            "test_detect_by_constraint_labels_with_diamonds: Detects diamonds in synthetic test image",
+            "test_detect_by_constraint_labels_inference: Correctly infers cells from diamond positions",
+            "Use mock images or existing test images (IMG_2050.png, IMG_2051.png)",
+            "Validate success/failure, cell count, grid_dims, confidence range"
+          ],
+          "status": "pending"
+        },
+        {
+          "id": "subtask-3-3",
+          "description": "Add integration test for multi-strategy system",
+          "service": "pips-agent",
+          "files_to_modify": ["test_cv_extraction_v2.py"],
+          "files_to_create": [],
+          "patterns_from": ["test_user_puzzle_cv.py (lines 59-79: multi-strategy test pattern)"],
+          "verification": {
+            "type": "command",
+            "command": "python -m pytest pips-agent/test_cv_extraction_v2.py::test_multi_strategy_includes_constraint_labels -v",
+            "expected": "test passed"
+          },
+          "implementation_notes": [
+            "test_multi_strategy_includes_constraint_labels: Verify strategy runs in multi-strategy system",
+            "test_constraint_labels_vs_other_strategies: Verify confidence-based selection works",
+            "Call extract_puzzle_multi_strategy() with all strategies enabled",
+            "Assert 'constraint_labels' in result['all_attempts']",
+            "Verify best result selected by confidence"
+          ],
+          "status": "pending"
+        },
+        {
+          "id": "subtask-3-4",
+          "description": "Run regression tests to ensure existing strategies unaffected",
+          "service": "pips-agent",
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "python pips-agent/test_user_puzzle_cv.py",
+            "expected": "Existing test passes, no regressions"
+          },
+          "implementation_notes": [
+            "Run test_user_puzzle_cv.py to verify existing strategies still work",
+            "Verify no import errors or crashes",
+            "Confirm region_contours and color_segmentation strategies unaffected"
+          ],
+          "status": "pending"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_phases": 3,
+    "total_subtasks": 9,
+    "services_involved": ["pips-agent"],
+    "parallelism": {
+      "max_parallel_phases": 1,
+      "parallel_groups": [],
+      "recommended_workers": 1,
+      "speedup_estimate": "Sequential execution required - phases have dependencies"
+    },
+    "startup_command": "cd pips-agent && python main.py"
+  },
+  "verification_strategy": {
+    "risk_level": "medium",
+    "skip_validation": false,
+    "test_creation_phase": "phase-3-testing",
+    "test_types_required": ["unit", "integration"],
+    "security_scanning_required": false,
+    "staging_deployment_required": false,
+    "acceptance_criteria": [
+      "detect_by_constraint_labels() function implemented and returns DetectionResult",
+      "Diamond detection identifies 4-vertex polygons with diamond geometry",
+      "Cell position inference calculates bounding boxes from diamond positions",
+      "Strategy integrated into extract_puzzle_multi_strategy() default list",
+      "Unit tests cover success and failure cases",
+      "Integration tests verify multi-strategy competition works",
+      "Existing detection strategies continue to work (no regressions)",
+      "Debug output saves correctly when debug_dir provided",
+      "Function handles edge cases: no diamonds, too few diamonds, irregular spacing"
+    ],
+    "verification_steps": [
+      {
+        "name": "Unit Tests - Diamond Detection",
+        "command": "python -m pytest pips-agent/test_cv_extraction_v2.py -k diamond -v",
+        "expected_outcome": "All diamond detection unit tests pass",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Integration Test - Multi-Strategy",
+        "command": "python -m pytest pips-agent/test_cv_extraction_v2.py::test_multi_strategy_includes_constraint_labels -v",
+        "expected_outcome": "Integration test passes",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Regression Test - Existing Strategies",
+        "command": "python pips-agent/test_user_puzzle_cv.py",
+        "expected_outcome": "Existing test passes, no regressions",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Manual Verification - Diamond Puzzle",
+        "command": "python -c \"from pips-agent.utils.cv_extraction_v2 import extract_puzzle_multi_strategy; result = extract_puzzle_multi_strategy('../IMG_2051.png', 'debug'); print(f'Method: {result[\\\"method_used\\\"]}, Confidence: {result[\\\"confidence\\\"]}, Cells: {result[\\\"num_cells\\\"]}')\"",
+        "expected_outcome": "Function runs without errors, detects cells, reports confidence",
+        "type": "manual",
+        "required": true,
+        "blocking": false
+      }
+    ],
+    "reasoning": "Medium risk algorithm change affecting detection accuracy. Requires unit tests for core detection logic, integration tests for multi-strategy system, and regression tests to ensure no breakage of existing strategies."
+  },
+  "qa_acceptance": {
+    "unit_tests": {
+      "required": true,
+      "commands": ["python -m pytest pips-agent/test_cv_extraction_v2.py -v"],
+      "minimum_coverage": null
+    },
+    "integration_tests": {
+      "required": true,
+      "commands": ["python -m pytest pips-agent/test_cv_extraction_v2.py::test_multi_strategy_includes_constraint_labels -v"],
+      "services_to_test": ["pips-agent"]
+    },
+    "e2e_tests": {
+      "required": false,
+      "commands": [],
+      "flows": []
+    },
+    "browser_verification": {
+      "required": false,
+      "pages": []
+    },
+    "regression_tests": {
+      "required": true,
+      "commands": ["python pips-agent/test_user_puzzle_cv.py"],
+      "expected": "Existing strategies continue to work"
+    },
+    "manual_checks": {
+      "required": true,
+      "checklist": [
+        "Function signature matches: detect_by_constraint_labels(image_path: str, debug_dir: str = None) -> DetectionResult",
+        "Returns DetectionResult dataclass with all required fields",
+        "Reuses helpers: estimate_grid_dims(), detect_regions_from_cells(), calculate_confidence()",
+        "Has try/except wrapper for error handling",
+        "Saves debug image when debug_dir provided",
+        "Integrated into extract_puzzle_multi_strategy() default strategies list",
+        "No console errors when running",
+        "Handles no-diamond case gracefully"
+      ]
+    }
+  },
+  "qa_signoff": null
+}
