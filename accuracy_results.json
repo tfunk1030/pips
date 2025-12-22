@@ -4,7 +4,7 @@
     "passed_tests": 33,
     "failed_tests": 4,
     "accuracy_percentage": 89.19,
-    "total_execution_time_sec": 1.53,
+    "total_execution_time_sec": 2.08,
     "target_accuracy": 85.0,
     "target_met": true
   },
@@ -43,7 +43,7 @@
       "expected": "3",
       "actual": "3",
       "error_message": "",
-      "execution_time_ms": 2.0
+      "execution_time_ms": 3.49
     },
     {
       "name": "DBSCAN 5 clusters moderate noise",
@@ -52,7 +52,7 @@
       "expected": "5",
       "actual": "5",
       "error_message": "",
-      "execution_time_ms": 2.0
+      "execution_time_ms": 1.0
     },
     {
       "name": "DBSCAN 4 clusters higher noise",
@@ -61,7 +61,7 @@
       "expected": "4",
       "actual": "4",
       "error_message": "",
-      "execution_time_ms": 2.11
+      "execution_time_ms": 2.0
     },
     {
       "name": "DBSCAN 6 clusters well-separated",
@@ -70,7 +70,7 @@
       "expected": "6",
       "actual": "6",
       "error_message": "",
-      "execution_time_ms": 2.0
+      "execution_time_ms": 1.59
     },
     {
       "name": "DBSCAN 2 clusters tight",
@@ -79,7 +79,7 @@
       "expected": "2",
       "actual": "2",
       "error_message": "",
-      "execution_time_ms": 1.0
+      "execution_time_ms": 1.08
     },
     {
       "name": "MeanShift 3 clusters",
@@ -88,7 +88,7 @@
       "expected": "3(+/-1)",
       "actual": "3",
       "error_message": "",
-      "execution_time_ms": 254.69
+      "execution_time_ms": 245.87
     },
     {
       "name": "MeanShift 4 clusters",
@@ -97,7 +97,7 @@
       "expected": "4(+/-1)",
       "actual": "2",
       "error_message": "Expected ~4 clusters, found 2",
-      "execution_time_ms": 23.47
+      "execution_time_ms": 23.9
     },
     {
       "name": "MeanShift 5 clusters",
@@ -106,7 +106,7 @@
       "expected": "5(+/-1)",
       "actual": "2",
       "error_message": "Expected ~5 clusters, found 2",
-      "execution_time_ms": 62.0
+      "execution_time_ms": 80.0
     },
     {
       "name": "Adaptive clustering (should use DBSCAN)",
@@ -115,7 +115,7 @@
       "expected": "2-6 clusters via dbscan",
       "actual": "4 clusters via dbscan",
       "error_message": "",
-      "execution_time_ms": 2.37
+      "execution_time_ms": 2.06
     },
     {
       "name": "Adaptive clustering (may trigger fallback)",
@@ -124,7 +124,7 @@
       "expected": "2-5 clusters via meanshift",
       "actual": "2 clusters via meanshift",
       "error_message": "",
-      "execution_time_ms": 47.9
+      "execution_time_ms": 53.84
     },
     {
       "name": "Confidence scoring produces valid range",
@@ -133,7 +133,7 @@
       "expected": "0.4-1.0",
       "actual": "0.765",
       "error_message": "",
-      "execution_time_ms": 6.61
+      "execution_time_ms": 9.37
     },
     {
       "name": "4x4 regular grid",
@@ -142,7 +142,7 @@
       "expected": "4x4",
       "actual": "(4, 4)",
       "error_message": "",
-      "execution_time_ms": 23.52
+      "execution_time_ms": 30.93
     },
     {
       "name": "5x5 regular grid",
@@ -151,7 +151,7 @@
       "expected": "5x5",
       "actual": "(5, 5)",
       "error_message": "",
-      "execution_time_ms": 13.73
+      "execution_time_ms": 21.06
     },
     {
       "name": "6x6 regular grid",
@@ -160,7 +160,7 @@
       "expected": "6x6",
       "actual": "(6, 6)",
       "error_message": "",
-      "execution_time_ms": 15.14
+      "execution_time_ms": 24.43
     },
     {
       "name": "3x5 rectangular grid",
@@ -169,7 +169,7 @@
       "expected": "3x5",
       "actual": "(3, 5)",
       "error_message": "",
-      "execution_time_ms": 8.59
+      "execution_time_ms": 12.51
     },
     {
       "name": "7x7 regular grid",
@@ -178,7 +178,7 @@
       "expected": "7x7",
       "actual": "(7, 7)",
       "error_message": "",
-      "execution_time_ms": 20.3
+      "execution_time_ms": 23.94
     },
     {
       "name": "Grid detection with noise",
@@ -187,7 +187,7 @@
       "expected": "5x5(+/-1)",
       "actual": "(7, 7)",
       "error_message": "Failed to detect grid with noise",
-      "execution_time_ms": 21.48
+      "execution_time_ms": 34.05
     },
     {
       "name": "Grid detection confidence valid",
@@ -196,7 +196,7 @@
       "expected": "0.0-1.0",
       "actual": "1.000",
       "error_message": "",
-      "execution_time_ms": 7.91
+      "execution_time_ms": 13.68
     },
     {
       "name": "Convex polygon approximation",
@@ -205,7 +205,7 @@
       "expected": "3-202 points",
       "actual": "6 points (eps=8.33)",
       "error_message": "",
-      "execution_time_ms": 0.0
+      "execution_time_ms": 1.23
     },
     {
       "name": "Concave polygon approximation",
@@ -223,7 +223,7 @@
       "expected": "3-151 points",
       "actual": "7 points (eps=7.09)",
       "error_message": "",
-      "execution_time_ms": 0.0
+      "execution_time_ms": 1.02
     },
     {
       "name": "Convex hull - convex shape",
@@ -241,7 +241,7 @@
       "expected": "concave",
       "actual": "highly_concave (conf=0.75)",
       "error_message": "",
-      "execution_time_ms": 1.0
+      "execution_time_ms": 1.32
     },
     {
       "name": "Watershed separates merged regions",
@@ -250,7 +250,7 @@
       "expected": ">=1 region(s)",
       "actual": "1 region(s), conf=0.50",
       "error_message": "",
-      "execution_time_ms": 1.11
+      "execution_time_ms": 2.74
     },
     {
       "name": "Clear image passes quality check",
@@ -259,7 +259,7 @@
       "expected": "acceptable=True",
       "actual": "acceptable=True",
       "error_message": "",
-      "execution_time_ms": 2.0
+      "execution_time_ms": 5.4
     },
     {
       "name": "Quality validation returns valid scores",
@@ -268,7 +268,7 @@
       "expected": "All scores 0-1",
       "actual": "overall=0.919",
       "error_message": "",
-      "execution_time_ms": 2.12
+      "execution_time_ms": 5.07
     },
     {
       "name": "Distortion detection on clean image",
@@ -277,7 +277,7 @@
       "expected": "distortion < 0.5",
       "actual": "distortion=0.001",
       "error_message": "",
-      "execution_time_ms": 5.44
+      "execution_time_ms": 12.3
     },
     {
       "name": "Distortion detection on perspective image",
@@ -286,7 +286,7 @@
       "expected": "0-1.0 range",
       "actual": "distortion=0.091",
       "error_message": "",
-      "execution_time_ms": 6.0
+      "execution_time_ms": 12.39
     },
     {
       "name": "Perspective correction produces output",
@@ -295,7 +295,7 @@
       "expected": "Valid corrected image",
       "actual": "No output",
       "error_message": "Correction failed",
-      "execution_time_ms": 0.0
+      "execution_time_ms": 1.01
     },
     {
       "name": "Quality validation: IMG_2050.png",
@@ -304,7 +304,7 @@
       "expected": "overall > 0.3",
       "actual": "0.988",
       "error_message": "",
-      "execution_time_ms": 181.98
+      "execution_time_ms": 257.22
     },
     {
       "name": "Distortion analysis: IMG_2050.png",
@@ -313,7 +313,7 @@
       "expected": "0-1.0 range",
       "actual": "0.159",
       "error_message": "",
-      "execution_time_ms": 104.37
+      "execution_time_ms": 162.46
     },
     {
       "name": "Grid detection: IMG_2050.png",
@@ -322,7 +322,7 @@
       "expected": "Valid result",
       "actual": "dims=(62, 9), conf=0.683",
       "error_message": "",
-      "execution_time_ms": 121.79
+      "execution_time_ms": 162.52
     },
     {
       "name": "Contour extraction: IMG_2050.png",
@@ -331,7 +331,7 @@
       "expected": ">=0 contours",
       "actual": "77 contours",
       "error_message": "",
-      "execution_time_ms": 65.19
+      "execution_time_ms": 104.94
     },
     {
       "name": "Quality validation: IMG_2051.png",
@@ -340,7 +340,7 @@
       "expected": "overall > 0.3",
       "actual": "0.890",
       "error_message": "",
-      "execution_time_ms": 191.4
+      "execution_time_ms": 275.15
     },
     {
       "name": "Distortion analysis: IMG_2051.png",
@@ -349,7 +349,7 @@
       "expected": "0-1.0 range",
       "actual": "0.108",
       "error_message": "",
-      "execution_time_ms": 117.44
+      "execution_time_ms": 164.29
     },
     {
       "name": "Grid detection: IMG_2051.png",
@@ -358,7 +358,7 @@
       "expected": "Valid result",
       "actual": "dims=(104, 48), conf=0.521",
       "error_message": "",
-      "execution_time_ms": 141.01
+      "execution_time_ms": 231.59
     },
     {
       "name": "Contour extraction: IMG_2051.png",
@@ -367,7 +367,7 @@
       "expected": ">=0 contours",
       "actual": "12 contours",
       "error_message": "",
-      "execution_time_ms": 63.68
+      "execution_time_ms": 94.82
     }
   ]
 }
