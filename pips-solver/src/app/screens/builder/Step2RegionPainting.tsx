@@ -18,6 +18,7 @@ import Animated from 'react-native-reanimated';
 import Svg, { Line, Rect } from 'react-native-svg';
 import { BuilderAction, OverlayBuilderState } from '../../../model/overlayTypes';
 import { hitTestCell } from '../../../utils/gridCalculations';
+import { triggerImpactLight, triggerPaintCell, triggerPaletteSelect } from '../../../utils/haptics';
 import ConfidenceIndicator from '../../components/ConfidenceIndicator';
 
 interface Props {
@@ -32,6 +33,7 @@ export default function Step2RegionPainting({ state, dispatch }: Props) {
   const lastPaintedCellRef = useRef<{ row: number; col: number } | null>(null);
 
   const handleColorSelect = (index: number) => {
+    triggerPaletteSelect(); // Haptic feedback when selecting palette color
     dispatch({ type: 'SELECT_PALETTE_COLOR', index });
   };
 
@@ -60,6 +62,7 @@ export default function Step2RegionPainting({ state, dispatch }: Props) {
         const last = lastPaintedCellRef.current;
         if (!last || last.row !== cell.row || last.col !== cell.col) {
           lastPaintedCellRef.current = cell;
+          triggerPaintCell(); // Haptic feedback when entering new cell
           dispatch({ type: 'PAINT_CELL', row: cell.row, col: cell.col });
         }
       }
@@ -72,6 +75,7 @@ export default function Step2RegionPainting({ state, dispatch }: Props) {
     // Keep this on the JS thread so we can safely mutate refs / call dispatch
     .runOnJS(true)
     .onBegin(e => {
+      triggerImpactLight(); // Haptic feedback when painting starts
       lastPaintedCellRef.current = null;
       paintCellIfNew(e.x, e.y);
     })

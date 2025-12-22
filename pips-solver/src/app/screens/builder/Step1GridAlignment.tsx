@@ -19,6 +19,7 @@ import Animated from 'react-native-reanimated';
 import Svg, { Circle, Line, Rect } from 'react-native-svg';
 import { BuilderAction, GridBounds, OverlayBuilderState } from '../../../model/overlayTypes';
 import { constrainBounds, hitTestCell } from '../../../utils/gridCalculations';
+import { triggerEdgeDragStart, triggerEdgeDragEnd, triggerCellTap, triggerControlButton } from '../../../utils/haptics';
 import ConfidenceIndicator from '../../components/ConfidenceIndicator';
 
 interface StageConfidence {
@@ -48,10 +49,12 @@ export default function Step1GridAlignment({
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
   const handleRowChange = (delta: number) => {
+    triggerControlButton();
     dispatch({ type: 'SET_ROWS', rows: grid.rows + delta });
   };
 
   const handleColChange = (delta: number) => {
+    triggerControlButton();
     dispatch({ type: 'SET_COLS', cols: grid.cols + delta });
   };
 
@@ -255,12 +258,16 @@ function DraggableGridOverlay({
     .runOnJS(true)
     .onBegin(() => {
       startBoundsRef.current = bounds;
+      triggerEdgeDragStart();
     })
     .onUpdate(e => {
       const deltaPercent = toPercent(e.translationX, 'width');
       const start = startBoundsRef.current;
       const newLeft = Math.max(0, Math.min(start.right - 10, start.left + deltaPercent));
       onBoundsChange({ ...start, left: newLeft });
+    })
+    .onFinalize(() => {
+      triggerEdgeDragEnd();
     })
     .hitSlop({ left: HANDLE_HIT_SLOP, right: HANDLE_HIT_SLOP, top: 0, bottom: 0 });
 
@@ -269,12 +276,16 @@ function DraggableGridOverlay({
     .runOnJS(true)
     .onBegin(() => {
       startBoundsRef.current = bounds;
+      triggerEdgeDragStart();
     })
     .onUpdate(e => {
       const deltaPercent = toPercent(e.translationX, 'width');
       const start = startBoundsRef.current;
       const newRight = Math.min(100, Math.max(start.left + 10, start.right + deltaPercent));
       onBoundsChange({ ...start, right: newRight });
+    })
+    .onFinalize(() => {
+      triggerEdgeDragEnd();
     })
     .hitSlop({ left: HANDLE_HIT_SLOP, right: HANDLE_HIT_SLOP, top: 0, bottom: 0 });
 
@@ -283,12 +294,16 @@ function DraggableGridOverlay({
     .runOnJS(true)
     .onBegin(() => {
       startBoundsRef.current = bounds;
+      triggerEdgeDragStart();
     })
     .onUpdate(e => {
       const deltaPercent = toPercent(e.translationY, 'height');
       const start = startBoundsRef.current;
       const newTop = Math.max(0, Math.min(start.bottom - 10, start.top + deltaPercent));
       onBoundsChange({ ...start, top: newTop });
+    })
+    .onFinalize(() => {
+      triggerEdgeDragEnd();
     })
     .hitSlop({ left: 0, right: 0, top: HANDLE_HIT_SLOP, bottom: HANDLE_HIT_SLOP });
 
@@ -297,12 +312,16 @@ function DraggableGridOverlay({
     .runOnJS(true)
     .onBegin(() => {
       startBoundsRef.current = bounds;
+      triggerEdgeDragStart();
     })
     .onUpdate(e => {
       const deltaPercent = toPercent(e.translationY, 'height');
       const start = startBoundsRef.current;
       const newBottom = Math.min(100, Math.max(start.top + 10, start.bottom + deltaPercent));
       onBoundsChange({ ...start, bottom: newBottom });
+    })
+    .onFinalize(() => {
+      triggerEdgeDragEnd();
     })
     .hitSlop({ left: 0, right: 0, top: HANDLE_HIT_SLOP, bottom: HANDLE_HIT_SLOP });
 
@@ -312,6 +331,7 @@ function DraggableGridOverlay({
     .onEnd(e => {
       const cell = hitTestCell(e.x, e.y, bounds, rows, cols, containerSize);
       if (cell) {
+        triggerCellTap();
         onCellTap(cell.row, cell.col);
       }
     });
