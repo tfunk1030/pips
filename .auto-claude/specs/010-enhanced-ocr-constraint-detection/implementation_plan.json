@@ -23,8 +23,9 @@
             "command": "tesseract --version",
             "expected": "tesseract 4.x or 5.x (with LSTM support)"
           },
-          "status": "pending",
-          "notes": "Tesseract binary must be installed separately (not just Python package). Verify LSTM neural nets are available (OEM mode 3 support)."
+          "status": "in_progress",
+          "notes": "BLOCKER: Tesseract OCR binary NOT installed on system (not in PATH). pytesseract Python package is available but requires the binary. User must install Tesseract: Windows - https://github.com/UB-Mannheim/tesseract/wiki, macOS - brew install tesseract, Linux - apt install tesseract-ocr. Created check_tesseract.py verification script. Re-run verification after installation.",
+          "updated_at": "2025-12-22T12:39:17.559110+00:00"
         },
         {
           "id": "subtask-1-2",
@@ -32,7 +33,9 @@
           "service": "pips-agent",
           "files_to_modify": [],
           "files_to_create": [],
-          "patterns_from": ["pips-agent/requirements.txt"],
+          "patterns_from": [
+            "pips-agent/requirements.txt"
+          ],
           "verification": {
             "type": "command",
             "command": "cd pips-agent && pip list | grep -E '(pytesseract|opencv-python|numpy)'",
@@ -46,7 +49,9 @@
           "description": "Create debug output directory structure for preprocessing stages",
           "service": "pips-agent",
           "files_to_modify": [],
-          "files_to_create": ["pips-agent/debug_ocr/.gitkeep"],
+          "files_to_create": [
+            "pips-agent/debug_ocr/.gitkeep"
+          ],
           "patterns_from": [],
           "verification": {
             "type": "command",
@@ -63,16 +68,22 @@
       "name": "Enhanced Preprocessing Pipeline Implementation",
       "type": "implementation",
       "description": "Implement 7-stage preprocessing pipeline: upscaling, grayscale, denoising (bilateral filter), CLAHE contrast enhancement, adaptive thresholding, morphological operations, optional dilation",
-      "depends_on": ["phase-1-setup"],
+      "depends_on": [
+        "phase-1-setup"
+      ],
       "parallel_safe": true,
       "subtasks": [
         {
           "id": "subtask-2-1",
           "description": "Add image upscaling function for low-resolution inputs",
           "service": "pips-agent",
-          "files_to_modify": ["pips-agent/utils/ocr_helper.py"],
+          "files_to_modify": [
+            "pips-agent/utils/ocr_helper.py"
+          ],
           "files_to_create": [],
-          "patterns_from": ["pips-agent/utils/ocr_helper.py"],
+          "patterns_from": [
+            "pips-agent/utils/ocr_helper.py"
+          ],
           "verification": {
             "type": "command",
             "command": "cd pips-agent && python -c \"from utils.ocr_helper import upscale_image; import numpy as np; img = np.zeros((100, 100, 3), dtype=np.uint8); result = upscale_image(img, target_dpi=300); print('OK' if result.shape[0] > 100 else 'FAIL')\"",
@@ -85,9 +96,13 @@
           "id": "subtask-2-2",
           "description": "Add bilateral denoising function (edge-preserving)",
           "service": "pips-agent",
-          "files_to_modify": ["pips-agent/utils/ocr_helper.py"],
+          "files_to_modify": [
+            "pips-agent/utils/ocr_helper.py"
+          ],
           "files_to_create": [],
-          "patterns_from": ["pips-agent/utils/ocr_helper.py"],
+          "patterns_from": [
+            "pips-agent/utils/ocr_helper.py"
+          ],
           "verification": {
             "type": "command",
             "command": "cd pips-agent && python -c \"from utils.ocr_helper import denoise_image; import numpy as np; img = np.zeros((100, 100), dtype=np.uint8); result = denoise_image(img); print('OK' if result is not None else 'FAIL')\"",
@@ -100,9 +115,13 @@
           "id": "subtask-2-3",
           "description": "Add CLAHE contrast enhancement function",
           "service": "pips-agent",
-          "files_to_modify": ["pips-agent/utils/ocr_helper.py"],
+          "files_to_modify": [
+            "pips-agent/utils/ocr_helper.py"
+          ],
           "files_to_create": [],
-          "patterns_from": ["pips-agent/utils/ocr_helper.py"],
+          "patterns_from": [
+            "pips-agent/utils/ocr_helper.py"
+          ],
           "verification": {
             "type": "command",
             "command": "cd pips-agent && python -c \"from utils.ocr_helper import enhance_contrast; import numpy as np; img = np.zeros((100, 100), dtype=np.uint8); result = enhance_contrast(img); print('OK' if result is not None else 'FAIL')\"",
@@ -115,9 +134,13 @@
           "id": "subtask-2-4",
           "description": "Replace OTSU with adaptive thresholding",
           "service": "pips-agent",
-          "files_to_modify": ["pips-agent/utils/ocr_helper.py"],
+          "files_to_modify": [
+            "pips-agent/utils/ocr_helper.py"
+          ],
           "files_to_create": [],
-          "patterns_from": ["pips-agent/utils/ocr_helper.py"],
+          "patterns_from": [
+            "pips-agent/utils/ocr_helper.py"
+          ],
           "verification": {
             "type": "command",
             "command": "cd pips-agent && python -c \"from utils.ocr_helper import adaptive_threshold; import numpy as np; img = np.zeros((100, 100), dtype=np.uint8); result = adaptive_threshold(img); print('OK' if result is not None else 'FAIL')\"",
@@ -130,9 +153,13 @@
           "id": "subtask-2-5",
           "description": "Add morphological operations for noise removal and text enhancement",
           "service": "pips-agent",
-          "files_to_modify": ["pips-agent/utils/ocr_helper.py"],
+          "files_to_modify": [
+            "pips-agent/utils/ocr_helper.py"
+          ],
           "files_to_create": [],
-          "patterns_from": ["pips-agent/utils/ocr_helper.py"],
+          "patterns_from": [
+            "pips-agent/utils/ocr_helper.py"
+          ],
           "verification": {
             "type": "command",
             "command": "cd pips-agent && python -c \"from utils.ocr_helper import apply_morphology; import numpy as np; img = np.zeros((100, 100), dtype=np.uint8); result = apply_morphology(img); print('OK' if result is not None else 'FAIL')\"",
@@ -145,16 +172,20 @@
           "id": "subtask-2-6",
           "description": "Create unified preprocessing pipeline function with debug output",
           "service": "pips-agent",
-          "files_to_modify": ["pips-agent/utils/ocr_helper.py"],
+          "files_to_modify": [
+            "pips-agent/utils/ocr_helper.py"
+          ],
           "files_to_create": [],
-          "patterns_from": ["pips-agent/utils/ocr_helper.py"],
+          "patterns_from": [
+            "pips-agent/utils/ocr_helper.py"
+          ],
           "verification": {
             "type": "command",
             "command": "cd pips-agent && python -c \"from utils.ocr_helper import preprocess_for_ocr; import numpy as np; img = np.zeros((200, 200, 3), dtype=np.uint8); result = preprocess_for_ocr(img, debug=False); print('OK' if result is not None else 'FAIL')\"",
             "expected": "OK"
           },
           "status": "pending",
-          "notes": "Pipeline order: upscale → grayscale → denoise → CLAHE → adaptive_threshold → morphology. Save intermediate images to DEBUG_OUTPUT_DIR when debug=True."
+          "notes": "Pipeline order: upscale \u2192 grayscale \u2192 denoise \u2192 CLAHE \u2192 adaptive_threshold \u2192 morphology. Save intermediate images to DEBUG_OUTPUT_DIR when debug=True."
         }
       ]
     },
@@ -163,16 +194,22 @@
       "name": "Tesseract Configuration Optimization",
       "type": "implementation",
       "description": "Configure Tesseract with optimal PSM modes (6 for single block, 11 for sparse text), OEM mode 3 (LSTM neural nets), and character whitelisting for numeric constraints (0-9, =, <, >, !=)",
-      "depends_on": ["phase-1-setup"],
+      "depends_on": [
+        "phase-1-setup"
+      ],
       "parallel_safe": true,
       "subtasks": [
         {
           "id": "subtask-3-1",
           "description": "Add Tesseract configuration builder with PSM and OEM modes",
           "service": "pips-agent",
-          "files_to_modify": ["pips-agent/utils/ocr_helper.py"],
+          "files_to_modify": [
+            "pips-agent/utils/ocr_helper.py"
+          ],
           "files_to_create": [],
-          "patterns_from": ["pips-agent/utils/ocr_helper.py"],
+          "patterns_from": [
+            "pips-agent/utils/ocr_helper.py"
+          ],
           "verification": {
             "type": "command",
             "command": "cd pips-agent && python -c \"from utils.ocr_helper import build_tesseract_config; config = build_tesseract_config(psm=6, oem=3); print('OK' if '--psm 6' in config and '--oem 3' in config else 'FAIL')\"",
@@ -185,9 +222,13 @@
           "id": "subtask-3-2",
           "description": "Add character whitelisting for numeric constraints",
           "service": "pips-agent",
-          "files_to_modify": ["pips-agent/utils/ocr_helper.py"],
+          "files_to_modify": [
+            "pips-agent/utils/ocr_helper.py"
+          ],
           "files_to_create": [],
-          "patterns_from": ["pips-agent/utils/ocr_helper.py"],
+          "patterns_from": [
+            "pips-agent/utils/ocr_helper.py"
+          ],
           "verification": {
             "type": "command",
             "command": "cd pips-agent && python -c \"from utils.ocr_helper import build_tesseract_config; config = build_tesseract_config(whitelist='0123456789=<>!'); print('OK' if 'tessedit_char_whitelist=0123456789' in config else 'FAIL')\"",
@@ -200,9 +241,13 @@
           "id": "subtask-3-3",
           "description": "Update extract_text_from_image to use enhanced preprocessing and Tesseract config",
           "service": "pips-agent",
-          "files_to_modify": ["pips-agent/utils/ocr_helper.py"],
+          "files_to_modify": [
+            "pips-agent/utils/ocr_helper.py"
+          ],
           "files_to_create": [],
-          "patterns_from": ["pips-agent/utils/ocr_helper.py"],
+          "patterns_from": [
+            "pips-agent/utils/ocr_helper.py"
+          ],
           "verification": {
             "type": "manual",
             "instructions": "Review extract_text_from_image function to verify it calls preprocess_for_ocr and uses build_tesseract_config with PSM 6, OEM 3, and character whitelist"
@@ -217,7 +262,10 @@
       "name": "Test Suite Creation & Accuracy Validation",
       "type": "implementation",
       "description": "Create comprehensive test suite with unit tests for each preprocessing step and integration tests validating 90%+ accuracy on 20+ diverse puzzle screenshots",
-      "depends_on": ["phase-2-preprocessing", "phase-3-tesseract-config"],
+      "depends_on": [
+        "phase-2-preprocessing",
+        "phase-3-tesseract-config"
+      ],
       "parallel_safe": false,
       "subtasks": [
         {
@@ -225,8 +273,12 @@
           "description": "Create unit tests for preprocessing functions",
           "service": "pips-agent",
           "files_to_modify": [],
-          "files_to_create": ["pips-agent/tests/test_ocr_preprocessing.py"],
-          "patterns_from": ["pips-agent/test_agent.py"],
+          "files_to_create": [
+            "pips-agent/tests/test_ocr_preprocessing.py"
+          ],
+          "patterns_from": [
+            "pips-agent/test_agent.py"
+          ],
           "verification": {
             "type": "command",
             "command": "cd pips-agent && python -m pytest tests/test_ocr_preprocessing.py -v",
@@ -240,8 +292,12 @@
           "description": "Create unit tests for Tesseract configuration",
           "service": "pips-agent",
           "files_to_modify": [],
-          "files_to_create": ["pips-agent/tests/test_tesseract_config.py"],
-          "patterns_from": ["pips-agent/test_agent.py"],
+          "files_to_create": [
+            "pips-agent/tests/test_tesseract_config.py"
+          ],
+          "patterns_from": [
+            "pips-agent/test_agent.py"
+          ],
           "verification": {
             "type": "command",
             "command": "cd pips-agent && python -m pytest tests/test_tesseract_config.py -v",
@@ -255,7 +311,9 @@
           "description": "Create test dataset with 20+ diverse puzzle screenshots",
           "service": "pips-agent",
           "files_to_modify": [],
-          "files_to_create": ["pips-agent/tests/test_data/README.md"],
+          "files_to_create": [
+            "pips-agent/tests/test_data/README.md"
+          ],
           "patterns_from": [],
           "verification": {
             "type": "command",
@@ -270,8 +328,12 @@
           "description": "Create integration test for end-to-end OCR accuracy validation",
           "service": "pips-agent",
           "files_to_modify": [],
-          "files_to_create": ["pips-agent/tests/test_ocr_accuracy.py"],
-          "patterns_from": ["pips-agent/test_user_puzzle_cv.py"],
+          "files_to_create": [
+            "pips-agent/tests/test_ocr_accuracy.py"
+          ],
+          "patterns_from": [
+            "pips-agent/test_user_puzzle_cv.py"
+          ],
           "verification": {
             "type": "command",
             "command": "cd pips-agent && python -m pytest tests/test_ocr_accuracy.py -v",
@@ -287,7 +349,9 @@
       "name": "Integration & End-to-End Verification",
       "type": "integration",
       "description": "Verify enhanced OCR integrates correctly with existing tools (ocr_constraints.py), no regressions in existing functionality, debug output working correctly",
-      "depends_on": ["phase-4-testing"],
+      "depends_on": [
+        "phase-4-testing"
+      ],
       "parallel_safe": false,
       "subtasks": [
         {
@@ -296,7 +360,9 @@
           "service": "pips-agent",
           "files_to_modify": [],
           "files_to_create": [],
-          "patterns_from": ["pips-agent/tools/ocr_constraints.py"],
+          "patterns_from": [
+            "pips-agent/tools/ocr_constraints.py"
+          ],
           "verification": {
             "type": "e2e",
             "steps": [
@@ -330,7 +396,9 @@
           "service": "pips-agent",
           "files_to_modify": [],
           "files_to_create": [],
-          "patterns_from": ["pips-agent/test_agent.py"],
+          "patterns_from": [
+            "pips-agent/test_agent.py"
+          ],
           "verification": {
             "type": "command",
             "command": "cd pips-agent && python test_agent.py",
@@ -345,12 +413,17 @@
   "summary": {
     "total_phases": 5,
     "total_subtasks": 16,
-    "services_involved": ["pips-agent"],
+    "services_involved": [
+      "pips-agent"
+    ],
     "parallelism": {
       "max_parallel_phases": 2,
       "parallel_groups": [
         {
-          "phases": ["phase-2-preprocessing", "phase-3-tesseract-config"],
+          "phases": [
+            "phase-2-preprocessing",
+            "phase-3-tesseract-config"
+          ],
           "reason": "Both depend only on phase-1-setup, work on different parts of ocr_helper.py (preprocessing functions vs config functions), no file conflicts"
         }
       ],
@@ -363,14 +436,17 @@
     "risk_level": "medium",
     "skip_validation": false,
     "test_creation_phase": "post_implementation",
-    "test_types_required": ["unit", "integration"],
+    "test_types_required": [
+      "unit",
+      "integration"
+    ],
     "security_scanning_required": false,
     "staging_deployment_required": false,
     "acceptance_criteria": [
       "All existing OCR tests pass (no regressions)",
       "New preprocessing unit tests pass (upscaling, denoising, CLAHE, adaptive threshold, morphology)",
       "Tesseract config unit tests pass (PSM modes, OEM mode, character whitelisting)",
-      "Integration test shows ≥90% accuracy on 20+ test images",
+      "Integration test shows \u226590% accuracy on 20+ test images",
       "Debug output images generated correctly for all preprocessing stages",
       "No console errors during OCR processing",
       "Backward compatibility: existing callers of ocr_helper functions work without modification"
@@ -395,7 +471,7 @@
       {
         "name": "OCR Accuracy Integration Test",
         "command": "cd pips-agent && python -m pytest tests/test_ocr_accuracy.py -v",
-        "expected_outcome": "≥90% accuracy on test dataset",
+        "expected_outcome": "\u226590% accuracy on test dataset",
         "type": "test",
         "required": true,
         "blocking": true
@@ -433,7 +509,9 @@
       "commands": [
         "cd pips-agent && python -m pytest tests/test_ocr_accuracy.py -v"
       ],
-      "services_to_test": ["pips-agent"]
+      "services_to_test": [
+        "pips-agent"
+      ]
     },
     "e2e_tests": {
       "required": true,
@@ -441,7 +519,7 @@
         "cd pips-agent && python test_user_puzzle_cv.py"
       ],
       "flows": [
-        "Load puzzle screenshot → Extract regions/cells → Run enhanced OCR → Verify ≥90% constraint detection accuracy"
+        "Load puzzle screenshot \u2192 Extract regions/cells \u2192 Run enhanced OCR \u2192 Verify \u226590% constraint detection accuracy"
       ]
     },
     "browser_verification": {
@@ -457,10 +535,14 @@
       "checks": [
         "Verify Tesseract binary installed (tesseract --version shows 4.x or 5.x with LSTM)",
         "Verify DEBUG_OUTPUT_DIR contains intermediate preprocessing images after OCR run",
-        "Verify preprocessing pipeline executes in correct order: upscale → grayscale → denoise → CLAHE → adaptive_threshold → morphology",
+        "Verify preprocessing pipeline executes in correct order: upscale \u2192 grayscale \u2192 denoise \u2192 CLAHE \u2192 adaptive_threshold \u2192 morphology",
         "Verify character whitelisting active: OCR output contains only 0-9=<>! characters (no letters)"
       ]
     }
   },
-  "qa_signoff": null
+  "qa_signoff": null,
+  "status": "human_review",
+  "planStatus": "review",
+  "updated_at": "2025-12-22T08:34:31.084Z",
+  "last_updated": "2025-12-22T12:39:17.559110+00:00"
 }
