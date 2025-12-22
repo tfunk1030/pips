@@ -857,6 +857,98 @@ def rotate_domino(
     return rotated
 
 
+def split_domino_halves(
+    image: np.ndarray,
+    padding: int = 0
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Split a domino image into left and right halves.
+
+    Divides a rotation-corrected domino image vertically down the middle
+    to separate the two pip-containing halves for independent detection.
+
+    Args:
+        image: Input BGR or grayscale image of a domino tile.
+            Should be rotation-corrected (horizontal) before splitting.
+        padding: Optional padding in pixels to remove from the center
+            of each half. Helps avoid the center divider line if present.
+
+    Returns:
+        Tuple of (left_half, right_half) images.
+        - left_half: Left half of the domino (first pip value)
+        - right_half: Right half of the domino (second pip value)
+        Both halves will have equal width.
+
+    Raises:
+        ValueError: If image is None or empty.
+
+    Notes:
+        For best results, apply rotation correction using rotate_domino()
+        before calling this function. The domino should be oriented with
+        its longer side horizontal.
+    """
+    if image is None or image.size == 0:
+        raise ValueError("Input image is empty or None")
+
+    # Get image dimensions
+    if len(image.shape) == 3:
+        h, w, c = image.shape
+    else:
+        h, w = image.shape
+
+    # Calculate midpoint
+    mid = w // 2
+
+    # Ensure equal width by handling odd width images
+    # For odd widths, left half gets the extra pixel
+    left_end = mid
+    right_start = mid
+
+    # Apply padding if specified (to avoid center divider line)
+    if padding > 0:
+        # Don't let padding exceed reasonable bounds
+        max_padding = min(w // 10, padding)
+        left_end = max(0, mid - max_padding)
+        right_start = min(w, mid + max_padding)
+
+    # Split the image
+    if len(image.shape) == 3:
+        left_half = image[:, :left_end, :]
+        right_half = image[:, right_start:, :]
+    else:
+        left_half = image[:, :left_end]
+        right_half = image[:, right_start:]
+
+    # Ensure equal widths by trimming if necessary
+    left_w = left_half.shape[1]
+    right_w = right_half.shape[1]
+
+    if left_w != right_w:
+        # Make both halves the minimum width
+        min_w = min(left_w, right_w)
+        if len(image.shape) == 3:
+            left_half = left_half[:, :min_w, :]
+            right_half = right_half[:, :min_w, :]
+        else:
+            left_half = left_half[:, :min_w]
+            right_half = right_half[:, :min_w]
+
+    # Save debug visualization if enabled
+    if DEBUG_OUTPUT_DIR is not None:
+        if len(image.shape) == 3:
+            debug_img = image.copy()
+            # Draw vertical line at split point
+            cv2.line(debug_img, (mid, 0), (mid, h), (0, 255, 0), 2)
+        else:
+            debug_img = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+            cv2.line(debug_img, (mid, 0), (mid, h), (0, 255, 0), 2)
+        save_debug_image("13_split_halves.png", debug_img)
+        save_debug_image("13_left_half.png", left_half)
+        save_debug_image("13_right_half.png", right_half)
+
+    return left_half, right_half
+
+
 def detect_pips_hough_adaptive(
     image: np.ndarray,
     param2_range: Tuple[int, int, int] = (20, 40, 5),
@@ -966,6 +1058,34 @@ def _self_test():
     rotated_gray = rotate_domino(gray_img, 45.0)
     assert rotated_gray is not None
     assert len(rotated_gray.shape) == 2  # Still grayscale
+
+    # Test split_domino_halves with BGR image
+    domino_img = np.zeros((100, 200, 3), dtype=np.uint8)
+    domino_img[:, :100] = [255, 0, 0]  # Blue left half
+    domino_img[:, 100:] = [0, 0, 255]  # Red right half
+    left, right = split_domino_halves(domino_img)
+    assert left is not None
+    assert right is not None
+    assert left.shape[1] == right.shape[1]  # Equal widths
+    assert left.shape[0] == domino_img.shape[0]  # Same height
+
+    # Test split_domino_halves with grayscale image
+    gray_domino = np.zeros((50, 100), dtype=np.uint8)
+    gray_domino[:, :50] = 100
+    gray_domino[:, 50:] = 200
+    left_gray, right_gray = split_domino_halves(gray_domino)
+    assert left_gray.shape[1] == right_gray.shape[1]
+    assert len(left_gray.shape) == 2  # Still grayscale
+
+    # Test split with odd width
+    odd_img = np.zeros((100, 201, 3), dtype=np.uint8)
+    left_odd, right_odd = split_domino_halves(odd_img)
+    assert left_odd.shape[1] == right_odd.shape[1]
+
+    # Test split with padding
+    padded_left, padded_right = split_domino_halves(domino_img, padding=5)
+    assert padded_left.shape[1] == padded_right.shape[1]
+    assert padded_left.shape[1] < left.shape[1]  # Padding reduces width
 
     return True
 
