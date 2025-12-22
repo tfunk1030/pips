@@ -1890,6 +1890,11 @@ def detect_grid_lines_adaptive(
     6. If still low confidence, try autocorrelation-based estimation
     7. Estimate grid dimensions based on detected lines and spacing
 
+    Fallback triggers are logged when:
+    - Primary methods (Hough/projection) have confidence below threshold
+    - Histogram fallback produces better results
+    - Autocorrelation fallback provides missing spacing estimates
+
     Args:
         image: Input image (BGR or grayscale)
         use_hough: Whether to use Hough line detection
@@ -1912,6 +1917,7 @@ def detect_grid_lines_adaptive(
         gray = image.copy()
 
     h, w = gray.shape[:2]
+    logger.info(f"Starting adaptive grid detection on {w}x{h} image")
 
     # Apply adaptive thresholding for varying lighting
     block_size = max(11, min(h, w) // 20)
@@ -1946,6 +1952,7 @@ def detect_grid_lines_adaptive(
 
     # Method 1: Hough line detection
     if use_hough:
+        logger.debug("Attempting Hough line detection")
         h_hough, v_hough = detect_lines_hough(
             combined_edges,
             threshold=max(30, min(h, w) // 15),
@@ -1954,9 +1961,11 @@ def detect_grid_lines_adaptive(
         )
         all_h_lines.extend(h_hough)
         all_v_lines.extend(v_hough)
+        logger.debug(f"Hough detected {len(h_hough)} horizontal, {len(v_hough)} vertical lines")
 
     # Method 2: Projection-based detection
     if use_projection:
+        logger.debug("Attempting projection-based detection")
         h_proj, v_proj = detect_grid_lines_projection(
             gray,
             min_distance=int(min_spacing * 0.8),
@@ -1964,10 +1973,12 @@ def detect_grid_lines_adaptive(
         )
         all_h_lines.extend(h_proj)
         all_v_lines.extend(v_proj)
+        logger.debug(f"Projection detected {len(h_proj)} horizontal, {len(v_proj)} vertical lines")
 
     # Cluster to remove duplicates
     h_lines = cluster_lines(np.array(all_h_lines), min_distance=min_spacing * 0.4)
     v_lines = cluster_lines(np.array(all_v_lines), min_distance=min_spacing * 0.4)
+    logger.debug(f"After clustering: {len(h_lines)} horizontal, {len(v_lines)} vertical lines")
 
     # RANSAC-style robust fitting for grid spacing
     h_spacing, h_confidence, h_inliers = ransac_fit_spacing(
@@ -1988,9 +1999,12 @@ def detect_grid_lines_adaptive(
     overall_confidence = (h_confidence + v_confidence) / 2 if h_confidence > 0 or v_confidence > 0 else 0.0
     method = "hough_ransac" if use_hough else "projection_ransac"
 
+    logger.info(f"Primary methods: confidence={overall_confidence:.3f}, h_spacing={h_spacing}, v_spacing={v_spacing}")
+
     # ========== FALLBACK STAGE 1: Histogram Gradient Analysis ==========
     # If primary methods have low confidence, try histogram-based detection
     if overall_confidence < fallback_threshold and use_histogram_fallback:
+        logger.warning(f"Primary methods confidence ({overall_confidence:.3f}) below threshold ({fallback_threshold}) - triggering histogram fallback")
         hist_h_lines, hist_v_lines, hist_confidence = detect_grid_lines_histogram(
             gray,
             min_spacing=int(min_spacing),
@@ -1999,8 +2013,11 @@ def detect_grid_lines_adaptive(
             gradient_threshold=0.12
         )
 
+        logger.debug(f"Histogram analysis: confidence={hist_confidence:.3f}, h_lines={len(hist_h_lines)}, v_lines={len(hist_v_lines)}")
+
         # Use histogram results if they're better
         if hist_confidence > overall_confidence:
+            logger.info(f"Histogram fallback improved results: {hist_confidence:.3f} > {overall_confidence:.3f}")
             # Merge histogram lines with existing lines
             if len(hist_h_lines) > 0:
                 all_h_merged = np.concatenate([h_lines, hist_h_lines])
@@ -2024,6 +2041,7 @@ def detect_grid_lines_adaptive(
             )
             overall_confidence = (h_confidence + v_confidence) / 2
             method = "histogram_ransac"
+            logger.info(f"After histogram merge: confidence={overall_confidence:.3f}, h_spacing={h_spacing}, v_spacing={v_spacing}")
 
             if debug_dir:
                 out_dir = Path(debug_dir)
@@ -2035,18 +2053,24 @@ def detect_grid_lines_adaptive(
                 for x in hist_v_lines:
                     cv2.line(debug_hist, (int(x), 0), (int(x), h - 1), (255, 0, 0), 1)
                 cv2.imwrite(str(out_dir / "histogram_lines.png"), debug_hist)
+        else:
+            logger.debug(f"Histogram fallback did not improve results: {hist_confidence:.3f} <= {overall_confidence:.3f}")
 
     # ========== FALLBACK STAGE 2: Autocorrelation Analysis ==========
     # If still low confidence, try autocorrelation to estimate cell size
     if overall_confidence < fallback_threshold and use_autocorrelation_fallback:
+        logger.warning(f"Confidence still low ({overall_confidence:.3f}) after histogram - triggering autocorrelation fallback")
         auto_cell_h, auto_cell_w, auto_confidence = detect_grid_lines_autocorrelation(
             gray,
             min_spacing=int(min_spacing),
             max_spacing=int(max_spacing)
         )
 
+        logger.debug(f"Autocorrelation analysis: cell_h={auto_cell_h}, cell_w={auto_cell_w}, confidence={auto_confidence:.3f}")
+
         # Use autocorrelation results if they provide better spacing estimates
         if auto_confidence > 0.3 and (h_spacing is None or v_spacing is None or auto_confidence > overall_confidence):
+            logger.info(f"Autocorrelation fallback providing spacing estimates (confidence={auto_confidence:.3f})")
             # Generate regular grid lines from autocorrelation spacing
             if auto_cell_h is not None and (h_spacing is None or auto_confidence > h_confidence):
                 h_spacing = auto_cell_h
@@ -2055,6 +2079,7 @@ def detect_grid_lines_adaptive(
                 )
                 if len(gen_h_lines) > len(h_lines):
                     h_lines = gen_h_lines
+                    logger.debug(f"Updated horizontal lines from autocorrelation: {len(h_lines)} lines")
 
             if auto_cell_w is not None and (v_spacing is None or auto_confidence > v_confidence):
                 v_spacing = auto_cell_w
@@ -2063,9 +2088,11 @@ def detect_grid_lines_adaptive(
                 )
                 if len(gen_v_lines) > len(v_lines):
                     v_lines = gen_v_lines
+                    logger.debug(f"Updated vertical lines from autocorrelation: {len(v_lines)} lines")
 
             overall_confidence = max(overall_confidence, auto_confidence * 0.8)  # Slight penalty for autocorr
             method = "autocorrelation"
+            logger.info(f"After autocorrelation: confidence={overall_confidence:.3f}, h_spacing={h_spacing}, v_spacing={v_spacing}")
 
             if debug_dir:
                 out_dir = Path(debug_dir)
@@ -2075,6 +2102,8 @@ def detect_grid_lines_adaptive(
                     f.write(f"Cell height: {auto_cell_h}\n")
                     f.write(f"Cell width: {auto_cell_w}\n")
                     f.write(f"Confidence: {auto_confidence}\n")
+        else:
+            logger.debug(f"Autocorrelation fallback not used: auto_confidence={auto_confidence:.3f}, threshold=0.3")
 
     # ========== Spacing Consistency ==========
     # Use consistent spacing if one direction has higher confidence
@@ -2099,6 +2128,16 @@ def detect_grid_lines_adaptive(
     # Mark as fallback if confidence still low after all attempts
     if overall_confidence < fallback_threshold:
         method = "low_confidence_" + method
+        logger.warning(
+            f"Grid detection completed with LOW confidence ({overall_confidence:.3f} < {fallback_threshold}) - "
+            f"all fallback methods exhausted, results may be inaccurate"
+        )
+
+    # Log final detection summary
+    logger.info(
+        f"Grid detection complete: method={method}, confidence={overall_confidence:.3f}, "
+        f"grid_dims={grid_dims}, h_lines={len(h_lines)}, v_lines={len(v_lines)}"
+    )
 
     # Save debug visualization
     if debug_dir:

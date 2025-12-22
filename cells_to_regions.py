@@ -16,7 +16,11 @@ from sklearn.metrics import silhouette_score
 from collections import defaultdict
 from dataclasses import dataclass, field
 import json
+import logging
 from typing import Tuple, List, Dict, Optional
+
+# Configure module logger
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -389,7 +393,8 @@ def cluster_colors_with_confidence(
     eps: float = 15.0,
     min_samples: int = 2,
     meanshift_quantile: float = 0.3,
-    fallback_k: int = 6
+    fallback_k: int = 6,
+    confidence_threshold: float = 0.5
 ) -> ClusteringResult:
     """
     Cluster colors with confidence scoring using adaptive method selection.
@@ -398,17 +403,27 @@ def cluster_colors_with_confidence(
     secondary fallback, and finally KMeans as the last resort. Computes
     comprehensive confidence metrics for the clustering result.
 
+    Fallback triggers are logged when:
+    - DBSCAN produces too few clusters or high noise ratio
+    - MeanShift produces too few clusters
+    - Confidence score falls below threshold
+
     Args:
         colors: Array of colors (N, 3)
         eps: DBSCAN epsilon parameter
         min_samples: DBSCAN min_samples parameter
         meanshift_quantile: Quantile for MeanShift bandwidth estimation
         fallback_k: Number of clusters for KMeans fallback
+        confidence_threshold: Minimum confidence score to accept result without warning
 
     Returns:
         ClusteringResult with labels, centers, method, and confidence metrics
     """
+    n_samples = len(colors)
+    logger.info(f"Starting adaptive clustering on {n_samples} color samples")
+
     # Try DBSCAN first
+    logger.debug(f"Attempting DBSCAN clustering (eps={eps}, min_samples={min_samples})")
     labels, centers, n_clusters = dbscan_cluster(colors, eps=eps, min_samples=min_samples)
     original_labels = labels.copy()  # Keep for noise ratio calculation
 
@@ -422,10 +437,16 @@ def cluster_colors_with_confidence(
             for i in np.where(noise_mask)[0]:
                 distances = np.linalg.norm(centers - colors[i], axis=1)
                 labels[i] = np.argmin(distances)
+            logger.debug(f"DBSCAN: remapped {np.sum(noise_mask)} noise points to nearest clusters")
 
         confidence = compute_cluster_confidence(
             colors, labels, centers, "dbscan", original_labels
         )
+        logger.info(f"DBSCAN succeeded: {n_clusters} clusters, noise_ratio={noise_ratio:.3f}, confidence={confidence.overall:.3f}")
+
+        if confidence.overall < confidence_threshold:
+            logger.warning(f"DBSCAN confidence ({confidence.overall:.3f}) below threshold ({confidence_threshold})")
+
         return ClusteringResult(
             labels=labels,
             centers=centers,
@@ -434,7 +455,11 @@ def cluster_colors_with_confidence(
             confidence=confidence
         )
 
+    # DBSCAN fallback triggered
+    logger.warning(f"DBSCAN fallback triggered: n_clusters={n_clusters}, noise_ratio={noise_ratio:.3f} (threshold: clusters>=2, noise<0.3)")
+
     # Try MeanShift as secondary fallback
+    logger.debug(f"Attempting MeanShift clustering (quantile={meanshift_quantile})")
     labels, centers, n_clusters = meanshift_cluster(colors, quantile=meanshift_quantile)
 
     if n_clusters >= 2:
@@ -442,6 +467,11 @@ def cluster_colors_with_confidence(
         confidence = compute_cluster_confidence(
             colors, labels, centers, "meanshift"
         )
+        logger.info(f"MeanShift succeeded: {n_clusters} clusters, confidence={confidence.overall:.3f}")
+
+        if confidence.overall < confidence_threshold:
+            logger.warning(f"MeanShift confidence ({confidence.overall:.3f}) below threshold ({confidence_threshold})")
+
         return ClusteringResult(
             labels=labels,
             centers=centers,
@@ -450,11 +480,20 @@ def cluster_colors_with_confidence(
             confidence=confidence
         )
 
+    # MeanShift fallback triggered
+    logger.warning(f"MeanShift fallback triggered: n_clusters={n_clusters} (threshold: clusters>=2)")
+
     # Fall back to KMeans as last resort
+    logger.debug(f"Falling back to KMeans clustering (k={fallback_k})")
     labels, centers = kmeans_cluster(colors, k=fallback_k)
     confidence = compute_cluster_confidence(
         colors, labels, centers, "kmeans"
     )
+    logger.info(f"KMeans fallback used: {fallback_k} clusters, confidence={confidence.overall:.3f}")
+
+    if confidence.overall < confidence_threshold:
+        logger.warning(f"KMeans confidence ({confidence.overall:.3f}) below threshold ({confidence_threshold}) - all methods exhausted")
+
     return ClusteringResult(
         labels=labels,
         centers=centers,
@@ -563,7 +602,8 @@ def main(
     eps: float = 15.0,
     min_samples: int = 2,
     fallback_k: int = 6,
-    use_lab: bool = True
+    use_lab: bool = True,
+    confidence_threshold: float = 0.5
 ) -> Dict:
     """
     Main entry point for cell-to-region clustering.
@@ -575,28 +615,37 @@ def main(
         min_samples: DBSCAN min_samples parameter
         fallback_k: Number of clusters for KMeans fallback
         use_lab: Use LAB color space for clustering
+        confidence_threshold: Minimum confidence score to accept without warning
 
     Returns:
         Dictionary with clustering results including confidence metrics
     """
+    logger.info(f"Processing image: {img_path}")
+
     img = cv2.imread(img_path)
     if img is None:
+        logger.error(f"Could not read image: {img_path}")
         raise FileNotFoundError(f"Could not read image: {img_path}")
 
     # Extract cells
     cells = extract_cells(img)
     if len(cells) == 0:
+        logger.error("No cells detected in image")
         raise ValueError("No cells detected in image")
+
+    logger.info(f"Extracted {len(cells)} cells from image")
 
     # Sample colors
     colors, coords = sample_cell_colors(img, cells, use_lab=use_lab)
+    logger.debug(f"Sampled {len(colors)} colors (LAB={use_lab})")
 
     # Cluster using adaptive method with confidence scoring
     result = cluster_colors_with_confidence(
         colors,
         eps=eps,
         min_samples=min_samples,
-        fallback_k=fallback_k
+        fallback_k=fallback_k,
+        confidence_threshold=confidence_threshold
     )
 
     # Build regions
@@ -628,7 +677,18 @@ def main(
     with open(output_path, "w") as f:
         json.dump(out, f, indent=2)
 
-    confidence_str = f"confidence={result.confidence.overall:.2f}"
+    # Log final summary
+    logger.info(
+        f"Clustering complete: method={result.method}, "
+        f"n_clusters={len(regions)}, confidence={result.confidence.overall:.3f}"
+    )
+
+    if result.confidence.overall < confidence_threshold:
+        logger.warning(
+            f"Final clustering confidence ({result.confidence.overall:.3f}) "
+            f"below threshold ({confidence_threshold}) - results may be inaccurate"
+        )
+
     return out
 
 
