@@ -1,0 +1,87 @@
+=== AUTO-BUILD PROGRESS ===
+
+Project: Enhance AI Visual Pips Board Extraction Accuracy
+Spec: 001-enhance-ai-visual-pips-board-extraction-accuracy
+Workspace: managed by orchestrator
+Started: 2025-12-21
+
+Workflow Type: feature
+Rationale: Feature enhancement improving existing AI extraction accuracy while adding new capabilities (enhanced validation, better UI feedback, improved preprocessing). Involves changes across pips-solver and cv-service with coordinated improvements.
+
+Session 1 (Planner):
+- Completed deep codebase investigation
+- Analyzed 5-stage extraction pipeline pattern
+- Identified multi-model ensemble consensus voting pattern
+- Documented Zod validation patterns and JSON parsing utilities
+- Created implementation_plan.json
+- Phases: 6
+- Total subtasks: 17
+- Created init.sh
+- Created build-progress.txt
+
+Phase Summary:
+- Phase 1 (Extraction Prompt Engineering): 5 subtasks, no dependencies
+  - Improve prompts for grid geometry, cell detection, region mapping, constraints, dominoes
+- Phase 2 (Cross-Stage Validation): 3 subtasks, depends on Phase 1
+  - Enhance grid validator, add inter-stage validation, improve confidence aggregation
+- Phase 3 (CV Service Preprocessing): 3 subtasks, no dependencies
+  - Improve grid detection, better cropping, add preprocessing endpoint
+- Phase 4 (Frontend UI/UX): 4 subtasks, depends on Phase 1 & 2
+  - Add confidence indicators, visual diff, cell correction UI, low-confidence warnings
+- Phase 5 (CV-AI Integration): 2 subtasks, depends on Phase 3
+  - Enhance cvExtraction.ts, add fallback logic
+- Phase 6 (Integration Testing): 2 subtasks, depends on Phase 4 & 5
+  - End-to-end verification, low-confidence flow testing
+
+Services Involved:
+- pips-solver: React Native/Expo frontend with AI extraction logic
+- cv-service: Python/FastAPI backend for image preprocessing
+
+Parallelism Analysis:
+- Max parallel phases: 2
+- Recommended workers: 2
+- Parallel groups:
+  - Phase 1 (pips-solver prompts) + Phase 3 (cv-service) can run simultaneously
+- Speedup estimate: 1.5x faster than sequential
+
+Key Files to Modify:
+pips-solver:
+  - src/services/extraction/stages/gridGeometry.ts
+  - src/services/extraction/stages/cellDetection.ts
+  - src/services/extraction/stages/regionMapping.ts
+  - src/services/extraction/stages/constraintExtraction.ts
+  - src/services/extraction/stages/dominoExtraction.ts
+  - src/services/extraction/validation/gridValidator.ts
+  - src/services/extraction/pipeline.ts
+  - src/services/cvExtraction.ts
+  - src/app/components/AIVerificationModal.tsx
+  - src/app/screens/OverlayBuilderScreen.tsx
+
+cv-service:
+  - main.py
+  - hybrid_extraction.py
+
+Patterns to Follow:
+- 5-stage pipeline with context passing: Grid → Cells → Regions → Constraints → Dominoes
+- Multi-model ensemble with confidence-weighted consensus voting
+- Use safeParse() for Zod validation of all AI responses
+- Use parseJSONWithFallback() for AI response parsing
+- ProgressCallback for reporting stage progress with confidence
+
+=== STARTUP COMMAND ===
+
+To continue building this spec, run:
+
+  source auto-claude/.venv/bin/activate && python auto-claude/run.py --spec 001 --parallel 2
+
+Or manually:
+
+  # Terminal 1: CV Service
+  cd cv-service && uvicorn main:app --host 0.0.0.0 --port 8080 --reload
+
+  # Terminal 2: Expo Frontend
+  cd pips-solver && npm run start
+
+=== END SESSION 1 (PLANNER) ===
+
+Next: Coder agent will pick up implementation from subtask-1-1

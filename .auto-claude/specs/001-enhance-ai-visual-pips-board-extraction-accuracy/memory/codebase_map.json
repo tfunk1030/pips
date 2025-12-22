@@ -1,0 +1,20 @@
+{
+  "discovered_files": {
+    "pips-solver/src/services/": {
+      "description": "AI extraction pipeline: 5-stage extraction (Grid Geometry, Cell Detection, Region Mapping, Constraint Extraction, Domino Extraction) with 3-model ensemble (Gemini, GPT, Claude). Known issues: code duplication between aiExtraction.ts and ensembleExtraction.ts, missing examples, prompt verbosity.",
+      "category": "architecture",
+      "discovered_at": "2025-12-22T04:25:33.826722+00:00"
+    },
+    "pips-solver/src/services/extraction/stages/gridGeometry.ts": {
+      "description": "Grid geometry extraction stage with improved prompts including ASCII visual examples for counting rows/columns, common mistakes to avoid, and dynamic retry hints when models disagree by 1",
+      "category": "extraction-prompts",
+      "discovered_at": "2025-12-22T04:57:44.920586+00:00"
+    },
+    "pips-solver/src/services/extraction/validation/gridValidator.ts": {
+      "description": "Enhanced with cross-validation functions: crossValidateGridAndCells() performs cell connectivity check (BFS), hole pattern detection, grid utilization validation, and confidence consistency checks. Also added compareCellDetections() and validateGridConsensus() for multi-model validation.",
+      "category": "validation",
+      "discovered_at": "2025-12-22T05:18:10.580594+00:00"
+    }
+  },
+  "last_updated": "2025-12-22T05:18:10.580594+00:00"
+}

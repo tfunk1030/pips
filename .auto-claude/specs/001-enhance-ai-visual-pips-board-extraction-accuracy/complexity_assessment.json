@@ -1,0 +1,119 @@
+{
+  "complexity": "standard",
+  "workflow_type": "feature",
+  "confidence": 0.80,
+  "reasoning": "Enhancement of existing AI extraction pipeline with known issues. Multiple services involved (pips-solver, cv-service) but integrations already exist. Requires research to understand current failure modes and prompt improvements. Not complex because infrastructure is in place; not simple because multiple workstreams (AI, extraction accuracy, UI/UX) and ~10 files affected.",
+
+  "analysis": {
+    "scope": {
+      "estimated_files": 12,
+      "estimated_services": 2,
+      "is_cross_cutting": true,
+      "notes": "Primary changes in pips-solver/src/services/ (aiExtraction.ts, ensembleExtraction.ts, extraction/). UI/UX changes in pips-solver/src/app/. Possible cv-service updates. Cross-cutting because extraction accuracy affects solver, UI rendering, and user workflow."
+    },
+    "integrations": {
+      "external_services": ["OpenAI GPT-5.2", "Anthropic Claude Opus 4.5", "Google Gemini 3 Pro", "OpenRouter"],
+      "new_dependencies": [],
+      "research_needed": true,
+      "notes": "All AI integrations already exist via multi-model ensemble. No new dependencies needed. Research required to understand why current extraction produces inaccurate results and how to improve prompts/pipeline."
+    },
+    "infrastructure": {
+      "docker_changes": false,
+      "database_changes": false,
+      "config_changes": true,
+      "notes": "cv-service already Dockerized. No database in use. May need new config options for extraction settings or thresholds. Env vars for API keys already exist."
+    },
+    "knowledge": {
+      "patterns_exist": true,
+      "research_required": true,
+      "unfamiliar_tech": [],
+      "notes": "5-stage extraction pipeline exists (Grid Geometry, Cell Detection, Region Mapping, Constraint Extraction, Domino Extraction). Existing critique document (plan.md) identifies known issues: code duplication, missing examples, prompt verbosity. Research needed to understand specific failure modes and improvement strategies."
+    },
+    "risk": {
+      "level": "medium",
+      "concerns": [
+        "Breaking existing extraction functionality during refactor",
+        "AI prompt changes may have unintended effects on accuracy",
+        "Code duplication creates risk of inconsistent behavior between aiExtraction.ts and ensembleExtraction.ts",
+        "UI/UX changes may affect existing user workflows"
+      ],
+      "notes": "Moderate risk - changes to AI extraction can be difficult to test comprehensively. Existing critique recommends consolidating duplicated code first to reduce drift."
+    }
+  },
+
+  "recommended_phases": [
+    "discovery",
+    "requirements",
+    "research",
+    "context",
+    "spec_writing",
+    "planning",
+    "validation"
+  ],
+
+  "flags": {
+    "needs_research": true,
+    "needs_self_critique": false,
+    "needs_infrastructure_setup": false
+  },
+
+  "validation_recommendations": {
+    "risk_level": "medium",
+    "skip_validation": false,
+    "minimal_mode": false,
+    "test_types_required": ["unit", "integration"],
+    "security_scan_required": true,
+    "staging_deployment_required": false,
+    "reasoning": "AI extraction modifications require unit tests for parsing/schema validation and integration tests for full extraction pipeline. Security scan needed because API keys are handled. No staging deployment required as no infrastructure changes."
+  },
+
+  "key_files_identified": {
+    "primary": [
+      "pips-solver/src/services/aiExtraction.ts",
+      "pips-solver/src/services/ensembleExtraction.ts",
+      "pips-solver/src/services/extraction/",
+      "pips-solver/src/services/extractionSchemas.ts",
+      "pips-solver/src/services/jsonParsingUtils.ts"
+    ],
+    "secondary": [
+      "pips-solver/src/app/",
+      "cv-service/hybrid_extraction.py",
+      "cv-service/main.py"
+    ],
+    "documentation": [
+      "CLAUDE.md",
+      "plan.md",
+      "pips-solver/AI_EXTRACTION_IMPROVEMENTS.md",
+      "pips-solver/COMPREHENSIVE_REPORT.md"
+    ]
+  },
+
+  "existing_issues_identified": [
+    "Code duplication between aiExtraction.ts and ensembleExtraction.ts",
+    "Missing 8x6 irregular grid example in prompts",
+    "Prompt verbosity (800+ lines with repetition)",
+    "Hardcoded magic numbers without documentation",
+    "Inconsistent size bounds between files (9-12 vs 9-11 for medium puzzles)",
+    "Not using Claude's native JSON mode"
+  ],
+
+  "workstreams": [
+    {
+      "name": "AI Visual Enhancement",
+      "description": "Improve visual representation of extraction results on pips board",
+      "primary_files": ["pips-solver/src/app/"]
+    },
+    {
+      "name": "Data Extraction Accuracy",
+      "description": "Fix AI extraction pipeline to produce accurate results",
+      "primary_files": ["pips-solver/src/services/aiExtraction.ts", "pips-solver/src/services/ensembleExtraction.ts"]
+    },
+    {
+      "name": "UI/UX Workflow",
+      "description": "Improve user interaction flow for puzzle extraction and solving",
+      "primary_files": ["pips-solver/src/app/"]
+    }
+  ],
+
+  "created_at": "2025-12-21T23:30:00.000Z"
+}

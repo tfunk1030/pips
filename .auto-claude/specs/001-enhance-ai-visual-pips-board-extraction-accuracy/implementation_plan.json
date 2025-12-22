@@ -1,0 +1,568 @@
+{
+  "feature": "Enhance AI Visual Pips Board Extraction Accuracy",
+  "workflow_type": "feature",
+  "workflow_rationale": "Feature enhancement improving existing AI extraction accuracy while adding new capabilities (enhanced validation, better UI feedback, improved preprocessing). Involves changes across pips-solver and cv-service with coordinated improvements.",
+  "phases": [
+    {
+      "id": "phase-1-extraction-prompts",
+      "name": "Extraction Prompt Engineering",
+      "type": "implementation",
+      "description": "Improve AI prompts for each extraction stage to increase accuracy",
+      "depends_on": [],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-1-1",
+          "description": "Improve grid geometry prompt with clearer instructions and examples for counting rows/cols",
+          "service": "pips-solver",
+          "files_to_modify": [
+            "src/services/extraction/stages/gridGeometry.ts"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "src/services/extractionSchemas.ts",
+            "src/services/jsonParsingUtils.ts"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd pips-solver && npx tsc --noEmit src/services/extraction/stages/gridGeometry.ts",
+            "expected": "No compilation errors"
+          },
+          "status": "completed",
+          "notes": "Improved grid geometry prompt with clearer step-by-step instructions, ASCII visual examples for counting rows/columns, common mistakes to avoid section, and enhanced retry prompt with dynamic hints for edge cases. TypeScript compilation passes successfully.",
+          "updated_at": "2025-12-22T04:57:37.581317+00:00"
+        },
+        {
+          "id": "subtask-1-2",
+          "description": "Improve cell detection prompt to better distinguish cells vs holes with visual examples",
+          "service": "pips-solver",
+          "files_to_modify": [
+            "src/services/extraction/stages/cellDetection.ts"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "src/services/extraction/stages/gridGeometry.ts"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd pips-solver && npx tsc --noEmit src/services/extraction/stages/cellDetection.ts",
+            "expected": "No compilation errors"
+          },
+          "status": "completed",
+          "notes": "Improved cell detection prompt with: ASCII visual identification guide showing cell vs hole characteristics, 3 comprehensive grid examples (corner holes, L-shape holes, internal holes), step-by-step detection methodology, common mistakes to avoid section, enhanced retry prompt with visual comparison diagrams and dynamic hole count hints. TypeScript compilation verified.",
+          "updated_at": "2025-12-22T05:01:31.456710+00:00"
+        },
+        {
+          "id": "subtask-1-3",
+          "description": "Improve region mapping prompt with better color distinction instructions",
+          "service": "pips-solver",
+          "files_to_modify": [
+            "src/services/extraction/stages/regionMapping.ts"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "src/services/extraction/stages/gridGeometry.ts"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd pips-solver && npx tsc --noEmit src/services/extraction/stages/regionMapping.ts",
+            "expected": "No compilation errors"
+          },
+          "status": "completed",
+          "notes": "Improved region mapping prompt with: comprehensive NYT Pips color palette with detailed descriptions for distinguishing similar colors (warm colors: pink/coral/peach/orange/tan, cool colors: teal/cyan/light blue/mint, neutral: gray/olive/green/purple/yellow), step-by-step region identification methodology, visual examples with emoji color mapping, common mistakes to avoid section, commonly confused color pairs reference table with comparison tips, enhanced retry prompt with dynamic analysis of previous attempts and color comparison technique (saturation/hue/brightness tests), systematic re-check methodology. TypeScript compilation verified.",
+          "updated_at": "2025-12-22T05:06:05.113085+00:00"
+        },
+        {
+          "id": "subtask-1-4",
+          "description": "Improve constraint extraction prompt with clearer diamond label reading instructions",
+          "service": "pips-solver",
+          "files_to_modify": [
+            "src/services/extraction/stages/constraintExtraction.ts"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "src/services/extraction/stages/gridGeometry.ts"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd pips-solver && npx tsc --noEmit src/services/extraction/stages/constraintExtraction.ts",
+            "expected": "No compilation errors"
+          },
+          "status": "completed",
+          "notes": "Improved constraint extraction prompt with: detailed diamond label identification guide showing visual appearance and positioning, step-by-step reading process for each region, comprehensive commonly confused characters section (6 vs 8, 12 vs 18, etc.), common mistakes to avoid checklist, expected value ranges for different region sizes, enhanced retry prompt with intelligent disagreement analysis that detects common confusion patterns (e.g., 6/8, 10/16, 12/18) and provides targeted hints to focus on specific regions, digit verification checklist for precise number reading. TypeScript compilation verified.",
+          "updated_at": "2025-12-22T05:10:12.524067+00:00"
+        },
+        {
+          "id": "subtask-1-5",
+          "description": "Improve domino extraction prompt with pip counting visual patterns",
+          "service": "pips-solver",
+          "files_to_modify": [
+            "src/services/extraction/stages/dominoExtraction.ts"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "src/services/extraction/stages/gridGeometry.ts"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd pips-solver && npx tsc --noEmit src/services/extraction/stages/dominoExtraction.ts",
+            "expected": "No compilation errors"
+          },
+          "status": "completed",
+          "notes": "Improved domino extraction prompt with detailed pip counting visual patterns. Added ASCII diagrams for all pip values (0-6), step-by-step counting methodology, critical distinguishing features (5 vs 6, 3 vs 5, 2 vs 4, 0 detection), common mistakes section, verification checklist, and enhanced retry prompt with context-aware guidance based on previous extraction results.",
+          "updated_at": "2025-12-22T05:13:45.458930+00:00"
+        }
+      ]
+    },
+    {
+      "id": "phase-2-validation",
+      "name": "Cross-Stage Validation",
+      "type": "implementation",
+      "description": "Add validation between extraction stages to catch errors early",
+      "depends_on": [
+        "phase-1-extraction-prompts"
+      ],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-2-1",
+          "description": "Enhance grid validator with cross-validation checks between geometry and cell detection",
+          "service": "pips-solver",
+          "files_to_modify": [
+            "src/services/extraction/validation/gridValidator.ts"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "src/services/extraction/validation/regionValidator.ts"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd pips-solver && npx tsc --noEmit src/services/extraction/validation/gridValidator.ts",
+            "expected": "No compilation errors"
+          },
+          "status": "completed",
+          "notes": "Enhanced grid validator with comprehensive cross-validation checks: crossValidateGridAndCells() main function with cell connectivity check (BFS), hole pattern detection (full rows/cols, checkerboard), grid utilization validation (30-70% cell density), confidence consistency checks, multi-model comparison (compareCellDetections(), validateGridConsensus()). TypeScript compilation verified. Commit: 9614559",
+          "updated_at": "2025-12-22T05:18:05.076548+00:00"
+        },
+        {
+          "id": "subtask-2-2",
+          "description": "Add inter-stage validation in pipeline to validate each stage output before passing to next",
+          "service": "pips-solver",
+          "files_to_modify": [
+            "src/services/extraction/pipeline.ts"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "src/services/extraction/validation/gridValidator.ts"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd pips-solver && npx tsc --noEmit src/services/extraction/pipeline.ts",
+            "expected": "No compilation errors"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-2-3",
+          "description": "Add confidence aggregation logic to compute overall extraction quality score",
+          "service": "pips-solver",
+          "files_to_modify": [
+            "src/services/extraction/pipeline.ts"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "src/services/ensembleExtraction.ts"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd pips-solver && npx tsc --noEmit src/services/extraction/pipeline.ts",
+            "expected": "No compilation errors"
+          },
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "phase-3-cv-service",
+      "name": "CV Service Preprocessing",
+      "type": "implementation",
+      "description": "Improve CV service grid detection and cropping for cleaner images to AI",
+      "depends_on": [],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-3-1",
+          "description": "Improve hybrid_extraction.py with better grid line detection using adaptive thresholding",
+          "service": "cv-service",
+          "files_to_modify": [
+            "hybrid_extraction.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "cd cv-service && python -c \"from hybrid_extraction import *; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-3-2",
+          "description": "Enhance main.py crop-puzzle endpoint with better boundary detection",
+          "service": "cv-service",
+          "files_to_modify": [
+            "main.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "hybrid_extraction.py"
+          ],
+          "verification": {
+            "type": "api",
+            "method": "GET",
+            "url": "http://localhost:8080/health",
+            "expected_status": 200
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-3-3",
+          "description": "Add image preprocessing endpoint for contrast/brightness normalization before AI extraction",
+          "service": "cv-service",
+          "files_to_modify": [
+            "main.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "hybrid_extraction.py"
+          ],
+          "verification": {
+            "type": "api",
+            "method": "GET",
+            "url": "http://localhost:8080/health",
+            "expected_status": 200
+          },
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "phase-4-frontend-ui",
+      "name": "Frontend UI/UX Improvements",
+      "type": "implementation",
+      "description": "Enhance verification modal and extraction workflow UI with better feedback",
+      "depends_on": [
+        "phase-1-extraction-prompts",
+        "phase-2-validation"
+      ],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-4-1",
+          "description": "Add per-stage confidence indicators to OverlayBuilderScreen during extraction",
+          "service": "pips-solver",
+          "files_to_modify": [
+            "src/app/screens/OverlayBuilderScreen.tsx"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "src/app/components/ConfidenceIndicator.tsx"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd pips-solver && npx tsc --noEmit src/app/screens/OverlayBuilderScreen.tsx",
+            "expected": "No compilation errors"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-4-2",
+          "description": "Enhance AIVerificationModal with visual diff showing extraction vs image overlay",
+          "service": "pips-solver",
+          "files_to_modify": [
+            "src/app/components/AIVerificationModal.tsx"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "src/app/components/GridRenderer.tsx"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd pips-solver && npx tsc --noEmit src/app/components/AIVerificationModal.tsx",
+            "expected": "No compilation errors"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-4-3",
+          "description": "Add cell-by-cell correction UI to AIVerificationModal for manual fixes",
+          "service": "pips-solver",
+          "files_to_modify": [
+            "src/app/components/AIVerificationModal.tsx"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "src/app/components/GridRenderer.tsx"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd pips-solver && npx tsc --noEmit src/app/components/AIVerificationModal.tsx",
+            "expected": "No compilation errors"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-4-4",
+          "description": "Add low-confidence warning prompts to trigger user verification when confidence is below threshold",
+          "service": "pips-solver",
+          "files_to_modify": [
+            "src/app/screens/OverlayBuilderScreen.tsx"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "src/app/components/AIVerificationModal.tsx"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd pips-solver && npx tsc --noEmit src/app/screens/OverlayBuilderScreen.tsx",
+            "expected": "No compilation errors"
+          },
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "phase-5-cv-integration",
+      "name": "CV-AI Integration",
+      "type": "implementation",
+      "description": "Integrate CV preprocessing with AI extraction pipeline for hybrid mode",
+      "depends_on": [
+        "phase-3-cv-service"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-5-1",
+          "description": "Enhance cvExtraction.ts to use CV preprocessing before AI extraction",
+          "service": "pips-solver",
+          "files_to_modify": [
+            "src/services/cvExtraction.ts"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "src/services/extraction/pipeline.ts"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd pips-solver && npx tsc --noEmit src/services/cvExtraction.ts",
+            "expected": "No compilation errors"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-5-2",
+          "description": "Add fallback logic to use raw image when CV service unavailable",
+          "service": "pips-solver",
+          "files_to_modify": [
+            "src/services/cvExtraction.ts"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "src/services/extraction/pipeline.ts"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd pips-solver && npx tsc --noEmit src/services/cvExtraction.ts",
+            "expected": "No compilation errors"
+          },
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "phase-6-integration",
+      "name": "Integration Testing",
+      "type": "integration",
+      "description": "Wire all improvements together and verify end-to-end extraction flow",
+      "depends_on": [
+        "phase-4-frontend-ui",
+        "phase-5-cv-integration"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-6-1",
+          "description": "End-to-end verification of extraction flow with sample puzzle images",
+          "all_services": true,
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "e2e",
+            "steps": [
+              "Start cv-service on port 8080",
+              "Start Expo dev server on port 8081",
+              "Open app and select puzzle image",
+              "Trigger AI extraction and verify progress indicators",
+              "Verify extraction results match expected for test puzzle",
+              "Test manual correction workflow"
+            ]
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-6-2",
+          "description": "Verify low-confidence flow prompts user for verification",
+          "all_services": true,
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "e2e",
+            "steps": [
+              "Select low-quality or partial puzzle image",
+              "Trigger AI extraction",
+              "Verify confidence indicators show low values",
+              "Verify user is prompted to review/correct",
+              "Apply corrections and verify they persist"
+            ]
+          },
+          "status": "pending"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_phases": 6,
+    "total_subtasks": 17,
+    "services_involved": [
+      "pips-solver",
+      "cv-service"
+    ],
+    "parallelism": {
+      "max_parallel_phases": 2,
+      "parallel_groups": [
+        {
+          "phases": [
+            "phase-1-extraction-prompts",
+            "phase-3-cv-service"
+          ],
+          "reason": "Independent services with no shared files - can run simultaneously"
+        }
+      ],
+      "recommended_workers": 2,
+      "speedup_estimate": "1.5x faster than sequential"
+    },
+    "startup_command": "source auto-claude/.venv/bin/activate && python auto-claude/run.py --spec 001 --parallel 2"
+  },
+  "verification_strategy": {
+    "risk_level": "medium",
+    "skip_validation": false,
+    "test_creation_phase": "post_implementation",
+    "test_types_required": [
+      "unit",
+      "integration"
+    ],
+    "security_scanning_required": true,
+    "staging_deployment_required": false,
+    "acceptance_criteria": [
+      "Grid dimension detection achieves >=98% accuracy on test puzzles",
+      "Cell/hole detection correctly identifies puzzle shape",
+      "Region mapping correctly identifies all colored regions",
+      "Constraint extraction achieves >=95% accuracy",
+      "Domino pip counting achieves >=90% accuracy per puzzle",
+      "Verification modal allows cell-by-cell correction",
+      "Confidence indicators show per-stage progress",
+      "No console errors during extraction workflow",
+      "Existing tests still pass"
+    ],
+    "verification_steps": [
+      {
+        "name": "TypeScript Compilation",
+        "command": "cd pips-solver && npx tsc --noEmit",
+        "expected_outcome": "No compilation errors",
+        "type": "build",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "CV Service Health Check",
+        "command": "curl -s http://localhost:8080/health",
+        "expected_outcome": "Returns 200 OK",
+        "type": "integration",
+        "required": true,
+        "blocking": false
+      },
+      {
+        "name": "Security Scan",
+        "command": "grep -r 'API_KEY.*=' pips-solver/src/ --include='*.ts' --include='*.tsx' | grep -v 'process.env' | head -10",
+        "expected_outcome": "No hardcoded secrets found",
+        "type": "security",
+        "required": true,
+        "blocking": true
+      }
+    ],
+    "reasoning": "Medium risk change requires TypeScript compilation checks for each file modification and integration tests for extraction pipeline. Security scan needed because API keys are handled."
+  },
+  "qa_acceptance": {
+    "unit_tests": {
+      "required": true,
+      "commands": [
+        "cd pips-solver && npm test"
+      ],
+      "minimum_coverage": null
+    },
+    "integration_tests": {
+      "required": true,
+      "commands": [
+        "cd cv-service && python -m pytest test_service.py"
+      ],
+      "services_to_test": [
+        "pips-solver",
+        "cv-service"
+      ]
+    },
+    "e2e_tests": {
+      "required": true,
+      "commands": [],
+      "flows": [
+        "extraction-happy-path",
+        "low-confidence-verification",
+        "manual-correction"
+      ]
+    },
+    "browser_verification": {
+      "required": true,
+      "pages": [
+        {
+          "url": "App -> New Puzzle",
+          "checks": [
+            "AI extraction starts",
+            "progress shown"
+          ]
+        },
+        {
+          "url": "App -> New Puzzle -> Extract",
+          "checks": [
+            "Shows grid, regions, constraints, dominoes"
+          ]
+        },
+        {
+          "url": "Builder Step 1",
+          "checks": [
+            "Grid overlay aligns with image"
+          ]
+        }
+      ]
+    },
+    "database_verification": {
+      "required": false,
+      "checks": []
+    }
+  },
+  "qa_signoff": null,
+  "status": "human_review",
+  "planStatus": "review",
+  "updated_at": "2025-12-22T04:42:42.970Z",
+  "last_updated": "2025-12-22T05:18:05.076548+00:00"
+}
