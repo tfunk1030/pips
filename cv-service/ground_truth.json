@@ -1,0 +1,178 @@
+{
+  "test_000_sat180.png": {
+    "correct": true,
+    "component": "puzzle_detection",
+    "confidence_accurate": 0.96,
+    "_saturation": 180,
+    "_with_grid": true,
+    "_add_noise": false
+  },
+  "test_001_sat200.png": {
+    "correct": true,
+    "component": "puzzle_detection",
+    "confidence_accurate": 0.98,
+    "_saturation": 200,
+    "_with_grid": true,
+    "_add_noise": false
+  },
+  "test_002_sat160.png": {
+    "correct": true,
+    "component": "puzzle_detection",
+    "confidence_accurate": 0.94,
+    "_saturation": 160,
+    "_with_grid": true,
+    "_add_noise": false
+  },
+  "test_003_sat170.png": {
+    "correct": true,
+    "component": "puzzle_detection",
+    "confidence_accurate": 0.95,
+    "_saturation": 170,
+    "_with_grid": true,
+    "_add_noise": false
+  },
+  "test_004_sat190.png": {
+    "correct": true,
+    "component": "puzzle_detection",
+    "confidence_accurate": 0.97,
+    "_saturation": 190,
+    "_with_grid": true,
+    "_add_noise": false
+  },
+  "test_005_sat150.png": {
+    "correct": true,
+    "component": "puzzle_detection",
+    "confidence_accurate": 0.93,
+    "_saturation": 150,
+    "_with_grid": true,
+    "_add_noise": false
+  },
+  "test_006_sat140.png": {
+    "correct": true,
+    "component": "puzzle_detection",
+    "confidence_accurate": 0.92,
+    "_saturation": 140,
+    "_with_grid": true,
+    "_add_noise": false
+  },
+  "test_007_sat155.png": {
+    "correct": true,
+    "component": "puzzle_detection",
+    "confidence_accurate": 0.935,
+    "_saturation": 155,
+    "_with_grid": true,
+    "_add_noise": false
+  },
+  "test_008_sat165.png": {
+    "correct": true,
+    "component": "puzzle_detection",
+    "confidence_accurate": 0.9450000000000001,
+    "_saturation": 165,
+    "_with_grid": true,
+    "_add_noise": false
+  },
+  "test_009_sat175.png": {
+    "correct": true,
+    "component": "puzzle_detection",
+    "confidence_accurate": 0.955,
+    "_saturation": 175,
+    "_with_grid": true,
+    "_add_noise": false
+  },
+  "test_010_sat100.png": {
+    "correct": true,
+    "component": "puzzle_detection",
+    "confidence_accurate": 0.88,
+    "_saturation": 100,
+    "_with_grid": true,
+    "_add_noise": false
+  },
+  "test_011_sat120.png": {
+    "correct": true,
+    "component": "puzzle_detection",
+    "confidence_accurate": 0.9,
+    "_saturation": 120,
+    "_with_grid": true,
+    "_add_noise": false
+  },
+  "test_012_sat90.png": {
+    "correct": true,
+    "component": "puzzle_detection",
+    "confidence_accurate": 0.85,
+    "_saturation": 90,
+    "_with_grid": true,
+    "_add_noise": false
+  },
+  "test_013_sat110.png": {
+    "correct": true,
+    "component": "puzzle_detection",
+    "confidence_accurate": 0.89,
+    "_saturation": 110,
+    "_with_grid": true,
+    "_add_noise": false
+  },
+  "test_014_sat130.png": {
+    "correct": true,
+    "component": "puzzle_detection",
+    "confidence_accurate": 0.91,
+    "_saturation": 130,
+    "_with_grid": true,
+    "_add_noise": false
+  },
+  "test_015_sat40.png": {
+    "correct": true,
+    "component": "puzzle_detection",
+    "confidence_accurate": 0.6000000000000001,
+    "_saturation": 40,
+    "_with_grid": true,
+    "_add_noise": false
+  },
+  "test_016_sat50.png": {
+    "correct": true,
+    "component": "puzzle_detection",
+    "confidence_accurate": 0.75,
+    "_saturation": 50,
+    "_with_grid": true,
+    "_add_noise": false
+  },
+  "test_017_sat30.png": {
+    "correct": true,
+    "component": "puzzle_detection",
+    "confidence_accurate": 0.55,
+    "_saturation": 30,
+    "_with_grid": true,
+    "_add_noise": false
+  },
+  "test_018_sat60.png": {
+    "correct": true,
+    "component": "puzzle_detection",
+    "confidence_accurate": 0.775,
+    "_saturation": 60,
+    "_with_grid": true,
+    "_add_noise": false
+  },
+  "test_019_sat50_nogrid.png": {
+    "correct": false,
+    "component": "puzzle_detection",
+    "confidence_accurate": 0.0,
+    "_saturation": 50,
+    "_with_grid": false,
+    "_add_noise": false
+  },
+  "test_020_sat30_nogrid.png": {
+    "correct": false,
+    "component": "puzzle_detection",
+    "confidence_accurate": 0.0,
+    "_saturation": 30,
+    "_with_grid": false,
+    "_add_noise": false
+  },
+  "test_021_sat80_nogrid.png": {
+    "correct": false,
+    "component": "puzzle_detection",
+    "confidence_accurate": 0.0,
+    "_saturation": 80,
+    "_with_grid": false,
+    "_add_noise": false
+  }
+}
