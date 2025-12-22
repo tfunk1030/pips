@@ -598,6 +598,115 @@ def validate_pip_count(pip_count: int) -> bool:
     return 0 <= pip_count <= 6
 
 
+def calculate_confidence(
+    pip_count: int,
+    circularity: float = 1.0,
+    size_variance: float = 0.0,
+    circularity_weight: float = 0.4,
+    size_weight: float = 0.3,
+    count_weight: float = 0.3
+) -> float:
+    """
+    Calculate confidence score for pip detection.
+
+    Computes a confidence score (0.0-1.0) based on:
+    - Pip circularity: How circular the detected pips are (1.0 = perfect circle)
+    - Size consistency: Variance in pip sizes (lower = more consistent)
+    - Count validation: Whether pip count is in valid range (0-6)
+
+    High confidence (>0.85) indicates reliable detection.
+    Low confidence (<0.7) indicates ambiguous or uncertain detection.
+
+    Args:
+        pip_count: Number of detected pips.
+        circularity: Average circularity of detected pips (0.0-1.0).
+            Circularity is calculated as 4*pi*area/perimeter^2.
+            A perfect circle has circularity of 1.0.
+            Good pip detection typically has circularity > 0.7.
+        size_variance: Variance in pip sizes (normalized).
+            Lower values indicate more consistent pip sizes.
+            Good detection typically has variance < 0.3.
+        circularity_weight: Weight for circularity factor (default 0.4).
+        size_weight: Weight for size consistency factor (default 0.3).
+        count_weight: Weight for count validation factor (default 0.3).
+
+    Returns:
+        Confidence score between 0.0 and 1.0.
+        - > 0.85: High confidence, reliable detection
+        - 0.7 - 0.85: Medium confidence, likely correct
+        - < 0.7: Low confidence, uncertain detection
+
+    Notes:
+        For blank dominoes (0 pips), returns high confidence (0.95) since
+        absence of pips is a valid and detectable state.
+        For pip counts outside 0-6 range, applies a strong penalty.
+    """
+    # Handle blank dominoes (0 pips) - high confidence case
+    if pip_count == 0:
+        # Blank dominoes are valid and should have high confidence
+        # when no circular shapes are detected
+        return 0.95
+
+    # 1. Circularity score (0.0 - 1.0)
+    # Good pips have circularity > 0.7
+    # Map circularity from [0.5, 1.0] range to [0.0, 1.0] score
+    # Values below 0.5 get score 0, values above 0.9 get diminishing returns
+    if circularity >= 0.9:
+        circularity_score = 1.0
+    elif circularity >= 0.5:
+        # Linear mapping from [0.5, 0.9] to [0.0, 1.0]
+        circularity_score = (circularity - 0.5) / 0.4
+    else:
+        # Poor circularity - likely not pips
+        circularity_score = 0.0
+
+    # 2. Size consistency score (0.0 - 1.0)
+    # Lower variance is better - pips should be similar sizes
+    # Map variance from [0.0, 0.5] to [1.0, 0.0]
+    # Variance > 0.5 gets 0 score
+    if size_variance <= 0.0:
+        size_score = 1.0
+    elif size_variance <= 0.5:
+        # Linear mapping: 0.0 variance = 1.0 score, 0.5 variance = 0.0 score
+        size_score = 1.0 - (size_variance / 0.5)
+    else:
+        # High variance - inconsistent pip sizes
+        size_score = 0.0
+
+    # 3. Count validation score (0.0 - 1.0)
+    # Valid pip counts (0-6) get high score
+    # Counts just outside range get partial score
+    # Far outside range get zero
+    if validate_pip_count(pip_count):
+        count_score = 1.0
+    elif pip_count == 7:
+        # Just over the limit - might be noise
+        count_score = 0.3
+    elif pip_count == 8:
+        # Likely over-detection
+        count_score = 0.1
+    else:
+        # Far out of range (negative or > 8)
+        count_score = 0.0
+
+    # 4. Calculate weighted confidence
+    # Ensure weights sum to 1.0
+    total_weight = circularity_weight + size_weight + count_weight
+    if total_weight <= 0:
+        total_weight = 1.0
+
+    confidence = (
+        (circularity_weight * circularity_score +
+         size_weight * size_score +
+         count_weight * count_score) / total_weight
+    )
+
+    # Clamp to [0.0, 1.0]
+    confidence = max(0.0, min(1.0, confidence))
+
+    return confidence
+
+
 def detect_rotation_angle(
     contour: np.ndarray
 ) -> Tuple[float, Tuple[float, float], Tuple[float, float], np.ndarray]:
@@ -1086,6 +1195,24 @@ def _self_test():
     padded_left, padded_right = split_domino_halves(domino_img, padding=5)
     assert padded_left.shape[1] == padded_right.shape[1]
     assert padded_left.shape[1] < left.shape[1]  # Padding reduces width
+
+    # Test calculate_confidence function
+    # Test with valid pip count and good metrics
+    conf_score = calculate_confidence(pip_count=3, circularity=0.9, size_variance=0.1)
+    assert 0.0 <= conf_score <= 1.0
+    assert conf_score >= 0.7  # Good detection should have reasonable confidence
+
+    # Test blank domino
+    conf_blank = calculate_confidence(pip_count=0)
+    assert conf_blank >= 0.9  # Blank dominoes should have high confidence
+
+    # Test edge case with max pips
+    conf_max = calculate_confidence(pip_count=6, circularity=1.0, size_variance=0.0)
+    assert conf_max >= 0.85  # Perfect detection should be high confidence
+
+    # Test invalid pip count
+    conf_invalid = calculate_confidence(pip_count=10, circularity=0.9, size_variance=0.1)
+    assert conf_invalid < 0.7  # Invalid count should have low confidence
 
     return True
 
