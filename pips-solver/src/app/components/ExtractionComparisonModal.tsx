@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useMemo, useCallback } from 'react';
-import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, Pressable } from 'react-native';
 import type {
   RawResponses,
   BoardModelResponse,
@@ -14,14 +14,33 @@ import type {
 } from '../../model/overlayTypes';
 import {
   compareCellDetections,
+  cellKey,
   type ComparisonResult,
   type DisagreementSummary,
   type NormalizedModelResult,
+  type CellDisagreement,
+  type DisagreementSeverity,
+  type CellCoordinate,
 } from '../../services/extraction/validation/gridValidator';
 
 // ════════════════════════════════════════════════════════════════════════════
 // Constants
 // ════════════════════════════════════════════════════════════════════════════
+
+/** Severity colors for disagreement highlighting */
+const SEVERITY_COLORS: Record<DisagreementSeverity, { border: string; bg: string; text: string }> = {
+  critical: { border: '#d32f2f', bg: 'rgba(211, 47, 47, 0.3)', text: '#ff6b6b' },
+  warning: { border: '#f9a825', bg: 'rgba(249, 168, 37, 0.3)', text: '#ffd54f' },
+  info: { border: '#1976d2', bg: 'rgba(25, 118, 210, 0.3)', text: '#64b5f6' },
+};
+
+/** Get the highest severity from a list of cell disagreements */
+function getHighestCellSeverity(disagreements: CellDisagreement[]): DisagreementSeverity | null {
+  if (disagreements.length === 0) return null;
+  if (disagreements.some(d => d.severity === 'critical')) return 'critical';
+  if (disagreements.some(d => d.severity === 'warning')) return 'warning';
+  return 'info';
+}
 
 /** Color palette for regions matching DEFAULT_PALETTE in overlayTypes */
 const REGION_COLORS: Record<string, string> = {
@@ -145,6 +164,94 @@ function TabBar({
 }
 
 /**
+ * Cell detail popup showing what each model reported for a disagreeing cell
+ */
+function CellDetailPopup({
+  coordinate,
+  disagreements,
+  onClose,
+}: {
+  coordinate: CellCoordinate;
+  disagreements: CellDisagreement[];
+  onClose: () => void;
+}) {
+  const severity = getHighestCellSeverity(disagreements);
+  const severityColor = severity ? SEVERITY_COLORS[severity] : SEVERITY_COLORS.info;
+
+  return (
+    <Modal visible={true} transparent animationType="fade">
+      <Pressable style={styles.popupOverlay} onPress={onClose}>
+        <Pressable style={styles.popupContainer} onPress={e => e.stopPropagation()}>
+          {/* Header */}
+          <View style={[styles.popupHeader, { borderBottomColor: severityColor.border }]}>
+            <View style={styles.popupHeaderContent}>
+              <Text style={styles.popupTitle}>Cell ({coordinate.row}, {coordinate.col})</Text>
+              {severity && (
+                <View style={[styles.popupSeverityBadge, { backgroundColor: severityColor.bg }]}>
+                  <Text style={[styles.popupSeverityText, { color: severityColor.text }]}>
+                    {severity.toUpperCase()}
+                  </Text>
+                </View>
+              )}
+            </View>
+            <TouchableOpacity style={styles.popupCloseButton} onPress={onClose}>
+              <Text style={styles.popupCloseText}>×</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Content: List disagreements */}
+          <ScrollView style={styles.popupContent}>
+            {disagreements.map((disagreement, idx) => (
+              <View key={disagreement.id || idx} style={styles.popupDisagreementItem}>
+                <View style={[
+                  styles.popupDisagreementHeader,
+                  { borderLeftColor: SEVERITY_COLORS[disagreement.severity].border }
+                ]}>
+                  <Text style={styles.popupDisagreementType}>
+                    {formatDisagreementType(disagreement.type)}
+                  </Text>
+                </View>
+
+                {/* Per-model values */}
+                <View style={styles.popupModelValues}>
+                  {Object.entries(disagreement.detections).map(([model, detection]) => (
+                    <View key={model} style={styles.popupModelRow}>
+                      <Text style={styles.popupModelName}>{formatModelName(model)}</Text>
+                      <Text style={styles.popupModelValue}>
+                        {disagreement.type === 'hole_position'
+                          ? (detection.isHole ? '# (hole)' : '· (cell)')
+                          : (detection.region || 'null')}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            ))}
+          </ScrollView>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+/**
+ * Format disagreement type for display
+ */
+function formatDisagreementType(type: string): string {
+  const typeMap: Record<string, string> = {
+    hole_position: 'Hole Position',
+    region_assignment: 'Region Assignment',
+    grid_dimensions: 'Grid Dimensions',
+    constraint_type: 'Constraint Type',
+    constraint_value: 'Constraint Value',
+    constraint_operator: 'Constraint Operator',
+    domino_count: 'Domino Count',
+    domino_value: 'Domino Value',
+  };
+  return typeMap[type] || type;
+}
+
+/**
  * Summary view showing overall comparison statistics
  */
 function SummaryView({
@@ -257,34 +364,67 @@ function DisagreementCategorySummary({ comparison }: { comparison: ComparisonRes
 }
 
 /**
- * Grid visualization component showing holes and cells
+ * Grid visualization component showing holes and cells with disagreement highlighting
  */
 function GridVisualization({
   holes,
   rows,
   cols,
+  cellDisagreementMap,
+  onCellPress,
 }: {
   holes: boolean[][];
   rows: number;
   cols: number;
+  cellDisagreementMap?: Map<string, CellDisagreement[]>;
+  onCellPress?: (coordinate: CellCoordinate, disagreements: CellDisagreement[]) => void;
 }) {
   return (
     <View style={styles.gridVisualization}>
       {holes.map((row, rowIndex) => (
         <View key={rowIndex} style={styles.gridRow}>
-          {row.map((isHole, colIndex) => (
-            <View
-              key={colIndex}
-              style={[
-                styles.gridCell,
-                isHole ? styles.gridCellHole : styles.gridCellValid,
-              ]}
-            >
-              <Text style={[styles.gridCellText, isHole && styles.gridCellTextHole]}>
-                {isHole ? '#' : '·'}
-              </Text>
-            </View>
-          ))}
+          {row.map((isHole, colIndex) => {
+            const key = cellKey(rowIndex, colIndex);
+            const disagreements = cellDisagreementMap?.get(key) || [];
+            const severity = getHighestCellSeverity(disagreements);
+            const hasDisagreement = disagreements.length > 0;
+            const severityStyle = severity ? {
+              borderColor: SEVERITY_COLORS[severity].border,
+              borderWidth: 2,
+              backgroundColor: SEVERITY_COLORS[severity].bg,
+            } : {};
+
+            const cellContent = (
+              <View
+                style={[
+                  styles.gridCell,
+                  isHole ? styles.gridCellHole : styles.gridCellValid,
+                  hasDisagreement && severityStyle,
+                ]}
+              >
+                <Text style={[
+                  styles.gridCellText,
+                  isHole && styles.gridCellTextHole,
+                  hasDisagreement && { color: SEVERITY_COLORS[severity!].text },
+                ]}>
+                  {isHole ? '#' : '·'}
+                </Text>
+              </View>
+            );
+
+            if (hasDisagreement && onCellPress) {
+              return (
+                <Pressable
+                  key={colIndex}
+                  onPress={() => onCellPress({ row: rowIndex, col: colIndex }, disagreements)}
+                >
+                  {cellContent}
+                </Pressable>
+              );
+            }
+
+            return <View key={colIndex}>{cellContent}</View>;
+          })}
         </View>
       ))}
     </View>
@@ -292,18 +432,22 @@ function GridVisualization({
 }
 
 /**
- * Region visualization component with color-coded cells
+ * Region visualization component with color-coded cells and disagreement highlighting
  */
 function RegionVisualization({
   regions,
   holes,
   rows,
   cols,
+  cellDisagreementMap,
+  onCellPress,
 }: {
   regions: (string | null)[][];
   holes?: boolean[][];
   rows: number;
   cols: number;
+  cellDisagreementMap?: Map<string, CellDisagreement[]>;
+  onCellPress?: (coordinate: CellCoordinate, disagreements: CellDisagreement[]) => void;
 }) {
   return (
     <View style={styles.gridVisualization}>
@@ -313,13 +457,22 @@ function RegionVisualization({
             const isHole = holes?.[rowIndex]?.[colIndex] || region === null;
             const bgColor = isHole ? '#333' : getRegionColor(region);
 
-            return (
+            const key = cellKey(rowIndex, colIndex);
+            const disagreements = cellDisagreementMap?.get(key) || [];
+            const severity = getHighestCellSeverity(disagreements);
+            const hasDisagreement = disagreements.length > 0;
+            const severityStyle = severity ? {
+              borderColor: SEVERITY_COLORS[severity].border,
+              borderWidth: 2,
+            } : {};
+
+            const cellContent = (
               <View
-                key={colIndex}
                 style={[
                   styles.gridCell,
                   styles.gridCellRegion,
                   { backgroundColor: bgColor },
+                  hasDisagreement && severityStyle,
                 ]}
               >
                 <Text style={[
@@ -328,8 +481,27 @@ function RegionVisualization({
                 ]}>
                   {isHole ? '#' : region || '.'}
                 </Text>
+                {hasDisagreement && (
+                  <View style={[
+                    styles.disagreementIndicator,
+                    { backgroundColor: SEVERITY_COLORS[severity!].border },
+                  ]} />
+                )}
               </View>
             );
+
+            if (hasDisagreement && onCellPress) {
+              return (
+                <Pressable
+                  key={colIndex}
+                  onPress={() => onCellPress({ row: rowIndex, col: colIndex }, disagreements)}
+                >
+                  {cellContent}
+                </Pressable>
+              );
+            }
+
+            return <View key={colIndex}>{cellContent}</View>;
           })}
         </View>
       ))}
@@ -511,14 +683,18 @@ function TimingDisplay({
 }
 
 /**
- * Model-specific result view showing full extraction details
+ * Model-specific result view showing full extraction details with disagreement highlighting
  */
 function ModelResultView({
   modelResult,
   timing,
+  cellDisagreementMap,
+  onCellPress,
 }: {
   modelResult: NormalizedModelResult;
   timing?: ModelTiming;
+  cellDisagreementMap?: Map<string, CellDisagreement[]>;
+  onCellPress?: (coordinate: CellCoordinate, disagreements: CellDisagreement[]) => void;
 }) {
   if (!modelResult.success) {
     return (
@@ -533,6 +709,9 @@ function ModelResultView({
   const rows = dimensions?.rows || 0;
   const cols = dimensions?.cols || 0;
 
+  // Count disagreements for this model's grid
+  const disagreementCount = cellDisagreementMap ? cellDisagreementMap.size : 0;
+
   return (
     <View style={styles.modelResultContainer}>
       {/* Grid Dimensions */}
@@ -543,11 +722,41 @@ function ModelResultView({
         </Text>
       </View>
 
+      {/* Disagreement Legend (if there are disagreements) */}
+      {disagreementCount > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Disagreements</Text>
+          <Text style={styles.textSmall}>
+            {disagreementCount} cell{disagreementCount !== 1 ? 's' : ''} with disagreements. Tap to see details.
+          </Text>
+          <View style={styles.legendRow}>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: SEVERITY_COLORS.critical.border }]} />
+              <Text style={styles.legendText}>Critical</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: SEVERITY_COLORS.warning.border }]} />
+              <Text style={styles.legendText}>Warning</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: SEVERITY_COLORS.info.border }]} />
+              <Text style={styles.legendText}>Info</Text>
+            </View>
+          </View>
+        </View>
+      )}
+
       {/* Grid with Holes */}
       {holes && holes.length > 0 && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Shape (# = hole)</Text>
-          <GridVisualization holes={holes} rows={rows} cols={cols} />
+          <GridVisualization
+            holes={holes}
+            rows={rows}
+            cols={cols}
+            cellDisagreementMap={cellDisagreementMap}
+            onCellPress={onCellPress}
+          />
         </View>
       )}
 
@@ -560,6 +769,8 @@ function ModelResultView({
             holes={holes}
             rows={rows}
             cols={cols}
+            cellDisagreementMap={cellDisagreementMap}
+            onCellPress={onCellPress}
           />
         </View>
       )}
@@ -635,6 +846,12 @@ export default function ExtractionComparisonModal({
 }: Props) {
   const [selectedTab, setSelectedTab] = useState<TabType>('summary');
 
+  // State for cell detail popup
+  const [selectedCell, setSelectedCell] = useState<{
+    coordinate: CellCoordinate;
+    disagreements: CellDisagreement[];
+  } | null>(null);
+
   // Compute comparison result from raw responses
   const comparison = useMemo<ComparisonResult | null>(() => {
     if (!rawResponses) return null;
@@ -644,6 +861,16 @@ export default function ExtractionComparisonModal({
       rawResponses.dominoes
     );
   }, [rawResponses]);
+
+  // Handle cell press to show details popup
+  const handleCellPress = useCallback((coordinate: CellCoordinate, disagreements: CellDisagreement[]) => {
+    setSelectedCell({ coordinate, disagreements });
+  }, []);
+
+  // Close cell detail popup
+  const handleCloseCellPopup = useCallback(() => {
+    setSelectedCell(null);
+  }, []);
 
   // Build tab list: summary + one per model
   const tabs = useMemo<TabType[]>(() => {
@@ -756,7 +983,12 @@ export default function ExtractionComparisonModal({
           {selectedTab === 'summary' ? (
             <SummaryView comparison={comparison} />
           ) : currentModelResult ? (
-            <ModelResultView modelResult={currentModelResult} timing={currentModelTiming} />
+            <ModelResultView
+              modelResult={currentModelResult}
+              timing={currentModelTiming}
+              cellDisagreementMap={comparison.cellDisagreementMap}
+              onCellPress={handleCellPress}
+            />
           ) : (
             <View style={styles.emptyState}>
               <Text style={styles.emptyText}>No data for this model</Text>
@@ -773,6 +1005,15 @@ export default function ExtractionComparisonModal({
             <Text style={styles.buttonText}>Accept Consensus</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Cell Detail Popup */}
+        {selectedCell && (
+          <CellDetailPopup
+            coordinate={selectedCell.coordinate}
+            disagreements={selectedCell.disagreements}
+            onClose={handleCloseCellPopup}
+          />
+        )}
       </View>
     </Modal>
   );
@@ -1255,5 +1496,130 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+
+  // Disagreement Legend
+  legendRow: {
+    flexDirection: 'row',
+    gap: 16,
+    marginTop: 8,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  legendDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  legendText: {
+    fontSize: 12,
+    color: '#888',
+  },
+
+  // Disagreement Indicator (small dot on cells)
+  disagreementIndicator: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+
+  // Cell Detail Popup
+  popupOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  popupContainer: {
+    backgroundColor: '#2a2a2a',
+    borderRadius: 12,
+    width: '100%',
+    maxWidth: 400,
+    maxHeight: '80%',
+    overflow: 'hidden',
+  },
+  popupHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 2,
+  },
+  popupHeaderContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  popupTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  popupSeverityBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  popupSeverityText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
+  popupCloseButton: {
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  popupCloseText: {
+    fontSize: 24,
+    color: '#888',
+    fontWeight: '300',
+  },
+  popupContent: {
+    padding: 16,
+    maxHeight: 300,
+  },
+  popupDisagreementItem: {
+    marginBottom: 16,
+  },
+  popupDisagreementHeader: {
+    borderLeftWidth: 3,
+    paddingLeft: 12,
+    marginBottom: 8,
+  },
+  popupDisagreementType: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  popupModelValues: {
+    marginLeft: 15,
+    gap: 6,
+  },
+  popupModelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#1a1a1a',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+  },
+  popupModelName: {
+    fontSize: 13,
+    color: '#888',
+  },
+  popupModelValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#fff',
+    fontFamily: 'Courier',
   },
 });
