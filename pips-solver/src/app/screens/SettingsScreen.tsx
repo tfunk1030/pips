@@ -46,6 +46,7 @@ export default function SettingsScreen({ navigation }: any) {
     googleApiKey: '',
     openaiApiKey: '',
     extractionStrategy: 'accurate' as ExtractionStrategy,
+    saveDebugResponses: false,
     cvServiceUrl: '',
   });
 
@@ -61,6 +62,7 @@ export default function SettingsScreen({ navigation }: any) {
       googleApiKey: loaded.googleApiKey || '',
       openaiApiKey: loaded.openaiApiKey || '',
       extractionStrategy: loaded.extractionStrategy || 'accurate',
+      saveDebugResponses: loaded.saveDebugResponses || false,
       cvServiceUrl: loaded.cvServiceUrl || '',
     });
   };
@@ -314,6 +316,36 @@ export default function SettingsScreen({ navigation }: any) {
                   </Text>
                 </TouchableOpacity>
               ))}
+            </View>
+
+            {/* Model Comparison Mode */}
+            <View style={styles.debugModeSection}>
+              <View style={styles.setting}>
+                <View style={styles.settingInfo}>
+                  <Text style={styles.settingLabel}>🔍 Model Comparison Mode</Text>
+                  <Text style={styles.settingDescription}>
+                    Store responses from each AI model for side-by-side comparison
+                  </Text>
+                </View>
+                <Switch
+                  value={settings.saveDebugResponses}
+                  onValueChange={value => updateSetting('saveDebugResponses', value)}
+                  trackColor={{ false: '#ccc', true: '#81C784' }}
+                  thumbColor={settings.saveDebugResponses ? '#4CAF50' : '#f4f3f4'}
+                />
+              </View>
+              <Text style={styles.debugModeHint}>
+                {settings.saveDebugResponses
+                  ? '✓ Enabled: After extraction, use "Compare Models" to see per-model results and disagreements'
+                  : '○ Disabled: Better performance, but model comparison unavailable'}
+              </Text>
+              {settings.saveDebugResponses && (
+                <View style={styles.debugModeWarning}>
+                  <Text style={styles.debugModeWarningText}>
+                    ⚠️ Uses additional memory to store raw responses. Recommended for debugging or verification only.
+                  </Text>
+                </View>
+              )}
             </View>
 
             {/* Google API Key (Gemini) */}
@@ -731,5 +763,31 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 8,
     fontStyle: 'italic',
+  },
+  debugModeSection: {
+    marginBottom: 16,
+    paddingTop: 12,
+    paddingBottom: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
+  debugModeHint: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+    paddingHorizontal: 4,
+  },
+  debugModeWarning: {
+    marginTop: 8,
+    padding: 10,
+    backgroundColor: '#FFF8E1',
+    borderRadius: 6,
+    borderLeftWidth: 3,
+    borderLeftColor: '#FFA000',
+  },
+  debugModeWarningText: {
+    fontSize: 11,
+    color: '#795548',
+    lineHeight: 16,
   },
 });

@@ -274,8 +274,10 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
     // Enable hybrid CV mode only if a CV service URL is configured
     const hasCVService = !!settings.cvServiceUrl?.trim();
 
-    // Enable debug responses for ensemble/accurate strategies to support model comparison
-    const shouldSaveDebugResponses = strategy === 'ensemble' || strategy === 'accurate';
+    // Enable debug responses if user enabled it in settings AND using multi-model strategies
+    // Multi-model strategies (ensemble/accurate) are required for meaningful model comparison
+    const shouldSaveDebugResponses =
+      settings.saveDebugResponses === true && (strategy === 'ensemble' || strategy === 'accurate');
 
     const result = await extractPuzzleMultiModel(state.image.base64, {
       strategy,

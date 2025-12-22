@@ -36,6 +36,11 @@ export interface AppSettings {
   // Extraction configuration
   extractionStrategy?: ExtractionStrategy;
 
+  // Debug mode for extraction comparison
+  // When enabled, stores raw responses from each AI model for side-by-side comparison
+  // Default: false (off for performance - storing responses uses more memory)
+  saveDebugResponses?: boolean;
+
   // CV Service URL for hybrid extraction (default: http://localhost:8080)
   cvServiceUrl?: string;
 }
