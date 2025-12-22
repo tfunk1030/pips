@@ -122,24 +122,36 @@ export default function Step1GridAlignment({
       <View style={styles.controls}>
         <View style={styles.controlRow}>
           <Text style={styles.controlLabel}>Rows</Text>
-          <TouchableOpacity style={styles.controlButton} onPress={() => handleRowChange(-1)}>
-            <Text style={styles.controlButtonText}>−</Text>
-          </TouchableOpacity>
+          <Button
+            title="−"
+            variant="secondary"
+            size="small"
+            onPress={() => handleRowChange(-1)}
+          />
           <Text style={styles.controlValue}>{grid.rows}</Text>
-          <TouchableOpacity style={styles.controlButton} onPress={() => handleRowChange(1)}>
-            <Text style={styles.controlButtonText}>+</Text>
-          </TouchableOpacity>
+          <Button
+            title="+"
+            variant="secondary"
+            size="small"
+            onPress={() => handleRowChange(1)}
+          />
         </View>
 
         <View style={styles.controlRow}>
           <Text style={styles.controlLabel}>Cols</Text>
-          <TouchableOpacity style={styles.controlButton} onPress={() => handleColChange(-1)}>
-            <Text style={styles.controlButtonText}>−</Text>
-          </TouchableOpacity>
+          <Button
+            title="−"
+            variant="secondary"
+            size="small"
+            onPress={() => handleColChange(-1)}
+          />
           <Text style={styles.controlValue}>{grid.cols}</Text>
-          <TouchableOpacity style={styles.controlButton} onPress={() => handleColChange(1)}>
-            <Text style={styles.controlButtonText}>+</Text>
-          </TouchableOpacity>
+          <Button
+            title="+"
+            variant="secondary"
+            size="small"
+            onPress={() => handleColChange(1)}
+          />
         </View>
       </View>
 
@@ -519,19 +531,6 @@ const styles = StyleSheet.create({
     color: '#888',
     fontSize: 14,
     marginRight: 4,
-  },
-  controlButton: {
-    width: 36,
-    height: 36,
-    backgroundColor: '#333',
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  controlButtonText: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: '600',
   },
   controlValue: {
     color: '#fff',
