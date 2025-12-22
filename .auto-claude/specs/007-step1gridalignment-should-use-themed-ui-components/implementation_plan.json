@@ -56,7 +56,8 @@
           "subtask_id": "subtask-2-1",
           "title": "Replace pickButton with themed Button",
           "description": "Replace the 'Select Image' TouchableOpacity button in the empty state with Button component using variant='primary'.",
-          "status": "pending",
+          "status": "completed",
+          "completion_notes": "Already completed. The 'Select Image' button in the empty state uses Button component with variant='primary'. Committed as e03633d.",
           "files_to_modify": [
             "pips-solver/src/app/screens/builder/Step1GridAlignment.tsx"
           ],
@@ -73,7 +74,8 @@
           "subtask_id": "subtask-2-2",
           "title": "Replace AI extraction button with themed Button",
           "description": "Replace the 'Use AI to Extract Puzzle' TouchableOpacity with Button component. Use variant='primary' with a custom color or a new 'ai' variant. Handle loading state with Button's built-in loading prop.",
-          "status": "pending",
+          "status": "completed",
+          "completion_notes": "AI extraction button now uses Button component with variant='primary' and loading prop. Committed as b44f4ca.",
           "files_to_modify": [
             "pips-solver/src/app/screens/builder/Step1GridAlignment.tsx"
           ],
@@ -90,7 +92,8 @@
           "subtask_id": "subtask-2-3",
           "title": "Replace row/col control buttons with themed Buttons",
           "description": "Replace the +/- control buttons for rows and columns with Button components using variant='secondary' and size='small'.",
-          "status": "pending",
+          "status": "completed",
+          "completion_notes": "Row/col +/- buttons now use Button component with variant='secondary' size='small'. Removed controlButton and controlButtonText styles. Committed as 4915753.",
           "files_to_modify": [
             "pips-solver/src/app/screens/builder/Step1GridAlignment.tsx"
           ],
