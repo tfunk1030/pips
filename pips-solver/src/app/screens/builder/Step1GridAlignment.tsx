@@ -19,7 +19,7 @@ import Animated from 'react-native-reanimated';
 import Svg, { Circle, Line, Rect } from 'react-native-svg';
 import { BuilderAction, GridBounds, OverlayBuilderState } from '../../../model/overlayTypes';
 import { constrainBounds, hitTestCell } from '../../../utils/gridCalculations';
-import { triggerEdgeDragStart, triggerEdgeDragEnd, triggerCellTap } from '../../../utils/haptics';
+import { triggerEdgeDragStart, triggerEdgeDragEnd, triggerCellTap, triggerControlButton } from '../../../utils/haptics';
 import ConfidenceIndicator from '../../components/ConfidenceIndicator';
 
 interface Props {
@@ -41,10 +41,12 @@ export default function Step1GridAlignment({
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
   const handleRowChange = (delta: number) => {
+    triggerControlButton();
     dispatch({ type: 'SET_ROWS', rows: grid.rows + delta });
   };
 
   const handleColChange = (delta: number) => {
+    triggerControlButton();
     dispatch({ type: 'SET_COLS', cols: grid.cols + delta });
   };
 
