@@ -413,6 +413,69 @@ async def crop_dominoes(request: CropDominoRequest):
     }
 
 
+@app.post("/image-stats", response_model=ImageStatsResponse)
+async def image_stats(request: ImageStatsRequest):
+    """
+    Calculate comprehensive image quality statistics.
+    Returns brightness, contrast, dynamic range, color balance, and saturation metrics.
+    Useful for diagnosing image quality issues before extraction.
+    """
+    import time
+    start = time.time()
+
+    try:
+        # Decode image
+        img = decode_image(request.image)
+        original_height, original_width = img.shape[:2]
+
+        # Apply ROI if specified
+        roi_applied = False
+        if request.roi is not None:
+            roi = request.roi
+            # Validate ROI bounds
+            if (roi.x < 0 or roi.y < 0 or
+                roi.x + roi.width > original_width or
+                roi.y + roi.height > original_height):
+                return ImageStatsResponse(
+                    success=False,
+                    error="ROI bounds exceed image dimensions",
+                    image_width=original_width,
+                    image_height=original_height,
+                    extraction_ms=int((time.time() - start) * 1000)
+                )
+            img = img[roi.y:roi.y + roi.height, roi.x:roi.x + roi.width]
+            roi_applied = True
+
+        # Calculate image statistics
+        stats = _calculate_image_stats(img)
+
+        return ImageStatsResponse(
+            success=True,
+            brightness=stats["brightness"],
+            contrast=stats["contrast"],
+            dynamic_range=DynamicRange(**stats["dynamic_range"]),
+            color_balance=ColorBalance(**stats["color_balance"]),
+            saturation=SaturationStats(**stats["saturation"]),
+            image_width=original_width,
+            image_height=original_height,
+            roi_applied=roi_applied,
+            extraction_ms=int((time.time() - start) * 1000)
+        )
+
+    except ValueError as e:
+        return ImageStatsResponse(
+            success=False,
+            error=str(e),
+            extraction_ms=int((time.time() - start) * 1000)
+        )
+    except Exception as e:
+        return ImageStatsResponse(
+            success=False,
+            error=f"Unexpected error: {str(e)}",
+            extraction_ms=int((time.time() - start) * 1000)
+        )
+
+
 @app.get("/health")
 async def health():
     return {"status": "healthy", "service": "pips-cv"}
