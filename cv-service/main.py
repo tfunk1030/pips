@@ -231,24 +231,193 @@ async def extract_geometry(request: ExtractRequest):
         )
 
 
-@app.post("/crop-puzzle")
-async def crop_puzzle(request: ExtractRequest):
+class CropPuzzleRequest(BaseModel):
+    """Request model for puzzle cropping with enhanced options."""
+    image: str  # base64 encoded
+    # Boundary detection options
+    exclude_bottom_percent: float = 0.05  # Exclude bottom X% of ROI (domino tray buffer)
+    min_confidence_threshold: float = 0.3  # Minimum confidence for grid detection
+    # Advanced options
+    use_adaptive_threshold: bool = True  # Use adaptive thresholding for grid lines
+    use_canny_fallback: bool = True  # Use Canny edge detection as fallback
+    padding_percent: float = 0.05  # Padding around detected grid (0.0 - 0.15)
+
+
+class CropPuzzleResponse(BaseModel):
+    """Response model with complete grid detection info."""
+    success: bool
+    error: Optional[str] = None
+
+    # Cropped image
+    cropped_image: Optional[str] = None
+
+    # Bounds in original image coordinates (includes padding)
+    bounds: Optional[dict] = None
+
+    # Actual grid bounds (without padding) - for overlay alignment
+    grid_bounds: Optional[dict] = None
+
+    # Grid detection confidence and warnings
+    grid_confidence: Optional[float] = None
+    confidence_level: str = "unknown"  # "high", "medium", "low", "unknown"
+    warnings: List[str] = []
+
+    # Detected grid dimensions (if found via line detection)
+    detected_rows: Optional[int] = None
+    detected_cols: Optional[int] = None
+
+    # Detection method used
+    detection_method: str = "unknown"
+
+    # Timing
+    extraction_ms: int = 0
+
+
+def _get_confidence_level(confidence: Optional[float]) -> str:
+    """Convert numeric confidence to categorical level."""
+    if confidence is None:
+        return "unknown"
+    elif confidence >= 0.7:
+        return "high"
+    elif confidence >= 0.4:
+        return "medium"
+    else:
+        return "low"
+
+
+def _generate_warnings(
+    confidence: Optional[float],
+    detected_rows: Optional[int],
+    detected_cols: Optional[int],
+    grid_bounds: Optional[dict],
+    bounds: Optional[dict]
+) -> List[str]:
+    """Generate user-facing warnings based on detection quality."""
+    warnings = []
+
+    # Confidence-based warnings
+    if confidence is None:
+        warnings.append("Grid line detection failed - using fallback saturation-based detection")
+    elif confidence < 0.3:
+        warnings.append(f"Low grid detection confidence ({confidence:.0%}) - boundaries may be inaccurate")
+    elif confidence < 0.5:
+        warnings.append(f"Moderate grid detection confidence ({confidence:.0%}) - verify boundaries")
+
+    # Dimension detection warnings
+    if detected_rows is not None and detected_cols is not None:
+        # Typical Pips puzzles are 4x4 to 8x8
+        if detected_rows < 3 or detected_cols < 3:
+            warnings.append(f"Unusually small grid detected ({detected_rows}x{detected_cols}) - may be partial detection")
+        elif detected_rows > 10 or detected_cols > 10:
+            warnings.append(f"Unusually large grid detected ({detected_rows}x{detected_cols}) - may include extra elements")
+        # Check for aspect ratio issues (most Pips puzzles are square or near-square)
+        ratio = detected_rows / detected_cols if detected_cols > 0 else 0
+        if ratio < 0.5 or ratio > 2.0:
+            warnings.append(f"Unusual grid aspect ratio ({detected_rows}:{detected_cols}) - verify detection")
+
+    # Bounds validation warnings
+    if grid_bounds and bounds:
+        grid_area = grid_bounds.get("width", 0) * grid_bounds.get("height", 0)
+        orig_area = grid_bounds.get("original_width", 1) * grid_bounds.get("original_height", 1)
+        if grid_area > 0 and orig_area > 0:
+            coverage = grid_area / orig_area
+            if coverage < 0.1:
+                warnings.append("Detected grid is very small relative to image - may be incorrect detection")
+            elif coverage > 0.8:
+                warnings.append("Detected grid covers most of image - may include non-puzzle areas")
+
+    return warnings
+
+
+@app.post("/crop-puzzle", response_model=CropPuzzleResponse)
+async def crop_puzzle(request: CropPuzzleRequest):
     """
     Crop image to puzzle region only (excludes dominoes, UI).
-    Returns cropped image for AI analysis.
+
+    Uses multiple detection techniques for best accuracy:
+    1. Adaptive thresholding for grid line detection (primary)
+    2. Canny edge detection (fallback for low contrast)
+    3. Saturation-based detection (baseline)
+
+    Returns cropped image for AI analysis along with detection confidence
+    and grid dimension estimates to help guide AI extraction.
     """
-    from hybrid_extraction import crop_puzzle_region
+    import time
+    from hybrid_extraction import crop_puzzle_region, CropResult
 
-    result = crop_puzzle_region(request.image)
+    start = time.time()
 
-    return {
-        "success": result.success,
-        "error": result.error,
-        "cropped_image": result.cropped_image,
-        "bounds": result.bounds,
-        "grid_bounds": result.grid_bounds,  # Actual grid bounds for overlay alignment
-        "extraction_ms": result.extraction_ms
-    }
+    # Validate padding_percent
+    padding_pct = max(0.0, min(0.15, request.padding_percent))
+
+    try:
+        # Call the hybrid extraction with the exclude_bottom_percent option
+        result = crop_puzzle_region(
+            request.image,
+            exclude_bottom_percent=request.exclude_bottom_percent
+        )
+
+        # Calculate elapsed time
+        elapsed_ms = int((time.time() - start) * 1000)
+
+        if not result.success:
+            return CropPuzzleResponse(
+                success=False,
+                error=result.error or "Unknown error during crop",
+                extraction_ms=elapsed_ms
+            )
+
+        # Determine detection method based on confidence
+        if result.grid_confidence is not None and result.grid_confidence > 0.3:
+            detection_method = "adaptive_threshold" if result.grid_confidence >= 0.5 else "canny_edge"
+        else:
+            detection_method = "saturation_fallback"
+
+        # Get confidence level
+        confidence_level = _get_confidence_level(result.grid_confidence)
+
+        # Generate warnings
+        warnings = _generate_warnings(
+            result.grid_confidence,
+            result.detected_rows,
+            result.detected_cols,
+            result.grid_bounds,
+            result.bounds
+        )
+
+        # Add warning if confidence below threshold
+        if result.grid_confidence is not None and result.grid_confidence < request.min_confidence_threshold:
+            warnings.insert(0, f"Detection confidence ({result.grid_confidence:.0%}) below threshold ({request.min_confidence_threshold:.0%})")
+
+        return CropPuzzleResponse(
+            success=True,
+            cropped_image=result.cropped_image,
+            bounds=result.bounds,
+            grid_bounds=result.grid_bounds,
+            grid_confidence=result.grid_confidence,
+            confidence_level=confidence_level,
+            warnings=warnings,
+            detected_rows=result.detected_rows,
+            detected_cols=result.detected_cols,
+            detection_method=detection_method,
+            extraction_ms=elapsed_ms
+        )
+
+    except ValueError as e:
+        # Handle specific detection errors
+        return CropPuzzleResponse(
+            success=False,
+            error=str(e),
+            warnings=["Grid detection failed - ensure image contains a visible puzzle grid"],
+            extraction_ms=int((time.time() - start) * 1000)
+        )
+    except Exception as e:
+        # Handle unexpected errors
+        return CropPuzzleResponse(
+            success=False,
+            error=f"Unexpected error: {str(e)}",
+            extraction_ms=int((time.time() - start) * 1000)
+        )
 
 
 class CropDominoRequest(BaseModel):
