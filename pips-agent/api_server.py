@@ -16,6 +16,9 @@ from utils.hint_engine import (
     generate_hint_level_3,
     generate_hint_level_4,
     HintResult,
+    validate_puzzle_state,
+    get_validation_hint,
+    PuzzleStateValidation,
 )
 
 
@@ -149,12 +152,73 @@ async def generate_hint(request: HintRequest) -> HintResponse:
     - Level 2: Focused direction (identify specific region/constraint)
     - Level 3: Specific cell placement (one cell with correct value)
     - Level 4: Partial solution (multiple cell placements)
+
+    Edge Cases Handled:
+    - Solved puzzle: Returns congratulations message
+    - Invalid state: Returns error guidance for Level 3/4, continues for Level 1/2
     """
     try:
         level = request.level
         puzzle_spec = request.puzzle_spec
+        current_state = request.current_state
 
-        # Generate hint using the hint engine
+        # Convert puzzle_spec to dict for validation
+        puzzle_dict = puzzle_spec.model_dump()
+
+        # Validate puzzle state for edge cases
+        validation = validate_puzzle_state(puzzle_dict, current_state)
+
+        # Handle solved puzzle - return special message
+        if validation.is_solved:
+            validation_hint = get_validation_hint(validation)
+            if validation_hint:
+                return HintResponse(
+                    success=True,
+                    hint=HintContent(
+                        level=level,
+                        content=validation_hint.content,
+                        type="info",
+                        region=validation_hint.region,
+                    ),
+                )
+
+        # Handle invalid puzzle state
+        if not validation.is_valid:
+            # For Level 1 and 2, we can still provide strategic/directional hints
+            # but include a note about the errors
+            if level <= 2:
+                validation_hint = get_validation_hint(validation)
+                if validation_hint:
+                    # Append error guidance to the regular hint
+                    normal_hint = _generate_hint_for_level(level, puzzle_spec)
+                    combined_content = (
+                        f"{validation_hint.content}\n\n"
+                        f"However, here's a general hint: {normal_hint.content}"
+                    )
+                    return HintResponse(
+                        success=True,
+                        hint=HintContent(
+                            level=level,
+                            content=combined_content,
+                            type="error",
+                            region=validation_hint.region or normal_hint.region,
+                        ),
+                    )
+            else:
+                # For Level 3 and 4, return error guidance only
+                validation_hint = get_validation_hint(validation)
+                if validation_hint:
+                    return HintResponse(
+                        success=True,
+                        hint=HintContent(
+                            level=level,
+                            content=validation_hint.content,
+                            type="error",
+                            region=validation_hint.region,
+                        ),
+                    )
+
+        # Generate normal hint using the hint engine
         hint_content = _generate_hint_for_level(level, puzzle_spec)
 
         return HintResponse(

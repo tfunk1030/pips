@@ -23,6 +23,233 @@ class HintResult:
     cells: Optional[List[Dict[str, Any]]] = None
 
 
+@dataclass
+class PuzzleStateValidation:
+    """Result of puzzle state validation."""
+    is_valid: bool
+    is_solved: bool
+    error_message: Optional[str] = None
+    violations: Optional[List[Dict[str, Any]]] = None
+
+
+# =============================================================================
+# Puzzle State Validation Functions
+# =============================================================================
+
+def validate_puzzle_state(
+    puzzle_spec: Any,
+    current_state: Optional[Dict[str, Any]] = None,
+) -> PuzzleStateValidation:
+    """
+    Validate the current puzzle state for edge cases.
+
+    Checks for:
+    1. Solved puzzle (all cells filled and constraints satisfied)
+    2. Invalid state (constraint violations)
+
+    Args:
+        puzzle_spec: The puzzle specification
+        current_state: Optional current puzzle state with user placements
+
+    Returns:
+        PuzzleStateValidation with is_valid, is_solved, and any error info
+    """
+    # Extract puzzle components
+    if isinstance(puzzle_spec, dict):
+        region_constraints = puzzle_spec.get("region_constraints", {})
+        board = puzzle_spec.get("board", {})
+        pips = puzzle_spec.get("pips", {})
+    else:
+        region_constraints = puzzle_spec.region_constraints
+        board = puzzle_spec.board
+        pips = puzzle_spec.pips
+
+        # Convert to dict-like if needed
+        if not isinstance(region_constraints, dict):
+            if hasattr(region_constraints, 'items'):
+                region_constraints = dict(region_constraints.items())
+            elif hasattr(region_constraints, '__dict__'):
+                region_constraints = region_constraints.__dict__
+
+    board_dict = board if isinstance(board, dict) else {
+        "regions": getattr(board, "regions", []),
+        "shape": getattr(board, "shape", [])
+    }
+    pips_dict = pips if isinstance(pips, dict) else {
+        "pip_min": getattr(pips, "pip_min", 0),
+        "pip_max": getattr(pips, "pip_max", 6)
+    }
+
+    # If no current state provided, puzzle is not solved but valid to proceed
+    if not current_state or "placements" not in current_state:
+        return PuzzleStateValidation(is_valid=True, is_solved=False)
+
+    placements = current_state.get("placements", {})
+
+    # Get all cells and their regions
+    shape = board_dict.get("shape", [])
+    regions = board_dict.get("regions", [])
+    pip_min = pips_dict.get("pip_min", 0)
+    pip_max = pips_dict.get("pip_max", 6)
+
+    # Collect cell values by region
+    region_values: Dict[str, List[int]] = {}
+    total_cells = 0
+    filled_cells = 0
+    violations: List[Dict[str, Any]] = []
+
+    for row_idx, (shape_row, region_row) in enumerate(zip(shape, regions)):
+        for col_idx, (cell_char, region_char) in enumerate(zip(shape_row, region_row)):
+            if cell_char == '.':
+                total_cells += 1
+                cell_key = f"{row_idx},{col_idx}"
+
+                if cell_key in placements:
+                    filled_cells += 1
+                    value = placements[cell_key]
+
+                    # Check value is within valid pip range
+                    if not isinstance(value, int) or value < pip_min or value > pip_max:
+                        violations.append({
+                            "type": "invalid_value",
+                            "row": row_idx,
+                            "col": col_idx,
+                            "value": value,
+                            "message": f"Value {value} at ({row_idx}, {col_idx}) is outside valid range [{pip_min}-{pip_max}]"
+                        })
+                    else:
+                        # Add to region values
+                        if region_char not in region_values:
+                            region_values[region_char] = []
+                        region_values[region_char].append(value)
+
+    # Check constraint violations for filled regions
+    for region_name, constraint in region_constraints.items():
+        if isinstance(constraint, dict):
+            constraint_type = constraint.get("type", "")
+            op = constraint.get("op", "==")
+            target_value = constraint.get("value", 0)
+        else:
+            constraint_type = getattr(constraint, "type", "")
+            op = getattr(constraint, "op", "==")
+            target_value = getattr(constraint, "value", 0)
+
+        if region_name not in region_values:
+            continue
+
+        values = region_values[region_name]
+
+        if constraint_type == "all_equal" and len(values) > 1:
+            # All values must be equal
+            if len(set(values)) > 1:
+                violations.append({
+                    "type": "constraint_violation",
+                    "region": region_name,
+                    "constraint": "all_equal",
+                    "values": values,
+                    "message": f"Region '{region_name}' has different values but requires all equal: {values}"
+                })
+
+        elif constraint_type == "sum" and values:
+            # Check if sum constraint could be violated
+            current_sum = sum(values)
+            # Count expected cells in region
+            expected_cells = sum(
+                1 for r_row in regions for r_char in r_row if r_char == region_name
+            )
+
+            # If region is completely filled, check the constraint
+            if len(values) == expected_cells:
+                satisfied = _check_sum_constraint(current_sum, op, target_value)
+                if not satisfied:
+                    violations.append({
+                        "type": "constraint_violation",
+                        "region": region_name,
+                        "constraint": "sum",
+                        "op": op,
+                        "target": target_value,
+                        "actual": current_sum,
+                        "message": f"Region '{region_name}' sum is {current_sum}, but constraint requires {op} {target_value}"
+                    })
+
+    # Determine result
+    if violations:
+        return PuzzleStateValidation(
+            is_valid=False,
+            is_solved=False,
+            error_message="Puzzle state contains constraint violations",
+            violations=violations
+        )
+
+    # Check if puzzle is solved (all cells filled with no violations)
+    is_solved = (filled_cells == total_cells and total_cells > 0)
+
+    return PuzzleStateValidation(
+        is_valid=True,
+        is_solved=is_solved
+    )
+
+
+def get_validation_hint(validation: PuzzleStateValidation) -> Optional[HintResult]:
+    """
+    Generate a hint based on puzzle state validation results.
+
+    For invalid states, provides guidance on fixing the errors.
+    For solved puzzles, indicates the puzzle is complete.
+
+    Args:
+        validation: The validation result from validate_puzzle_state
+
+    Returns:
+        HintResult if there's a special message, None otherwise
+    """
+    if validation.is_solved:
+        return HintResult(
+            content="🎉 Congratulations! This puzzle is already solved. All constraints are satisfied.",
+            hint_type="info"
+        )
+
+    if not validation.is_valid and validation.violations:
+        # Generate guidance based on the first violation
+        violation = validation.violations[0]
+        violation_type = violation.get("type", "")
+
+        if violation_type == "invalid_value":
+            return HintResult(
+                content=f"⚠️ Invalid value detected: {violation.get('message', 'Check your placements.')} "
+                        f"Remove or change the value at row {violation.get('row', '?')}, column {violation.get('col', '?')}.",
+                hint_type="error"
+            )
+
+        elif violation_type == "constraint_violation":
+            region = violation.get("region", "?")
+            constraint = violation.get("constraint", "")
+
+            if constraint == "all_equal":
+                return HintResult(
+                    content=f"⚠️ Constraint violation in region '{region}': {violation.get('message', '')} "
+                            f"This region requires all cells to have the same value.",
+                    hint_type="error",
+                    region=region
+                )
+            elif constraint == "sum":
+                return HintResult(
+                    content=f"⚠️ Constraint violation in region '{region}': The current sum ({violation.get('actual', '?')}) "
+                            f"doesn't satisfy the constraint ({violation.get('op', '?')} {violation.get('target', '?')}). "
+                            f"Try adjusting the values in this region.",
+                    hint_type="error",
+                    region=region
+                )
+
+        # Generic error guidance
+        return HintResult(
+            content=f"⚠️ {validation.error_message}. Review your placements and check for errors.",
+            hint_type="error"
+        )
+
+    return None
+
+
 # =============================================================================
 # Strategic Hint Templates for Level 1
 # =============================================================================
