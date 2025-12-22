@@ -5,7 +5,6 @@
 
 import React, { useCallback, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Image,
   LayoutChangeEvent,
   ScrollView,
@@ -155,20 +154,13 @@ export default function Step1GridAlignment({
       {/* AI Extraction Button */}
       {onAIExtract && (
         <View style={styles.aiSection}>
-          <TouchableOpacity
-            style={[styles.aiButton, aiProgress && styles.aiButtonDisabled]}
+          <Button
+            title="Use AI to Extract Puzzle"
+            variant="primary"
             onPress={onAIExtract}
-            disabled={!!aiProgress}
-          >
-            {aiProgress ? (
-              <View style={styles.aiButtonLoading}>
-                <ActivityIndicator size="small" color="#fff" />
-                <Text style={styles.aiButtonText}>{aiProgress}</Text>
-              </View>
-            ) : (
-              <Text style={styles.aiButtonText}>Use AI to Extract Puzzle</Text>
-            )}
-          </TouchableOpacity>
+            loading={!!aiProgress}
+            style={styles.aiButton}
+          />
           <Text style={styles.aiHint}>AI will detect grid, regions, constraints, and dominoes</Text>
 
           {/* Per-stage confidence indicators during extraction */}
@@ -569,24 +561,7 @@ const styles = StyleSheet.create({
   },
   aiButton: {
     backgroundColor: '#9C27B0',
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 8,
     minWidth: 200,
-    alignItems: 'center',
-  },
-  aiButtonDisabled: {
-    backgroundColor: '#666',
-  },
-  aiButtonLoading: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  aiButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
   },
   aiHint: {
     color: '#888',
