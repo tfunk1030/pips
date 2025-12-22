@@ -21,12 +21,19 @@ import { BuilderAction, GridBounds, OverlayBuilderState } from '../../../model/o
 import { constrainBounds, hitTestCell } from '../../../utils/gridCalculations';
 import ConfidenceIndicator from '../../components/ConfidenceIndicator';
 
+interface StageConfidence {
+  board?: number;
+  dominoes?: number;
+  currentStage?: string;
+}
+
 interface Props {
   state: OverlayBuilderState;
   dispatch: React.Dispatch<BuilderAction>;
   onPickNewImage: () => void;
   onAIExtract?: () => void;
   aiProgress?: string | null;
+  stageConfidence?: StageConfidence;
 }
 
 export default function Step1GridAlignment({
@@ -35,6 +42,7 @@ export default function Step1GridAlignment({
   onPickNewImage,
   onAIExtract,
   aiProgress,
+  stageConfidence,
 }: Props) {
   const { image, grid } = state;
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
@@ -158,6 +166,25 @@ export default function Step1GridAlignment({
             )}
           </TouchableOpacity>
           <Text style={styles.aiHint}>AI will detect grid, regions, constraints, and dominoes</Text>
+
+          {/* Per-stage confidence indicators during extraction */}
+          {aiProgress && stageConfidence && (stageConfidence.board !== undefined || stageConfidence.dominoes !== undefined) && (
+            <View style={styles.stageConfidenceContainer}>
+              <Text style={styles.stageConfidenceTitle}>Extraction Progress</Text>
+              <View style={styles.stageConfidenceIndicators}>
+                <ConfidenceIndicator
+                  label="Board"
+                  confidence={stageConfidence.board}
+                  compact
+                />
+                <ConfidenceIndicator
+                  label="Dominoes"
+                  confidence={stageConfidence.dominoes}
+                  compact
+                />
+              </View>
+            </View>
+          )}
         </View>
       )}
 
@@ -585,6 +612,28 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 8,
     textTransform: 'uppercase',
+  },
+  stageConfidenceContainer: {
+    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  stageConfidenceTitle: {
+    color: '#888',
+    fontSize: 11,
+    fontWeight: '600',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  stageConfidenceIndicators: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    gap: 16,
   },
   edgeHandle: {
     position: 'absolute',

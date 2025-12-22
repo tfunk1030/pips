@@ -58,6 +58,13 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
   const [aiProgress, setAIProgress] = useState<string | null>(null);
   const [pendingAIResult, setPendingAIResult] = useState<AIExtractionResult | null>(null);
 
+  // Per-stage confidence tracking during extraction
+  const [stageConfidence, setStageConfidence] = useState<{
+    board?: number;
+    dominoes?: number;
+    currentStage?: string;
+  }>({});
+
   // Load draft if provided
   useEffect(() => {
     const loadExistingDraft = async () => {
@@ -256,6 +263,8 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
       ensemble: 'Maximum Accuracy',
     };
     setAIProgress(`Starting ${strategyNames[strategy]} extraction...`);
+    // Reset stage confidence for new extraction
+    setStageConfidence({});
 
     const hasCVService = !!settings.cvServiceUrl?.trim();
     const result = await extractPuzzleMultiModel(state.image.base64, {
@@ -271,6 +280,22 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
       onProgress: (progress: EnsembleProgress) => {
         const modelInfo = progress.modelsUsed?.length ? ` (${progress.modelsUsed.join(', ')})` : '';
         setAIProgress(`${progress.message}${modelInfo}`);
+
+        // Update per-stage confidence as extraction progresses
+        setStageConfidence(prev => {
+          const updated = { ...prev, currentStage: progress.step };
+
+          // Track confidence when stages complete
+          if (progress.confidence !== undefined) {
+            if (progress.step === 'board_verification' || progress.step === 'board_secondary') {
+              updated.board = progress.confidence;
+            } else if (progress.step === 'dominoes_secondary' || progress.step === 'cross_validation') {
+              updated.dominoes = progress.confidence;
+            }
+          }
+
+          return updated;
+        });
       },
     });
 
@@ -305,10 +330,12 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
       }
 
       setAIProgress(null);
+      setStageConfidence({});
       setPendingAIResult(result.result);
     } else {
       dispatch({ type: 'AI_ERROR', error: result.error || 'Unknown error' });
       setAIProgress(null);
+      setStageConfidence({});
 
       let errorMsg = result.error || 'Failed to extract puzzle data';
       let helpText = '';
@@ -464,6 +491,7 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
             onPickNewImage={pickImage}
             onAIExtract={handleAIExtract}
             aiProgress={aiProgress}
+            stageConfidence={stageConfidence}
           />
         );
       case 2:
