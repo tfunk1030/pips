@@ -10,7 +10,9 @@ import argparse
 import cv2
 import numpy as np
 
-from preprocess import preprocess_domino_tray, preprocess_tile
+from pathlib import Path
+
+from preprocess import preprocess_domino_tray, preprocess_domino_tray_debug, preprocess_tile
 
 
 def count_pips(half: np.ndarray, threshold: int = 150) -> int:
@@ -95,6 +97,11 @@ def main():
         action="store_true",
         help="Apply preprocessing to each individual cropped domino tile"
     )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Save intermediate preprocessing images to debug_preprocess/ directory"
+    )
 
     args = parser.parse_args()
 
@@ -106,12 +113,31 @@ def main():
 
     # Apply preprocessing unless disabled
     if not args.no_preprocess:
-        img, metrics = preprocess_domino_tray(img)
+        # Get base name from image path for debug output
+        base_name = Path(args.image).stem
+
+        if args.debug:
+            # Use debug preprocessing to save intermediate images
+            img, metrics, debug_files = preprocess_domino_tray_debug(
+                img,
+                output_dir="debug_preprocess",
+                base_name=base_name
+            )
+            print(f"Debug mode: Saved {len(debug_files)} files to debug_preprocess/")
+            for file_type, file_path in sorted(debug_files.items()):
+                print(f"  - {file_type}: {file_path}")
+        else:
+            img, metrics = preprocess_domino_tray(img)
+
         print(f"Preprocessing applied: {', '.join(metrics['steps_applied'])}")
         print(f"  Brightness: {metrics['original_brightness']:.1f} -> {metrics['final_brightness']:.1f}")
         print(f"  Contrast: {metrics['original_contrast']:.1f} -> {metrics['final_contrast']:.1f}")
     else:
         print("Preprocessing disabled")
+
+        # If debug mode and no-preprocess, warn user
+        if args.debug:
+            print("Note: --debug has no effect when --no-preprocess is used")
 
     # Report tile preprocessing status
     if args.tile_preprocess:

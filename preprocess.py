@@ -5,6 +5,9 @@ This module provides preprocessing functions to improve domino pip detection
 accuracy, especially in low-light or poorly balanced photos.
 """
 
+import os
+from pathlib import Path
+
 import cv2
 import numpy as np
 
@@ -428,3 +431,235 @@ def preprocess_tile(
         )
 
     return result
+
+
+def create_histogram_image(image: np.ndarray, title: str = "") -> np.ndarray:
+    """
+    Create an image showing the color histogram of an input image.
+
+    Args:
+        image: Input BGR image (numpy array).
+        title: Title to display on the histogram image.
+
+    Returns:
+        BGR image showing the histogram visualization.
+    """
+    import matplotlib
+    matplotlib.use('Agg')  # Use non-interactive backend
+    import matplotlib.pyplot as plt
+
+    # Create figure
+    fig, ax = plt.subplots(figsize=(6, 4), dpi=100)
+
+    # Calculate histograms for each channel
+    colors = ('b', 'g', 'r')
+    labels = ('Blue', 'Green', 'Red')
+
+    for i, (color, label) in enumerate(zip(colors, labels)):
+        hist = cv2.calcHist([image], [i], None, [256], [0, 256])
+        ax.plot(hist, color=color, label=label, linewidth=1)
+
+    ax.set_xlim([0, 256])
+    ax.set_xlabel('Pixel Value')
+    ax.set_ylabel('Frequency')
+    ax.set_title(title if title else 'Color Histogram')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+
+    # Convert matplotlib figure to numpy array
+    fig.tight_layout()
+    fig.canvas.draw()
+
+    # Get the image from the figure using buffer_rgba (modern matplotlib API)
+    buf = fig.canvas.buffer_rgba()
+    img_array = np.asarray(buf)
+
+    # Remove alpha channel (RGBA -> RGB) and convert to BGR for OpenCV
+    img_array = cv2.cvtColor(img_array, cv2.COLOR_RGBA2BGR)
+
+    plt.close(fig)
+
+    return img_array
+
+
+def save_debug_images(
+    original: np.ndarray,
+    after_white_balance: np.ndarray,
+    after_brightness: np.ndarray,
+    after_clahe: np.ndarray,
+    output_dir: str = "debug_preprocess",
+    base_name: str = "image"
+) -> dict:
+    """
+    Save intermediate preprocessing images and histograms for debugging.
+
+    Args:
+        original: Original BGR image before preprocessing.
+        after_white_balance: Image after white balance correction.
+        after_brightness: Image after brightness normalization.
+        after_clahe: Image after CLAHE contrast enhancement.
+        output_dir: Directory to save debug images. Default is "debug_preprocess".
+        base_name: Base name for output files. Default is "image".
+
+    Returns:
+        Dictionary with paths to all saved files.
+
+    Example:
+        >>> paths = save_debug_images(orig, wb, bright, clahe, base_name="IMG_2050")
+        >>> print(f"Saved {len(paths)} debug images")
+    """
+    # Create output directory
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    saved_files = {}
+
+    # Define images and their labels
+    stages = [
+        ("01_original", original, "Original"),
+        ("02_after_white_balance", after_white_balance, "After White Balance"),
+        ("03_after_brightness", after_brightness, "After Brightness Normalization"),
+        ("04_after_clahe", after_clahe, "After CLAHE"),
+    ]
+
+    # Save each intermediate image
+    for stage_name, img, label in stages:
+        # Save the image
+        img_filename = f"{base_name}_{stage_name}.png"
+        img_path = output_path / img_filename
+        cv2.imwrite(str(img_path), img)
+        saved_files[f"{stage_name}_image"] = str(img_path)
+
+        # Save histogram for this stage
+        hist_img = create_histogram_image(img, title=f"{label} Histogram")
+        hist_filename = f"{base_name}_{stage_name}_histogram.png"
+        hist_path = output_path / hist_filename
+        cv2.imwrite(str(hist_path), hist_img)
+        saved_files[f"{stage_name}_histogram"] = str(hist_path)
+
+    # Create a combined histogram comparison image
+    hist_images = []
+    for stage_name, img, label in stages:
+        hist_img = create_histogram_image(img, title=label)
+        hist_images.append(hist_img)
+
+    # Arrange histograms in a 2x2 grid
+    top_row = np.hstack([hist_images[0], hist_images[1]])
+    bottom_row = np.hstack([hist_images[2], hist_images[3]])
+    combined_hist = np.vstack([top_row, bottom_row])
+
+    combined_filename = f"{base_name}_histogram_comparison.png"
+    combined_path = output_path / combined_filename
+    cv2.imwrite(str(combined_path), combined_hist)
+    saved_files["histogram_comparison"] = str(combined_path)
+
+    return saved_files
+
+
+def preprocess_domino_tray_debug(
+    image: np.ndarray,
+    output_dir: str = "debug_preprocess",
+    base_name: str = "image",
+    white_balance_method: str = "gray_world",
+    target_brightness: float = 128.0,
+    clahe_clip_limit: float = 2.0,
+    clahe_tile_grid_size: tuple = (8, 8)
+) -> tuple:
+    """
+    Apply preprocessing pipeline with debug output.
+
+    Applies the full preprocessing pipeline and saves intermediate images
+    at each step for debugging and visualization.
+
+    Args:
+        image: Input BGR image (numpy array).
+        output_dir: Directory to save debug images. Default is "debug_preprocess".
+        base_name: Base name for output files. Default is "image".
+        white_balance_method: Method for white balance ("gray_world" or
+            "white_patch"). Default is "gray_world".
+        target_brightness: Target mean brightness for normalization (0-255).
+            Default is 128.0.
+        clahe_clip_limit: CLAHE clip limit for contrast limiting.
+            Default is 2.0.
+        clahe_tile_grid_size: CLAHE tile grid size for local histogram
+            equalization. Default is (8, 8).
+
+    Returns:
+        A tuple containing:
+            - result: Final preprocessed BGR image
+            - metrics: Dictionary with preprocessing metrics
+            - debug_files: Dictionary with paths to all saved debug files
+
+    Raises:
+        ValueError: If image is None or empty.
+
+    Example:
+        >>> import cv2
+        >>> image = cv2.imread("domino_tray.jpg")
+        >>> result, metrics, debug_files = preprocess_domino_tray_debug(
+        ...     image, base_name="domino_tray"
+        ... )
+        >>> print(f"Saved debug files: {list(debug_files.keys())}")
+    """
+    if image is None or image.size == 0:
+        raise ValueError("Input image is None or empty")
+
+    # Store original
+    original = image.copy()
+
+    # Calculate original metrics
+    original_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    original_brightness = float(np.mean(original_gray))
+    original_contrast = float(np.std(original_gray))
+
+    steps_applied = []
+
+    # Step 1: White balance correction
+    after_white_balance = apply_white_balance(original, method=white_balance_method)
+    steps_applied.append(f"white_balance ({white_balance_method})")
+
+    # Step 2: Brightness normalization
+    after_brightness = normalize_brightness(
+        after_white_balance,
+        target_brightness=target_brightness
+    )
+    steps_applied.append(f"brightness_normalize (target={target_brightness})")
+
+    # Step 3: CLAHE contrast enhancement
+    after_clahe = apply_clahe(
+        after_brightness,
+        clip_limit=clahe_clip_limit,
+        tile_grid_size=clahe_tile_grid_size
+    )
+    steps_applied.append(f"clahe (clip={clahe_clip_limit})")
+
+    # Final result
+    result = after_clahe
+
+    # Calculate final metrics
+    final_gray = cv2.cvtColor(result, cv2.COLOR_BGR2GRAY)
+    final_brightness = float(np.mean(final_gray))
+    final_contrast = float(np.std(final_gray))
+
+    # Build metrics dictionary
+    metrics = {
+        "steps_applied": steps_applied,
+        "original_brightness": original_brightness,
+        "final_brightness": final_brightness,
+        "brightness_change": final_brightness - original_brightness,
+        "original_contrast": original_contrast,
+        "final_contrast": final_contrast,
+        "contrast_change": final_contrast - original_contrast,
+    }
+
+    # Save debug images
+    debug_files = save_debug_images(
+        original=original,
+        after_white_balance=after_white_balance,
+        after_brightness=after_brightness,
+        after_clahe=after_clahe,
+        output_dir=output_dir,
+        base_name=base_name
+    )
+
+    return result, metrics, debug_files
