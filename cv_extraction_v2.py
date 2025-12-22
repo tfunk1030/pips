@@ -18,9 +18,13 @@ Key features:
 
 import cv2
 import numpy as np
+import logging
 from dataclasses import dataclass, field
 from typing import List, Tuple, Optional, Dict, Union
 from pathlib import Path
+
+# Configure module logger
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -590,7 +594,10 @@ def analyze_convex_hull(
         >>> analysis = analyze_convex_hull(cnt)
         >>> print(f"Solidity: {analysis.solidity:.2f}, Defects: {analysis.defect_count}")
     """
+    logger.debug(f"Analyzing convex hull for contour with {len(contour) if contour is not None else 0} points")
+
     if contour is None or len(contour) < 3:
+        logger.debug("Contour too small for convex hull analysis (< 3 points)")
         return ConvexHullAnalysis(
             contour=contour if contour is not None else np.array([]),
             hull=np.array([]),
@@ -655,6 +662,11 @@ def analyze_convex_hull(
         0.2 * min(1.0, defect_count / 3.0) +
         0.2 * min(1.0, max_defect_depth / 20.0)
     ))
+
+    logger.debug(
+        f"Convex hull analysis complete: is_convex={is_convex}, solidity={solidity:.3f}, "
+        f"defects={defect_count}, concavity={concavity_score:.3f}, complexity={complexity_score:.3f}"
+    )
 
     return ConvexHullAnalysis(
         contour=contour,
@@ -1118,7 +1130,10 @@ def separate_merged_regions(
         >>> result = separate_merged_regions(img, binary_mask=mask)
         >>> print(f"Found {result.num_regions} regions")
     """
+    logger.info(f"Starting watershed separation (method={method}, distance_threshold={distance_threshold})")
+
     if image is None:
+        logger.error("Watershed separation failed: image is None")
         return WatershedResult(confidence=0.0)
 
     # Ensure we have a 3-channel image for watershed
@@ -1128,6 +1143,7 @@ def separate_merged_regions(
         image_bgr = image.copy()
 
     h, w = image_bgr.shape[:2]
+    logger.debug(f"Processing image: {w}x{h}")
 
     # Generate binary mask if not provided
     if binary_mask is None:
@@ -1144,6 +1160,7 @@ def separate_merged_regions(
             )
 
     # Generate markers based on method
+    logger.debug(f"Generating watershed markers using '{method}' method")
     if method == "peaks":
         markers, num_markers = generate_watershed_markers_peaks(
             binary_mask,
@@ -1156,9 +1173,11 @@ def separate_merged_regions(
             distance_threshold=distance_threshold,
             min_marker_area=min_marker_area
         )
+    logger.debug(f"Generated {num_markers} watershed markers")
 
     # If only one or no markers found, return original as single region
     if num_markers <= 1:
+        logger.info(f"Watershed: No separation needed (markers={num_markers}), returning single region")
         # Find contour from mask
         contours, _ = cv2.findContours(
             binary_mask,
@@ -1277,6 +1296,11 @@ def separate_merged_regions(
             cv2.circle(segments_vis, (int(seg.centroid[0]), int(seg.centroid[1])), 3, color, -1)
         cv2.imwrite(str(out_dir / "watershed_segments.png"), segments_vis)
 
+    logger.info(
+        f"Watershed separation complete: {len(segments)} segments extracted, "
+        f"confidence={confidence:.3f}, method={method}"
+    )
+
     return WatershedResult(
         segments=segments,
         markers=markers,
@@ -1317,7 +1341,10 @@ def separate_merged_regions_batch(
     Returns:
         List of WatershedResult objects (one per input contour)
     """
+    logger.info(f"Starting batch watershed separation on {len(contours)} contours")
     results = []
+    watershed_count = 0
+    skipped_count = 0
 
     for i, contour in enumerate(contours):
         # Analyze contour to determine if it might be merged
@@ -1332,6 +1359,11 @@ def separate_merged_regions_batch(
         )
 
         if should_watershed:
+            logger.debug(
+                f"Contour {i+1}: Applying watershed (solidity={analysis.solidity:.3f}, "
+                f"defects={analysis.defect_count}, concavity={analysis.concavity_score:.3f})"
+            )
+            watershed_count += 1
             # Create debug subdirectory for this contour
             contour_debug_dir = None
             if debug_dir:
@@ -1347,6 +1379,10 @@ def separate_merged_regions_batch(
                 debug_dir=contour_debug_dir
             )
         else:
+            logger.debug(
+                f"Contour {i+1}: Skipping watershed (solidity={analysis.solidity:.3f}, appears convex)"
+            )
+            skipped_count += 1
             # Return contour as single segment
             area = cv2.contourArea(contour)
             moments = cv2.moments(contour)
@@ -1374,6 +1410,12 @@ def separate_merged_regions_batch(
             )
 
         results.append(result)
+
+    total_segments = sum(r.num_regions for r in results)
+    logger.info(
+        f"Batch watershed complete: {len(contours)} contours -> {total_segments} segments "
+        f"(watershed applied: {watershed_count}, skipped: {skipped_count})"
+    )
 
     return results
 
@@ -1486,15 +1528,18 @@ def approximate_contours_batch(
     Returns:
         List of ApproximatedContour objects
     """
+    logger.debug(f"Approximating {len(contours)} contours (min_area={min_area}, max_area={max_area})")
     results = []
 
     # Pre-filter by area
     filtered_contours = filter_contours_by_area(contours, min_area, max_area)
+    logger.debug(f"After area filtering: {len(filtered_contours)} contours")
 
     # Filter by aspect ratio
     filtered_contours = filter_contours_by_aspect_ratio(
         filtered_contours, min_aspect, max_aspect
     )
+    logger.debug(f"After aspect ratio filtering: {len(filtered_contours)} contours")
 
     for cnt in filtered_contours:
         # Determine epsilon
@@ -1596,7 +1641,13 @@ def extract_contours_with_approximation(
     Returns:
         ContourExtractionResult with approximated contours and metadata
     """
+    logger.info(
+        f"Starting contour extraction (epsilon_mode={epsilon_mode}, "
+        f"analyze_convexity={analyze_convexity})"
+    )
+
     if image is None:
+        logger.error("Contour extraction failed: image is None")
         return ContourExtractionResult(
             contours=[],
             total_contours_found=0,
@@ -1612,6 +1663,7 @@ def extract_contours_with_approximation(
 
     h, w = gray.shape[:2]
     image_area = h * w
+    logger.debug(f"Processing image: {w}x{h}, area={image_area}")
 
     # Preprocessing: blur to reduce noise
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
@@ -1656,6 +1708,7 @@ def extract_contours_with_approximation(
     )
 
     total_found = len(contours)
+    logger.debug(f"Found {total_found} raw contours")
 
     # Apply polygon approximation with filtering
     approximated = approximate_contours_batch(
@@ -1737,6 +1790,24 @@ def extract_contours_with_approximation(
                         1
                     )
             cv2.imwrite(str(out_dir / "cv_v2_convex_hull.png"), debug_hull)
+
+    # Log shape type distribution
+    shape_counts = {}
+    for ac in approximated:
+        shape_counts[ac.shape_type] = shape_counts.get(ac.shape_type, 0) + 1
+
+    logger.info(
+        f"Contour extraction complete: {total_found} found -> {len(approximated)} after filtering, "
+        f"confidence={confidence:.3f}"
+    )
+    if shape_counts:
+        logger.debug(f"Shape distribution: {shape_counts}")
+
+    if analyze_convexity and approximated:
+        convexity_counts = {}
+        for ac in approximated:
+            convexity_counts[ac.convexity_class] = convexity_counts.get(ac.convexity_class, 0) + 1
+        logger.debug(f"Convexity distribution: {convexity_counts}")
 
     return ContourExtractionResult(
         contours=approximated,
