@@ -18,7 +18,8 @@
       "@solver/*": ["src/solver/*"],
       "@validator/*": ["src/validator/*"],
       "@storage/*": ["src/storage/*"],
-      "@samples/*": ["src/samples/*"]
+      "@samples/*": ["src/samples/*"],
+      "@extraction/*": ["src/extraction/*"]
     }
   },
   "include": ["src/**/*", "App.tsx"],
