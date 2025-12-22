@@ -1,0 +1,18 @@
+Testing Hint Generation
+============================================================
+
+🎯 Start with Region E
+   Region E requires all cells to be equal - this is very constraining! You'll need matching dominoes (like 2-2, 3-3, etc.)
+
+💡 Other easy regions to tackle: H, G
+
+🔍 General Strategy:
+   1. Work on most constrained regions first
+   2. Track which dominoes you've used
+   3. Check if placements violate neighboring region constraints
+
+⚠️  'All equal' regions (E, K) need matching dominoes
+   Look for doubles in your tray: 0-0, 1-1, 2-2, etc.
+
+📊 Two-cell sum regions are easier to solve
+   Focus on: C, H, G, A, I
