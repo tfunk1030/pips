@@ -251,3 +251,109 @@ def _white_balance_white_patch(image: np.ndarray) -> np.ndarray:
     result = np.clip(result, 0, 255).astype(np.uint8)
 
     return result
+
+
+def preprocess_domino_tray(
+    image: np.ndarray,
+    enable_white_balance: bool = True,
+    enable_brightness_normalize: bool = True,
+    enable_clahe: bool = True,
+    white_balance_method: str = "gray_world",
+    target_brightness: float = 128.0,
+    clahe_clip_limit: float = 2.0,
+    clahe_tile_grid_size: tuple = (8, 8)
+) -> tuple:
+    """
+    Apply full preprocessing pipeline to a domino tray image.
+
+    Chains preprocessing steps in optimal order to improve domino pip detection:
+    1. White balance correction (removes color cast)
+    2. Brightness normalization (standardizes lighting)
+    3. CLAHE contrast enhancement (improves local contrast for pip detection)
+
+    Args:
+        image: Input BGR image (numpy array).
+        enable_white_balance: Whether to apply white balance correction.
+            Default is True.
+        enable_brightness_normalize: Whether to apply brightness normalization.
+            Default is True.
+        enable_clahe: Whether to apply CLAHE contrast enhancement.
+            Default is True.
+        white_balance_method: Method for white balance ("gray_world" or
+            "white_patch"). Default is "gray_world".
+        target_brightness: Target mean brightness for normalization (0-255).
+            Default is 128.0.
+        clahe_clip_limit: CLAHE clip limit for contrast limiting.
+            Default is 2.0.
+        clahe_tile_grid_size: CLAHE tile grid size for local histogram
+            equalization. Default is (8, 8).
+
+    Returns:
+        A tuple containing:
+            - result: Preprocessed BGR image
+            - metrics: Dictionary with preprocessing metrics including:
+                - steps_applied: List of preprocessing steps that were applied
+                - original_brightness: Mean brightness before preprocessing
+                - final_brightness: Mean brightness after preprocessing
+                - brightness_change: Difference in brightness
+                - original_contrast: Standard deviation of brightness before
+                - final_contrast: Standard deviation of brightness after
+
+    Raises:
+        ValueError: If image is None or empty.
+
+    Example:
+        >>> import cv2
+        >>> image = cv2.imread("domino_tray.jpg")
+        >>> result, metrics = preprocess_domino_tray(image)
+        >>> print(f"Applied steps: {metrics['steps_applied']}")
+        >>> print(f"Brightness change: {metrics['brightness_change']:.1f}")
+    """
+    if image is None or image.size == 0:
+        raise ValueError("Input image is None or empty")
+
+    # Initialize result and tracking
+    result = image.copy()
+    steps_applied = []
+
+    # Calculate original image metrics
+    original_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    original_brightness = float(np.mean(original_gray))
+    original_contrast = float(np.std(original_gray))
+
+    # Step 1: White balance correction
+    if enable_white_balance:
+        result = apply_white_balance(result, method=white_balance_method)
+        steps_applied.append(f"white_balance ({white_balance_method})")
+
+    # Step 2: Brightness normalization
+    if enable_brightness_normalize:
+        result = normalize_brightness(result, target_brightness=target_brightness)
+        steps_applied.append(f"brightness_normalize (target={target_brightness})")
+
+    # Step 3: CLAHE contrast enhancement
+    if enable_clahe:
+        result = apply_clahe(
+            result,
+            clip_limit=clahe_clip_limit,
+            tile_grid_size=clahe_tile_grid_size
+        )
+        steps_applied.append(f"clahe (clip={clahe_clip_limit})")
+
+    # Calculate final image metrics
+    final_gray = cv2.cvtColor(result, cv2.COLOR_BGR2GRAY)
+    final_brightness = float(np.mean(final_gray))
+    final_contrast = float(np.std(final_gray))
+
+    # Build metrics dictionary
+    metrics = {
+        "steps_applied": steps_applied,
+        "original_brightness": original_brightness,
+        "final_brightness": final_brightness,
+        "brightness_change": final_brightness - original_brightness,
+        "original_contrast": original_contrast,
+        "final_contrast": final_contrast,
+        "contrast_change": final_contrast - original_contrast,
+    }
+
+    return result, metrics
