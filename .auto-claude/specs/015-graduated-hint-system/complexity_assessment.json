@@ -1,0 +1,70 @@
+{
+  "complexity": "standard",
+  "workflow_type": "feature",
+  "confidence": 0.85,
+  "reasoning": "Multi-level hint system with algorithmic complexity across 4 distinct levels. Requires puzzle analysis, strategy detection, and solution generation. Scope spans 6-8 files but contained to single service with no external integrations or infrastructure changes.",
+
+  "analysis": {
+    "scope": {
+      "estimated_files": 7,
+      "estimated_services": 1,
+      "is_cross_cutting": false,
+      "notes": "Hint service with multiple algorithm components (strategy analyzer, constraint checker, solution generator), UI components, state management, and tests. Contained to game application."
+    },
+    "integrations": {
+      "external_services": [],
+      "new_dependencies": [],
+      "research_needed": false,
+      "notes": "No external services required. Puzzle solving algorithms may already exist in codebase. If not, standard algorithmic research (not external API integration)."
+    },
+    "infrastructure": {
+      "docker_changes": false,
+      "database_changes": false,
+      "config_changes": false,
+      "notes": "No infrastructure changes. Hint state likely managed in-memory or local storage."
+    },
+    "knowledge": {
+      "patterns_exist": true,
+      "research_required": false,
+      "unfamiliar_tech": [],
+      "notes": "Puzzle solving algorithms are well-documented domain knowledge. Implementation patterns likely exist if puzzle game already has solving capabilities."
+    },
+    "risk": {
+      "level": "medium",
+      "concerns": [
+        "Algorithm correctness across 4 hint levels",
+        "Hint quality and contextual relevance",
+        "Performance of puzzle state analysis",
+        "State management for hint progression tracking"
+      ],
+      "notes": "User experience depends on hint quality. Each level requires different analysis depth. Must avoid repetitive or unhelpful hints."
+    }
+  },
+
+  "recommended_phases": [
+    "discovery",
+    "requirements",
+    "context",
+    "spec_writing",
+    "planning",
+    "validation"
+  ],
+
+  "flags": {
+    "needs_research": false,
+    "needs_self_critique": false,
+    "needs_infrastructure_setup": false
+  },
+
+  "validation_recommendations": {
+    "risk_level": "medium",
+    "skip_validation": false,
+    "minimal_mode": false,
+    "test_types_required": ["unit", "integration"],
+    "security_scan_required": false,
+    "staging_deployment_required": false,
+    "reasoning": "Game logic feature with algorithmic complexity requires unit tests for each hint level's logic and integration tests for hint progression flow. No security-sensitive areas or infrastructure changes involved."
+  },
+
+  "created_at": "2025-12-22T12:00:00Z"
+}
