@@ -29,7 +29,17 @@
       "description": "Enhanced with visual diff mode: Supports toggle between Visual/Text views. Visual mode uses SVG rendering (Rect, Line, SvgText) with parseRegionsToGrid() and parseShapeToHoles() helper functions to parse extraction results into renderable format. Includes region color legend, visual domino rendering with pip dots (getPipPositions()), and ConfidenceBar component for visual confidence display. Optional sourceImage prop enables image overlay comparison.",
       "category": "architecture",
       "discovered_at": "2025-12-22T05:48:53.972046+00:00"
+    },
+    "pips-solver/src/services/cvExtraction.ts": {
+      "description": "Enhanced with CV preprocessing pipeline. Key functions: preprocessForAIExtraction() chains crop+preprocess for optimal AI extraction, preprocessImage() calls /preprocess-image endpoint, cropPuzzleRegionEnhanced() gets enhanced crop with grid detection confidence/dimensions/warnings. Helper functions: shouldPreprocess() analyzes image stats for quality issues, getPreprocessingRecommendations() generates targeted options. Types: PreprocessOptions, ImageStats, PreprocessResult, EnhancedCropResult, CVPreprocessingResult.",
+      "category": "CV-AI Integration",
+      "discovered_at": "2025-12-22T06:05:42.861735+00:00"
+    },
+    "cv-service/test_low_confidence_flow.py": {
+      "description": "Dedicated E2E test script for low-confidence extraction flow verification. Tests: low confidence detection from degraded images, warning generation, partial image handling, confidence level classification (high/medium/low/unknown), preprocessing quality assessment, and correction data completeness. Optional numpy/scipy/pillow deps enable synthetic image degradation for more thorough testing.",
+      "category": "testing",
+      "discovered_at": "2025-12-22T06:20:29.749687+00:00"
     }
   },
-  "last_updated": "2025-12-22T05:48:53.972046+00:00"
+  "last_updated": "2025-12-22T06:20:29.749687+00:00"
 }

@@ -167,11 +167,71 @@
         }
       ],
       "status": "completed"
+    },
+    "subtask-4-4": {
+      "attempts": [
+        {
+          "session": 15,
+          "timestamp": "2025-12-22T01:01:58.150769",
+          "approach": "Implemented: Add low-confidence warning prompts to trigger user verification when confidence is below threshold",
+          "success": true,
+          "error": null
+        }
+      ],
+      "status": "completed"
+    },
+    "subtask-5-1": {
+      "attempts": [
+        {
+          "session": 16,
+          "timestamp": "2025-12-22T01:05:54.826225",
+          "approach": "Implemented: Enhance cvExtraction.ts to use CV preprocessing before AI extraction",
+          "success": true,
+          "error": null
+        }
+      ],
+      "status": "completed"
+    },
+    "subtask-5-2": {
+      "attempts": [
+        {
+          "session": 17,
+          "timestamp": "2025-12-22T01:08:30.724420",
+          "approach": "Implemented: Add fallback logic to use raw image when CV service unavailable",
+          "success": true,
+          "error": null
+        }
+      ],
+      "status": "completed"
+    },
+    "subtask-6-1": {
+      "attempts": [
+        {
+          "session": 18,
+          "timestamp": "2025-12-22T01:14:26.909337",
+          "approach": "Implemented: End-to-end verification of extraction flow with sample puzzle images",
+          "success": true,
+          "error": null
+        }
+      ],
+      "status": "completed"
+    },
+    "subtask-6-2": {
+      "attempts": [
+        {
+          "session": 19,
+          "timestamp": "2025-12-22T01:20:40.537149",
+          "approach": "Implemented: Verify low-confidence flow prompts user for verification",
+          "success": true,
+          "error": null
+        }
+      ],
+      "status": "completed"
     }
   },
   "stuck_subtasks": [],
   "metadata": {
     "created_at": "2025-12-21T23:48:42.838189",
-    "last_updated": "2025-12-22T00:57:38.702812"
+    "last_updated": "2025-12-22T01:20:40.537149"
   }
 }
