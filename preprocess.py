@@ -357,3 +357,74 @@ def preprocess_domino_tray(
     }
 
     return result, metrics
+
+
+def preprocess_tile(
+    tile: np.ndarray,
+    enable_white_balance: bool = True,
+    enable_brightness_normalize: bool = True,
+    enable_clahe: bool = True,
+    white_balance_method: str = "gray_world",
+    target_brightness: float = 128.0,
+    clahe_clip_limit: float = 3.0,
+    clahe_tile_grid_size: tuple = (4, 4)
+) -> np.ndarray:
+    """
+    Apply preprocessing pipeline to an individual domino tile.
+
+    Similar to preprocess_domino_tray but with parameters optimized for small
+    cropped domino tiles. Uses a smaller CLAHE tile grid size and higher clip
+    limit by default since tiles are smaller than full images.
+
+    Args:
+        tile: Input BGR image of a cropped domino tile (numpy array).
+        enable_white_balance: Whether to apply white balance correction.
+            Default is True.
+        enable_brightness_normalize: Whether to apply brightness normalization.
+            Default is True.
+        enable_clahe: Whether to apply CLAHE contrast enhancement.
+            Default is True.
+        white_balance_method: Method for white balance ("gray_world" or
+            "white_patch"). Default is "gray_world".
+        target_brightness: Target mean brightness for normalization (0-255).
+            Default is 128.0.
+        clahe_clip_limit: CLAHE clip limit for contrast limiting.
+            Default is 3.0 (higher than full image to compensate for smaller area).
+        clahe_tile_grid_size: CLAHE tile grid size for local histogram
+            equalization. Default is (4, 4) (smaller than full image since
+            tiles are already small).
+
+    Returns:
+        Preprocessed BGR image of the tile.
+
+    Raises:
+        ValueError: If tile is None or empty.
+
+    Example:
+        >>> import cv2
+        >>> tile = cv2.imread("domino_tile.jpg")
+        >>> processed_tile = preprocess_tile(tile)
+    """
+    if tile is None or tile.size == 0:
+        raise ValueError("Input tile is None or empty")
+
+    # Initialize result
+    result = tile.copy()
+
+    # Step 1: White balance correction
+    if enable_white_balance:
+        result = apply_white_balance(result, method=white_balance_method)
+
+    # Step 2: Brightness normalization
+    if enable_brightness_normalize:
+        result = normalize_brightness(result, target_brightness=target_brightness)
+
+    # Step 3: CLAHE contrast enhancement
+    if enable_clahe:
+        result = apply_clahe(
+            result,
+            clip_limit=clahe_clip_limit,
+            tile_grid_size=clahe_tile_grid_size
+        )
+
+    return result

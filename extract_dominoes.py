@@ -10,7 +10,7 @@ import argparse
 import cv2
 import numpy as np
 
-from preprocess import preprocess_domino_tray
+from preprocess import preprocess_domino_tray, preprocess_tile
 
 
 def count_pips(half: np.ndarray, threshold: int = 150) -> int:
@@ -32,7 +32,8 @@ def count_pips(half: np.ndarray, threshold: int = 150) -> int:
 
 def extract_dominoes(
     image: np.ndarray,
-    detection_threshold: int = 200
+    detection_threshold: int = 200,
+    tile_preprocess: bool = False
 ) -> list:
     """
     Extract domino tiles from an image and count pips.
@@ -41,6 +42,9 @@ def extract_dominoes(
         image: BGR image containing domino tiles.
         detection_threshold: Grayscale threshold for domino detection.
             Default is 200.
+        tile_preprocess: Whether to apply preprocessing to each individual
+            cropped domino tile before pip counting. Uses optimized parameters
+            for small images. Default is False.
 
     Returns:
         List of tuples (left_pips, right_pips) for each detected domino.
@@ -55,6 +59,11 @@ def extract_dominoes(
         x, y, w, h = cv2.boundingRect(c)
         if 120 < w < 240 and 50 < h < 100:
             tile = image[y:y+h, x:x+w]
+
+            # Apply tile preprocessing if enabled
+            if tile_preprocess:
+                tile = preprocess_tile(tile)
+
             left = tile[:, :w//2]
             right = tile[:, w//2:]
 
@@ -81,6 +90,11 @@ def main():
         action="store_true",
         help="Disable image preprocessing (for A/B comparison)"
     )
+    parser.add_argument(
+        "--tile-preprocess",
+        action="store_true",
+        help="Apply preprocessing to each individual cropped domino tile"
+    )
 
     args = parser.parse_args()
 
@@ -99,8 +113,12 @@ def main():
     else:
         print("Preprocessing disabled")
 
+    # Report tile preprocessing status
+    if args.tile_preprocess:
+        print("Tile preprocessing: enabled (optimized parameters for small crops)")
+
     # Extract dominoes
-    dominoes = extract_dominoes(img)
+    dominoes = extract_dominoes(img, tile_preprocess=args.tile_preprocess)
     print(f"Dominoes: {dominoes}")
 
     return 0
