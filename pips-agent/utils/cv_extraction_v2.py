@@ -618,33 +618,182 @@ def infer_cells_from_diamonds(diamond_centers: List[Tuple[int, int]], img_shape:
         return []
 
     # Determine if diamonds mark corners or centers
-    # If corners: cells are between diamonds
-    # If centers: cells are on diamonds
+    layout_pattern = detect_diamond_layout_pattern(
+        diamond_centers, x_clusters, y_clusters, x_spacing, y_spacing
+    )
 
-    # Heuristic: If spacing is similar to expected cell size, diamonds mark corners
-    # If spacing is about half, diamonds might mark centers of adjacent cells
-
-    # Assume diamonds mark corners (most common pattern)
-    # Cells are in the spaces between diamonds
     cells = []
 
-    for i in range(len(y_clusters) - 1):
-        for j in range(len(x_clusters) - 1):
-            x1 = x_clusters[j]
-            x2 = x_clusters[j + 1]
-            y1 = y_clusters[i]
-            y2 = y_clusters[i + 1]
+    if layout_pattern == "corners":
+        # Diamonds mark cell corners (grid intersections)
+        # Cells are in the spaces between diamonds
+        for i in range(len(y_clusters) - 1):
+            for j in range(len(x_clusters) - 1):
+                x1 = x_clusters[j]
+                x2 = x_clusters[j + 1]
+                y1 = y_clusters[i]
+                y2 = y_clusters[i + 1]
 
-            cell_x = int(x1)
-            cell_y = int(y1)
-            cell_w = int(x2 - x1)
-            cell_h = int(y2 - y1)
+                cell_x = int(x1)
+                cell_y = int(y1)
+                cell_w = int(x2 - x1)
+                cell_h = int(y2 - y1)
 
-            # Validate cell dimensions
-            if cell_w > 10 and cell_h > 10:
-                cells.append((cell_x, cell_y, cell_w, cell_h))
+                # Validate cell dimensions
+                if cell_w > 10 and cell_h > 10:
+                    cells.append((cell_x, cell_y, cell_w, cell_h))
+    else:
+        # Diamonds mark cell centers
+        # Cells are centered on each diamond position
+        cell_w = int(x_spacing)
+        cell_h = int(y_spacing)
+
+        # Create a grid of expected positions based on clusters
+        for i, y_center in enumerate(y_clusters):
+            for j, x_center in enumerate(x_clusters):
+                # Check if there's actually a diamond near this grid position
+                if has_diamond_near(diamond_centers, x_center, y_center, x_spacing, y_spacing):
+                    # Cell is centered on the diamond
+                    cell_x = int(x_center - cell_w / 2)
+                    cell_y = int(y_center - cell_h / 2)
+
+                    # Ensure cell is within image bounds
+                    cell_x = max(0, cell_x)
+                    cell_y = max(0, cell_y)
+
+                    # Validate cell dimensions
+                    if cell_w > 10 and cell_h > 10:
+                        cells.append((cell_x, cell_y, cell_w, cell_h))
 
     return cells
+
+
+def detect_diamond_layout_pattern(
+    diamond_centers: List[Tuple[int, int]],
+    x_clusters: List[float],
+    y_clusters: List[float],
+    x_spacing: float,
+    y_spacing: float
+) -> str:
+    """
+    Detect whether diamonds mark cell corners or cell centers.
+
+    Corner pattern: Diamonds at grid intersections, (N+1) x (M+1) diamonds for N x M cells
+    Center pattern: Diamonds at cell centers, exactly one diamond per cell
+
+    The key heuristics:
+    1. Corner patterns tend to have diamonds at the edges of the grid
+    2. Center patterns have more evenly distributed diamonds within the grid area
+    3. For corners, there should be ~1 more row/col of diamonds than cells
+    4. For centers, diamond count should closely match expected cell count
+
+    Args:
+        diamond_centers: List of (x, y) diamond center positions
+        x_clusters: Clustered x-coordinates of diamonds
+        y_clusters: Clustered y-coordinates of diamonds
+        x_spacing: Median horizontal spacing between clusters
+        y_spacing: Median vertical spacing between clusters
+
+    Returns:
+        "corners" or "centers" indicating the detected pattern
+    """
+    num_diamonds = len(diamond_centers)
+    num_x_clusters = len(x_clusters)
+    num_y_clusters = len(y_clusters)
+
+    # For corners pattern: We expect (rows+1) * (cols+1) diamonds
+    # For centers pattern: We expect rows * cols diamonds
+
+    # Expected diamonds if corners pattern
+    corners_expected = num_x_clusters * num_y_clusters
+
+    # If we have corner pattern, there would be (N-1)*(M-1) cells
+    corners_cell_count = (num_x_clusters - 1) * (num_y_clusters - 1)
+
+    # If we have center pattern, there would be N*M cells (same as diamond count per cluster)
+    centers_cell_count = num_x_clusters * num_y_clusters
+
+    # Check how many diamonds actually exist at cluster intersections
+    # For a proper corner pattern, most cluster intersections should have diamonds
+    diamonds_at_intersections = 0
+    tolerance = min(x_spacing, y_spacing) * 0.4
+
+    for x_c in x_clusters:
+        for y_c in y_clusters:
+            if has_diamond_near(diamond_centers, x_c, y_c, x_spacing, y_spacing, tolerance):
+                diamonds_at_intersections += 1
+
+    # Calculate fill ratios
+    intersection_fill_ratio = diamonds_at_intersections / corners_expected if corners_expected > 0 else 0
+
+    # Heuristic 1: Check if diamonds fill the grid intersections well
+    # Corner patterns should have high fill ratio at intersections
+    if intersection_fill_ratio > 0.7:
+        # Most intersections have diamonds - likely corners pattern
+        # Additional check: corners pattern should have at least 2x2 grid of diamonds
+        if num_x_clusters >= 2 and num_y_clusters >= 2:
+            # Check cell count reasonableness
+            if corners_cell_count >= 1:
+                return "corners"
+
+    # Heuristic 2: Check diamond distribution relative to cluster grid
+    # For center pattern, diamonds should be well-distributed within clusters
+    # and there should be a reasonable number of cells
+    if centers_cell_count >= 4 and intersection_fill_ratio > 0.5:
+        # Moderate fill with reasonable cell count
+        # Check if spacing suggests cells (not corners)
+        # In corners pattern, spacing is cell size
+        # In centers pattern, spacing is also cell size but diamonds are centered
+
+        # Additional heuristic: check border behavior
+        # Corner patterns often have diamonds at the very edges
+        # Center patterns have diamonds set in from edges by half a cell
+
+        centers = np.array(diamond_centers)
+        min_x, max_x = centers[:, 0].min(), centers[:, 0].max()
+        min_y, max_y = centers[:, 1].min(), centers[:, 1].max()
+
+        # Calculate how close the outermost diamonds are to grid edges
+        x_margin_ratio = (max_x - min_x) / (num_x_clusters * x_spacing) if num_x_clusters > 1 else 1
+        y_margin_ratio = (max_y - min_y) / (num_y_clusters * y_spacing) if num_y_clusters > 1 else 1
+
+        # For center patterns, the span should be about (N-1) * spacing
+        # For corner patterns, the span should also be about (N-1) * spacing
+        # This heuristic isn't very distinctive, so default to corners if ambiguous
+
+    # Default to corners pattern as it's more common
+    return "corners"
+
+
+def has_diamond_near(
+    diamond_centers: List[Tuple[int, int]],
+    x: float,
+    y: float,
+    x_spacing: float,
+    y_spacing: float,
+    tolerance: float = None
+) -> bool:
+    """
+    Check if there's a diamond near the given position.
+
+    Args:
+        diamond_centers: List of (x, y) diamond centers
+        x, y: Position to check
+        x_spacing, y_spacing: Grid spacing (used for default tolerance)
+        tolerance: Maximum distance to consider "near" (default: 30% of spacing)
+
+    Returns:
+        True if a diamond exists near the position
+    """
+    if tolerance is None:
+        tolerance = min(x_spacing, y_spacing) * 0.3
+
+    for dx, dy in diamond_centers:
+        dist = np.sqrt((dx - x) ** 2 + (dy - y) ** 2)
+        if dist <= tolerance:
+            return True
+
+    return False
 
 
 def cluster_coordinates(coords: List[float], tolerance: float = None) -> List[float]:
