@@ -51,6 +51,237 @@ export interface ExtractionProgress {
 export type ProgressCallback = (progress: ExtractionProgress) => void;
 
 // =============================================================================
+// Confidence Aggregation Types
+// =============================================================================
+
+/**
+ * Weights for each extraction stage (must sum to 1.0)
+ * Higher weights indicate more critical stages for overall accuracy
+ */
+const STAGE_WEIGHTS: StageConfidence = {
+  grid: 0.25,      // Grid dimensions are foundational
+  cells: 0.25,     // Cell/hole detection is critical for puzzle structure
+  regions: 0.20,   // Region mapping affects constraint interpretation
+  constraints: 0.15, // Constraints can be manually corrected more easily
+  dominoes: 0.15,  // Dominoes can also be manually verified
+};
+
+/**
+ * Penalty factors for validation issues
+ */
+const VALIDATION_PENALTY = {
+  /** Per-error penalty applied to overall confidence */
+  perError: 0.05,
+  /** Maximum total penalty from errors */
+  maxPenalty: 0.30,
+  /** Penalty for critical errors (blocking issues) */
+  criticalPenalty: 0.50,
+};
+
+/**
+ * Thresholds for quality classification
+ */
+const QUALITY_THRESHOLDS = {
+  excellent: 0.90,
+  good: 0.75,
+  acceptable: 0.60,
+  poor: 0.40,
+};
+
+/**
+ * Extended confidence breakdown including quality metrics
+ */
+export interface ConfidenceBreakdown {
+  /** Weighted aggregate of all stage confidences */
+  weightedAverage: number;
+  /** Minimum confidence across all stages (bottleneck indicator) */
+  minimum: number;
+  /** Maximum confidence across all stages */
+  maximum: number;
+  /** Standard deviation of stage confidences (consistency measure) */
+  standardDeviation: number;
+  /** Penalty applied due to validation errors */
+  validationPenalty: number;
+  /** Final quality score after all adjustments */
+  qualityScore: number;
+  /** Human-readable quality classification */
+  qualityClass: 'excellent' | 'good' | 'acceptable' | 'poor' | 'critical';
+  /** Per-stage contribution to the weighted average */
+  stageContributions: StageConfidence;
+}
+
+/**
+ * Compute weighted average confidence from per-stage confidences
+ */
+function computeWeightedConfidence(perStage: StageConfidence): number {
+  return (
+    perStage.grid * STAGE_WEIGHTS.grid +
+    perStage.cells * STAGE_WEIGHTS.cells +
+    perStage.regions * STAGE_WEIGHTS.regions +
+    perStage.constraints * STAGE_WEIGHTS.constraints +
+    perStage.dominoes * STAGE_WEIGHTS.dominoes
+  );
+}
+
+/**
+ * Compute standard deviation of stage confidences (measure of consistency)
+ */
+function computeConfidenceStdDev(perStage: StageConfidence): number {
+  const values = [
+    perStage.grid,
+    perStage.cells,
+    perStage.regions,
+    perStage.constraints,
+    perStage.dominoes,
+  ];
+  const mean = values.reduce((a, b) => a + b, 0) / values.length;
+  const squaredDiffs = values.map((v) => Math.pow(v - mean, 2));
+  return Math.sqrt(squaredDiffs.reduce((a, b) => a + b, 0) / values.length);
+}
+
+/**
+ * Compute validation penalty based on error count and severity
+ */
+function computeValidationPenalty(
+  errors: ValidationError[],
+  hasCriticalError: boolean
+): number {
+  if (hasCriticalError) {
+    return VALIDATION_PENALTY.criticalPenalty;
+  }
+
+  const errorPenalty = errors.length * VALIDATION_PENALTY.perError;
+  return Math.min(errorPenalty, VALIDATION_PENALTY.maxPenalty);
+}
+
+/**
+ * Classify quality based on score
+ */
+function classifyQuality(
+  score: number
+): 'excellent' | 'good' | 'acceptable' | 'poor' | 'critical' {
+  if (score >= QUALITY_THRESHOLDS.excellent) return 'excellent';
+  if (score >= QUALITY_THRESHOLDS.good) return 'good';
+  if (score >= QUALITY_THRESHOLDS.acceptable) return 'acceptable';
+  if (score >= QUALITY_THRESHOLDS.poor) return 'poor';
+  return 'critical';
+}
+
+/**
+ * Aggregate confidence scores from all stages into an overall quality score
+ *
+ * The aggregation follows the pattern from ensembleExtraction.ts:
+ * - Uses weighted averaging based on stage importance
+ * - Applies penalty for validation errors
+ * - Returns detailed breakdown for debugging and user feedback
+ */
+function aggregateConfidence(
+  perStage: StageConfidence,
+  validationErrors: ValidationError[],
+  hasCriticalError: boolean = false
+): ConfidenceBreakdown {
+  // Compute weighted average
+  const weightedAverage = computeWeightedConfidence(perStage);
+
+  // Compute min/max for range indication
+  const values = [
+    perStage.grid,
+    perStage.cells,
+    perStage.regions,
+    perStage.constraints,
+    perStage.dominoes,
+  ];
+  const minimum = Math.min(...values);
+  const maximum = Math.max(...values);
+
+  // Compute standard deviation (consistency measure)
+  const standardDeviation = computeConfidenceStdDev(perStage);
+
+  // Compute validation penalty
+  const validationPenalty = computeValidationPenalty(
+    validationErrors,
+    hasCriticalError
+  );
+
+  // Final quality score: weighted average minus penalty, clamped to [0, 1]
+  const qualityScore = Math.max(0, Math.min(1, weightedAverage - validationPenalty));
+
+  // Classify quality
+  const qualityClass = classifyQuality(qualityScore);
+
+  // Compute per-stage contributions (for debugging/transparency)
+  const stageContributions: StageConfidence = {
+    grid: perStage.grid * STAGE_WEIGHTS.grid,
+    cells: perStage.cells * STAGE_WEIGHTS.cells,
+    regions: perStage.regions * STAGE_WEIGHTS.regions,
+    constraints: perStage.constraints * STAGE_WEIGHTS.constraints,
+    dominoes: perStage.dominoes * STAGE_WEIGHTS.dominoes,
+  };
+
+  return {
+    weightedAverage,
+    minimum,
+    maximum,
+    standardDeviation,
+    validationPenalty,
+    qualityScore,
+    qualityClass,
+    stageContributions,
+  };
+}
+
+/**
+ * Generate review hints based on confidence breakdown
+ */
+function generateConfidenceHints(breakdown: ConfidenceBreakdown, perStage: StageConfidence): string[] {
+  const hints: string[] = [];
+
+  // Flag low-confidence stages
+  const stages: [StageName, number][] = [
+    ['grid', perStage.grid],
+    ['cells', perStage.cells],
+    ['regions', perStage.regions],
+    ['constraints', perStage.constraints],
+    ['dominoes', perStage.dominoes],
+  ];
+
+  for (const [stage, confidence] of stages) {
+    if (confidence < QUALITY_THRESHOLDS.acceptable) {
+      const stageNames: Record<StageName, string> = {
+        grid: 'Grid dimensions',
+        cells: 'Cell/hole detection',
+        regions: 'Region mapping',
+        constraints: 'Constraint extraction',
+        dominoes: 'Domino extraction',
+      };
+      hints.push(`Low confidence in ${stageNames[stage]} (${(confidence * 100).toFixed(0)}%)`);
+    }
+  }
+
+  // Flag high variance (inconsistent confidences)
+  if (breakdown.standardDeviation > 0.15) {
+    hints.push('Extraction confidence varies significantly across stages - verify all sections');
+  }
+
+  // Flag if minimum is dragging down overall score
+  if (breakdown.minimum < QUALITY_THRESHOLDS.poor && breakdown.weightedAverage > QUALITY_THRESHOLDS.acceptable) {
+    const bottleneck = stages.find(([, conf]) => conf === breakdown.minimum);
+    if (bottleneck) {
+      const stageNames: Record<StageName, string> = {
+        grid: 'Grid dimensions',
+        cells: 'Cell/hole detection',
+        regions: 'Region mapping',
+        constraints: 'Constraint extraction',
+        dominoes: 'Domino extraction',
+      };
+      hints.push(`${stageNames[bottleneck[0]]} is the main source of uncertainty`);
+    }
+  }
+
+  return hints;
+}
+
+// =============================================================================
 // Inter-Stage Validation
 // =============================================================================
 
@@ -660,7 +891,7 @@ export async function extractPuzzle(
   // Dominoes don't block completion - issues are flagged for user review
 
   // ==========================================================================
-  // Build Result
+  // Build Result with Confidence Aggregation
   // ==========================================================================
   const stageConfidence: StageConfidence = {
     grid: gridResult.result.confidence,
@@ -670,15 +901,26 @@ export async function extractPuzzle(
     dominoes: dominoResult.result.confidence,
   };
 
-  const overallConfidence = Math.min(
-    stageConfidence.grid,
-    stageConfidence.cells,
-    stageConfidence.regions,
-    stageConfidence.constraints,
-    stageConfidence.dominoes
+  // Use weighted confidence aggregation for more accurate quality scoring
+  // This follows the pattern from ensembleExtraction.ts
+  const confidenceBreakdown = aggregateConfidence(
+    stageConfidence,
+    allValidationErrors,
+    false // No critical errors if we've reached this point
   );
 
+  // Generate additional hints based on confidence analysis
+  const confidenceHints = generateConfidenceHints(confidenceBreakdown, stageConfidence);
+  reviewHints.push(...confidenceHints);
+
+  // Use the quality score as the overall confidence
+  // This is more nuanced than the previous Math.min approach
+  const overallConfidence = confidenceBreakdown.qualityScore;
+
+  // Determine if review is needed based on quality classification
   const needsReview =
+    confidenceBreakdown.qualityClass === 'poor' ||
+    confidenceBreakdown.qualityClass === 'critical' ||
     overallConfidence < fullConfig.lowConfidenceThreshold ||
     allValidationErrors.length > 0;
 
