@@ -270,20 +270,5 @@
     "ready_for_qa_revalidation": false
   },
   "last_updated": "2025-12-22T08:29:11.869873+00:00",
-  "recoveryNote": "Task recovered from stuck state at 2025-12-22T08:09:09.409Z",
-  "qa_iteration_history": [
-    {
-      "iteration": 1,
-      "status": "approved",
-      "timestamp": "2025-12-22T08:30:22.943544+00:00",
-      "issues": [],
-      "duration_seconds": 579.27
-    }
-  ],
-  "qa_stats": {
-    "total_iterations": 1,
-    "last_iteration": 1,
-    "last_status": "approved",
-    "issues_by_type": {}
-  }
+  "recoveryNote": "Task recovered from stuck state at 2025-12-22T08:09:09.409Z"
 }

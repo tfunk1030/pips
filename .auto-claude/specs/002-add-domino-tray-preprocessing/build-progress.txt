@@ -1,0 +1,79 @@
+# Build Progress: Add Domino Tray Preprocessing
+
+## Status: COMPLETE (10/10 subtasks)
+
+Last Updated: 2025-12-22
+
+---
+
+## Phase 4.2 Validation Results
+
+### Test Images Processed
+
+#### IMG_2050.png (Dark Mode - Low Light)
+- **Original Brightness:** 41.3
+- **After Preprocessing:** 79.9 (+38.7 improvement)
+- **Original Contrast:** 58.5
+- **After Preprocessing:** 64.6 (+6.1 improvement)
+- **Steps Applied:** white_balance (gray_world), brightness_normalize (target=128.0), clahe (clip=2.0)
+
+#### IMG_2051.png (Light Mode - Well Lit)
+- **Original Brightness:** 239.0
+- **After Preprocessing:** 129.0 (-110.0 normalized)
+- **Original Contrast:** 46.8
+- **After Preprocessing:** 24.6 (-22.2 adjusted)
+- **Steps Applied:** white_balance (gray_world), brightness_normalize (target=128.0), clahe (clip=2.0)
+
+### Preprocessing Pipeline Verification
+- All preprocessing steps execute successfully on both images
+- White balance correctly applied using gray_world method
+- Brightness normalization properly adjusts toward target (128)
+- CLAHE enhances local contrast
+- No errors or crashes during processing
+
+### Debug Output Generated (20 files in debug_preprocess/)
+For each image:
+- Original image
+- After white balance
+- After brightness normalization
+- After CLAHE
+- Histogram for each stage
+- Histogram comparison
+- Side-by-side comparison image
+
+### Unit Tests
+- **63 tests passed** in tests/test_preprocess.py
+- All preprocessing functions verified
+- Edge cases and error handling tested
+- Integration tests confirm pipeline consistency
+
+### Regression Testing
+- Both dark (IMG_2050) and light (IMG_2051) images process without errors
+- Preprocessing correctly brightens dark images
+- Preprocessing correctly normalizes over-bright images
+- No crashes or unexpected behavior
+
+### Notes
+The test images are screenshots from a domino puzzle game app. The domino tiles visible at the bottom of the screenshots are smaller than the detection parameters currently configured in extract_dominoes.py (which expects width 120-240px, height 50-100px). The preprocessing pipeline itself works correctly on these images - any adjustments to detection parameters would be a separate enhancement.
+
+---
+
+## Completed Phases
+
+### Phase 1: Core Preprocessing Module (4/4)
+- 1.1 CLAHE function
+- 1.2 Brightness normalization
+- 1.3 White balance
+- 1.4 Combined pipeline
+
+### Phase 2: Integration with Domino Extraction (2/2)
+- 2.1 Refactored extract_dominoes.py
+- 2.2 Tile preprocessing option
+
+### Phase 3: Debug and Visualization Tools (2/2)
+- 3.1 Debug output for preprocessing stages
+- 3.2 Comparison visualization script
+
+### Phase 4: Testing and Validation (2/2)
+- 4.1 Unit tests (63 tests)
+- 4.2 Validation with existing images
