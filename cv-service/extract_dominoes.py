@@ -598,6 +598,174 @@ def validate_pip_count(pip_count: int) -> bool:
     return 0 <= pip_count <= 6
 
 
+def detect_rotation_angle(
+    contour: np.ndarray
+) -> Tuple[float, Tuple[float, float], Tuple[float, float], np.ndarray]:
+    """
+    Detect the rotation angle of a domino contour using minAreaRect.
+
+    Uses cv2.minAreaRect to find the minimum area bounding rectangle
+    of a contour and extracts the rotation angle. The angle is normalized
+    to ensure dominoes are oriented with the longer side horizontal.
+
+    Args:
+        contour: Input contour points from cv2.findContours.
+            Must be a numpy array of shape (N, 1, 2) or (N, 2).
+
+    Returns:
+        Tuple of (angle, center, size, box_points):
+        - angle: Rotation angle in degrees. Positive values are counter-clockwise.
+            Range is normalized to [-45, 45] degrees, assuming domino should
+            be horizontal with longer side along x-axis.
+        - center: Tuple (cx, cy) of the rectangle center point.
+        - size: Tuple (width, height) of the rectangle dimensions.
+            After normalization, width >= height (longer side is width).
+        - box_points: NumPy array of 4 corner points of the rotated rectangle.
+
+    Raises:
+        ValueError: If contour is None, empty, or has invalid shape.
+
+    Notes:
+        cv2.minAreaRect returns angles in the range [-90, 0) degrees.
+        This function normalizes the angle so that:
+        - The longer side of the rectangle is considered the width
+        - Angle is adjusted to keep the domino approximately horizontal
+        - Output angle indicates rotation needed to straighten the domino
+    """
+    if contour is None or len(contour) == 0:
+        raise ValueError("Input contour is empty or None")
+
+    # Ensure contour has enough points for minAreaRect
+    if len(contour) < 5:
+        raise ValueError("Contour must have at least 5 points for minAreaRect")
+
+    # Get minimum area bounding rectangle
+    # Returns: ((cx, cy), (width, height), angle)
+    # angle is in range [-90, 0)
+    rect = cv2.minAreaRect(contour)
+
+    center = rect[0]  # (cx, cy)
+    size = rect[1]    # (width, height)
+    angle = rect[2]   # angle in degrees
+
+    width, height = size
+
+    # Normalize angle to ensure longer side is horizontal
+    # minAreaRect can return width < height depending on orientation
+    # We want dominoes to be oriented with longer side horizontal
+    if width < height:
+        # Swap width and height, adjust angle by 90 degrees
+        width, height = height, width
+        angle = angle + 90
+
+    # Normalize angle to range [-45, 45] for consistency
+    # This ensures we don't flip the domino upside down unnecessarily
+    if angle > 45:
+        angle = angle - 90
+    elif angle < -45:
+        angle = angle + 90
+
+    # Get the 4 corner points of the rotated rectangle
+    # These are useful for visualization and cropping
+    box_points = cv2.boxPoints(rect)
+    box_points = np.intp(box_points)
+
+    # Return normalized values
+    normalized_size = (width, height)
+
+    return angle, center, normalized_size, box_points
+
+
+def detect_rotation_angle_from_image(
+    image: np.ndarray,
+    block_size: int = 11,
+    c_value: int = 2
+) -> Tuple[float, Tuple[float, float], Tuple[float, float], np.ndarray, np.ndarray]:
+    """
+    Detect the rotation angle of a domino from an image.
+
+    Preprocesses the image, finds contours, and detects the rotation angle
+    of the largest contour (assumed to be the domino).
+
+    Args:
+        image: Input BGR or grayscale image containing a domino.
+        block_size: Block size for adaptive thresholding.
+        c_value: Constant for adaptive thresholding.
+
+    Returns:
+        Tuple of (angle, center, size, box_points, contour):
+        - angle: Rotation angle in degrees (see detect_rotation_angle).
+        - center: Tuple (cx, cy) of the rectangle center point.
+        - size: Tuple (width, height) of the rectangle dimensions.
+        - box_points: NumPy array of 4 corner points.
+        - contour: The largest contour found in the image.
+
+    Raises:
+        ValueError: If image is empty or no contours are found.
+    """
+    if image is None or image.size == 0:
+        raise ValueError("Input image is empty or None")
+
+    # Convert to grayscale if needed
+    if len(image.shape) == 3 and image.shape[2] == 3:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = image.copy()
+
+    # Apply bilateral filter for edge-preserving smoothing
+    filtered = cv2.bilateralFilter(gray, 9, 75, 75)
+
+    # Apply adaptive thresholding
+    binary = cv2.adaptiveThreshold(
+        filtered,
+        255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY_INV,
+        block_size,
+        c_value
+    )
+
+    # Morphological operations to clean up
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+    cleaned = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+    cleaned = cv2.morphologyEx(cleaned, cv2.MORPH_OPEN, kernel)
+
+    # Find contours
+    contours, _ = cv2.findContours(
+        cleaned,
+        cv2.RETR_EXTERNAL,
+        cv2.CHAIN_APPROX_SIMPLE
+    )
+
+    if not contours:
+        raise ValueError("No contours found in image")
+
+    # Find the largest contour (assumed to be the domino)
+    largest_contour = max(contours, key=cv2.contourArea)
+
+    # Detect rotation angle from the largest contour
+    angle, center, size, box_points = detect_rotation_angle(largest_contour)
+
+    # Save debug visualization if enabled
+    if DEBUG_OUTPUT_DIR is not None:
+        debug_img = image.copy() if len(image.shape) == 3 else cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+        cv2.drawContours(debug_img, [box_points], 0, (0, 255, 0), 2)
+        cv2.circle(debug_img, (int(center[0]), int(center[1])), 5, (0, 0, 255), -1)
+        # Add angle text
+        cv2.putText(
+            debug_img,
+            f"Angle: {angle:.1f}",
+            (10, 30),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (255, 255, 0),
+            2
+        )
+        save_debug_image("11_rotation_detected.png", debug_img)
+
+    return angle, center, size, box_points, largest_contour
+
+
 def detect_pips_hough_adaptive(
     image: np.ndarray,
     param2_range: Tuple[int, int, int] = (20, 40, 5),
