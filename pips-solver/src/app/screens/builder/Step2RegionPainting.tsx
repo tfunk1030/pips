@@ -18,7 +18,7 @@ import Animated from 'react-native-reanimated';
 import Svg, { Line, Rect } from 'react-native-svg';
 import { BuilderAction, OverlayBuilderState } from '../../../model/overlayTypes';
 import { hitTestCell } from '../../../utils/gridCalculations';
-import { triggerImpactLight, triggerPaintCell } from '../../../utils/haptics';
+import { triggerImpactLight, triggerPaintCell, triggerPaletteSelect } from '../../../utils/haptics';
 import ConfidenceIndicator from '../../components/ConfidenceIndicator';
 
 interface Props {
@@ -33,6 +33,7 @@ export default function Step2RegionPainting({ state, dispatch }: Props) {
   const lastPaintedCellRef = useRef<{ row: number; col: number } | null>(null);
 
   const handleColorSelect = (index: number) => {
+    triggerPaletteSelect(); // Haptic feedback when selecting palette color
     dispatch({ type: 'SELECT_PALETTE_COLOR', index });
   };
 
