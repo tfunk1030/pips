@@ -23,7 +23,9 @@
             "command": "git tag -l \"backup-pre-merge-*\" | head -1",
             "expected": "backup-pre-merge-"
           },
-          "status": "pending"
+          "status": "completed",
+          "completed_at": "2025-12-22T09:33:22.000Z",
+          "notes": "Created backup tag backup-pre-merge-20251222-093322"
         },
         {
           "id": "subtask-1-2",
@@ -43,7 +45,9 @@
           "id": "subtask-1-3",
           "description": "Stage and commit unstaged .auto-claude changes on copilot-fixes",
           "service": "repository",
-          "files_to_modify": [".auto-claude/"],
+          "files_to_modify": [
+            ".auto-claude/"
+          ],
           "files_to_create": [],
           "patterns_from": [],
           "verification": {
@@ -60,7 +64,9 @@
       "name": "Commit Worktree Changes",
       "type": "implementation",
       "description": "Commit uncommitted changes in all worktrees before merging",
-      "depends_on": ["phase-1-setup"],
+      "depends_on": [
+        "phase-1-setup"
+      ],
       "parallel_safe": false,
       "subtasks": [
         {
@@ -130,7 +136,9 @@
       "name": "Merge Primary Branch",
       "type": "implementation",
       "description": "Merge copilot-fixes (41 commits ahead) into main first as it contains the primary work",
-      "depends_on": ["phase-2-worktree-commits"],
+      "depends_on": [
+        "phase-2-worktree-commits"
+      ],
       "parallel_safe": false,
       "subtasks": [
         {
@@ -168,7 +176,9 @@
       "name": "Merge Auto-Claude Branches",
       "type": "implementation",
       "description": "Sequentially merge all 17 auto-claude feature branches into main",
-      "depends_on": ["phase-3-primary-merge"],
+      "depends_on": [
+        "phase-3-primary-merge"
+      ],
       "parallel_safe": false,
       "subtasks": [
         {
@@ -302,7 +312,9 @@
       "name": "Merge Utility Branches",
       "type": "implementation",
       "description": "Merge remaining utility and experimental branches into main",
-      "depends_on": ["phase-4-autoclaude-merges"],
+      "depends_on": [
+        "phase-4-autoclaude-merges"
+      ],
       "parallel_safe": false,
       "subtasks": [
         {
@@ -328,7 +340,10 @@
           "files_to_modify": [],
           "files_to_create": [],
           "patterns_from": [],
-          "branches": ["claude", "codex"],
+          "branches": [
+            "claude",
+            "codex"
+          ],
           "verification": {
             "type": "command",
             "command": "git log --oneline -3 main",
@@ -343,7 +358,13 @@
           "files_to_modify": [],
           "files_to_create": [],
           "patterns_from": [],
-          "branches": ["dreamy-perlman", "pensive-yalow", "vibrant-sinoussi", "gpt5", "gpt52"],
+          "branches": [
+            "dreamy-perlman",
+            "pensive-yalow",
+            "vibrant-sinoussi",
+            "gpt5",
+            "gpt52"
+          ],
           "notes": "Skip branches with 0 commits ahead of main or that are already merged",
           "verification": {
             "type": "command",
@@ -359,7 +380,9 @@
       "name": "Cleanup and Verification",
       "type": "cleanup",
       "description": "Remove worktrees, verify clean state, and run post-merge tests",
-      "depends_on": ["phase-5-utility-merges"],
+      "depends_on": [
+        "phase-5-utility-merges"
+      ],
       "parallel_safe": false,
       "subtasks": [
         {
@@ -424,7 +447,11 @@
   "summary": {
     "total_phases": 6,
     "total_subtasks": 20,
-    "services_involved": ["repository", "cv-service", "pips-solver"],
+    "services_involved": [
+      "repository",
+      "cv-service",
+      "pips-solver"
+    ],
     "parallelism": {
       "max_parallel_phases": 1,
       "parallel_groups": [],
@@ -437,7 +464,9 @@
     "risk_level": "high",
     "skip_validation": false,
     "test_creation_phase": "post_implementation",
-    "test_types_required": ["integration"],
+    "test_types_required": [
+      "integration"
+    ],
     "security_scanning_required": false,
     "staging_deployment_required": false,
     "acceptance_criteria": [
@@ -493,8 +522,12 @@
     },
     "integration_tests": {
       "required": true,
-      "commands": ["cd cv-service && python -c 'import main'"],
-      "services_to_test": ["cv-service"]
+      "commands": [
+        "cd cv-service && python -c 'import main'"
+      ],
+      "services_to_test": [
+        "cv-service"
+      ]
     },
     "e2e_tests": {
       "required": false,
@@ -533,5 +566,8 @@
       "Performance impact from many sequential merges",
       "Disk space increase from preserved history"
     ]
-  }
+  },
+  "status": "human_review",
+  "planStatus": "review",
+  "updated_at": "2025-12-22T14:32:16.964Z"
 }
