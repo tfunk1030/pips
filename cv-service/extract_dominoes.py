@@ -440,6 +440,147 @@ def detect_pips_hough(
     return pip_count, detected_circles, detection_info
 
 
+def detect_pips_contours(
+    image: np.ndarray,
+    min_area: Optional[int] = None,
+    max_area: Optional[int] = None,
+    min_circularity: float = 0.5,
+    block_size: int = 11,
+    c_value: int = 5
+) -> Tuple[int, list, dict]:
+    """
+    Detect pips on a domino image using contour-based analysis.
+
+    This is a fallback detection method when HoughCircles fails to
+    detect pips reliably. Uses adaptive thresholding and contour
+    filtering based on area and circularity.
+
+    Args:
+        image: Input BGR or grayscale image of a domino half.
+        min_area: Minimum contour area for valid pips. If None, scales
+            automatically based on image size.
+        max_area: Maximum contour area for valid pips. If None, scales
+            automatically based on image size.
+        min_circularity: Minimum circularity (4*pi*area/perimeter^2) for
+            valid pips. Range 0-1, where 1 is a perfect circle.
+        block_size: Block size for adaptive thresholding.
+        c_value: Constant for adaptive thresholding.
+
+    Returns:
+        Tuple of (pip_count, contours, detection_info):
+        - pip_count: Number of detected pips (valid contours)
+        - contours: List of contour arrays for detected pips
+        - detection_info: Dict with detection metadata including:
+            - areas: List of contour areas
+            - circularities: List of contour circularity values
+            - mean_area: Average area of detected contours
+            - area_variance: Variance in contour areas
+            - image_size: Tuple of (height, width)
+    """
+    if image is None or image.size == 0:
+        raise ValueError("Input image is empty or None")
+
+    # Preprocess image for contour detection
+    preprocessed = preprocess_for_contours(
+        image,
+        block_size=block_size,
+        c_value=c_value,
+        invert=True
+    )
+
+    # Get image dimensions
+    h, w = preprocessed.shape[:2]
+
+    # Calculate default area bounds based on image size
+    # For a domino half, pips are typically 5-15% of the half width
+    img_scale = (h * w) / 10000.0  # Normalize to 100x100 reference
+    if min_area is None:
+        min_area = max(int(10 * img_scale), 10)
+    if max_area is None:
+        max_area = min(int(500 * img_scale), h * w // 10)
+
+    # Ensure min < max
+    if min_area >= max_area:
+        min_area = max(10, max_area - 50)
+
+    # Find contours
+    contours, _ = cv2.findContours(
+        preprocessed,
+        cv2.RETR_EXTERNAL,
+        cv2.CHAIN_APPROX_SIMPLE
+    )
+
+    # Initialize detection info
+    detection_info = {
+        "areas": [],
+        "circularities": [],
+        "mean_area": 0.0,
+        "area_variance": 0.0,
+        "image_size": (h, w),
+        "min_area_threshold": min_area,
+        "max_area_threshold": max_area,
+        "min_circularity": min_circularity,
+        "total_contours_found": len(contours)
+    }
+
+    # Filter contours by area and circularity
+    valid_contours = []
+    areas = []
+    circularities = []
+
+    for contour in contours:
+        area = cv2.contourArea(contour)
+
+        # Check area bounds
+        if area < min_area or area > max_area:
+            continue
+
+        # Calculate circularity: 4*pi*area/perimeter^2
+        # Perfect circle has circularity of 1.0
+        perimeter = cv2.arcLength(contour, True)
+        if perimeter == 0:
+            continue
+
+        circularity = 4 * np.pi * area / (perimeter * perimeter)
+
+        # Check circularity threshold
+        if circularity < min_circularity:
+            continue
+
+        # Valid pip contour
+        valid_contours.append(contour)
+        areas.append(float(area))
+        circularities.append(float(circularity))
+
+    # Update detection info
+    detection_info["areas"] = areas
+    detection_info["circularities"] = circularities
+
+    if areas:
+        detection_info["mean_area"] = float(np.mean(areas))
+        detection_info["area_variance"] = float(np.var(areas)) if len(areas) > 1 else 0.0
+        detection_info["mean_circularity"] = float(np.mean(circularities))
+    else:
+        detection_info["mean_circularity"] = 0.0
+
+    # Create debug visualization
+    if DEBUG_OUTPUT_DIR is not None:
+        debug_img = cv2.cvtColor(preprocessed, cv2.COLOR_GRAY2BGR)
+        for i, contour in enumerate(valid_contours):
+            # Draw contour
+            cv2.drawContours(debug_img, [contour], -1, (0, 255, 0), 2)
+            # Draw center point
+            M = cv2.moments(contour)
+            if M["m00"] != 0:
+                cx = int(M["m10"] / M["m00"])
+                cy = int(M["m01"] / M["m00"])
+                cv2.circle(debug_img, (cx, cy), 3, (0, 0, 255), -1)
+        save_debug_image("10_contour_detected_pips.png", debug_img)
+
+    pip_count = len(valid_contours)
+    return pip_count, valid_contours, detection_info
+
+
 def detect_pips_hough_adaptive(
     image: np.ndarray,
     param2_range: Tuple[int, int, int] = (20, 40, 5),
@@ -526,6 +667,14 @@ def _self_test():
     # Test adaptive detection
     pip_count_adaptive, _, _ = detect_pips_hough_adaptive(test_img)
     assert isinstance(pip_count_adaptive, int)
+
+    # Test contour-based pip detection
+    pip_count_contours, contours, contour_info = detect_pips_contours(test_img)
+    assert isinstance(pip_count_contours, int)
+    assert isinstance(contours, list)
+    assert isinstance(contour_info, dict)
+    assert "mean_area" in contour_info
+    assert "circularities" in contour_info
 
     return True
 
