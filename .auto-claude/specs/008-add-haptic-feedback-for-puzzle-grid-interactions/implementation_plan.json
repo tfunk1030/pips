@@ -1,0 +1,191 @@
+{
+  "feature": "Add haptic feedback for puzzle grid interactions",
+  "description": "The interactive grid overlay in Step1GridAlignment (dragging edges, tapping cells to mark holes) lacks haptic feedback. React Native supports Haptics which would enhance the tactile feel matching the 'Tactile Game Table' design aesthetic.",
+  "created_at": "2025-12-22T07:01:13.523Z",
+  "updated_at": "2025-12-22T08:00:00.000Z",
+  "status": "in_progress",
+  "planStatus": "approved",
+  "phases": [
+    {
+      "id": "phase-1",
+      "name": "Setup and Infrastructure",
+      "description": "Install expo-haptics package and create a reusable haptics utility module",
+      "subtasks": [
+        {
+          "id": "1.1",
+          "title": "Install expo-haptics package",
+          "description": "Add expo-haptics to the pips-solver project dependencies using the expo install command to ensure version compatibility",
+          "status": "completed",
+          "estimated_effort": "5 minutes",
+          "files_to_modify": [
+            "pips-solver/package.json"
+          ],
+          "acceptance_criteria": [
+            "expo-haptics is added to package.json dependencies",
+            "Package installs without errors"
+          ],
+          "notes": "Successfully installed expo-haptics@~15.0.8 using expo install for SDK 54.0.0 compatibility. Package added to package.json and yarn.lock updated.",
+          "updated_at": "2025-12-22T08:22:10.840878+00:00"
+        },
+        {
+          "id": "1.2",
+          "title": "Create haptics utility module",
+          "description": "Create a centralized haptics utility (src/utils/haptics.ts) that wraps expo-haptics with app-specific haptic patterns for different interaction types: selection, edge drag, cell tap, error feedback",
+          "status": "completed",
+          "estimated_effort": "15 minutes",
+          "files_to_modify": [
+            "pips-solver/src/utils/haptics.ts"
+          ],
+          "acceptance_criteria": [
+            "haptics.ts exports functions for: triggerSelection, triggerImpactLight, triggerImpactMedium, triggerCellTap, triggerEdgeDrag",
+            "Graceful fallback if haptics not available (web platform)",
+            "TypeScript types are properly defined"
+          ],
+          "notes": "Created haptics.ts utility module with all required exports: triggerSelection, triggerImpactLight, triggerImpactMedium, triggerCellTap, triggerEdgeDrag. Also added triggerEdgeDragStart/End, triggerPaintCell, triggerPaletteSelect, triggerControlButton, and notification haptics (error/success/warning). Includes graceful fallback for web platform and full JSDoc documentation.",
+          "updated_at": "2025-12-22T08:26:11.775946+00:00"
+        }
+      ]
+    },
+    {
+      "id": "phase-2",
+      "name": "Step1GridAlignment Haptic Integration",
+      "description": "Add haptic feedback to grid edge dragging and cell tap (hole toggle) interactions",
+      "subtasks": [
+        {
+          "id": "2.1",
+          "title": "Add haptics to grid edge drag gestures",
+          "description": "Integrate haptic feedback into leftGesture, rightGesture, topGesture, and bottomGesture Pan gestures. Trigger light haptic on drag start (onBegin) and subtle continuous feedback during drag",
+          "status": "completed",
+          "estimated_effort": "20 minutes",
+          "files_to_modify": [
+            "pips-solver/src/app/screens/builder/Step1GridAlignment.tsx"
+          ],
+          "acceptance_criteria": [
+            "Light impact haptic triggers when user starts dragging any edge",
+            "Selection haptic triggers when drag ends (feedback that position is set)",
+            "Haptics import from utils/haptics module"
+          ],
+          "notes": "Integrated haptic feedback into all four edge gestures (leftGesture, rightGesture, topGesture, bottomGesture). Added triggerEdgeDragStart() in onBegin for light haptic on drag start, and triggerEdgeDragEnd() in onFinalize for selection haptic when drag ends. TypeScript compiles successfully.",
+          "updated_at": "2025-12-22T08:30:05.254688+00:00"
+        },
+        {
+          "id": "2.2",
+          "title": "Add haptics to cell tap (hole toggle) gesture",
+          "description": "Add haptic feedback when user taps a cell to mark/unmark it as a hole. Use medium impact for toggling state",
+          "status": "completed",
+          "estimated_effort": "10 minutes",
+          "files_to_modify": [
+            "pips-solver/src/app/screens/builder/Step1GridAlignment.tsx"
+          ],
+          "acceptance_criteria": [
+            "Medium impact haptic triggers when cell is tapped to toggle hole",
+            "Haptic provides clear tactile confirmation of the toggle action"
+          ],
+          "notes": "Added triggerCellTap() haptic feedback to the tap gesture handler in DraggableGridOverlay. When user taps a cell to toggle hole state, medium impact haptic provides clear tactile confirmation. TypeScript compiles successfully.",
+          "updated_at": "2025-12-22T08:32:53.734469+00:00"
+        },
+        {
+          "id": "2.3",
+          "title": "Add haptics to row/column control buttons",
+          "description": "Add light haptic feedback when user taps +/- buttons to change grid rows or columns",
+          "status": "completed",
+          "estimated_effort": "10 minutes",
+          "files_to_modify": [
+            "pips-solver/src/app/screens/builder/Step1GridAlignment.tsx"
+          ],
+          "acceptance_criteria": [
+            "Light haptic triggers on each +/- button press",
+            "Provides tactile confirmation that the control was activated"
+          ],
+          "notes": "Added triggerControlButton() haptic feedback to handleRowChange and handleColChange functions in Step1GridAlignment. When users tap +/- buttons to change grid rows or columns, a light impact haptic provides tactile confirmation. TypeScript compiles successfully.",
+          "updated_at": "2025-12-22T08:36:11.855916+00:00"
+        }
+      ]
+    },
+    {
+      "id": "phase-3",
+      "name": "Step2RegionPainting Haptic Integration",
+      "description": "Add haptic feedback to region painting gestures and palette selection",
+      "subtasks": [
+        {
+          "id": "3.1",
+          "title": "Add haptics to cell painting gesture",
+          "description": "Integrate haptic feedback into the paintGesture. Trigger light haptic when painting starts and selection haptic when each new cell is painted during drag",
+          "status": "pending",
+          "estimated_effort": "15 minutes",
+          "files_to_modify": [
+            "pips-solver/src/app/screens/builder/Step2RegionPainting.tsx"
+          ],
+          "acceptance_criteria": [
+            "Light impact haptic triggers when painting begins (onBegin)",
+            "Selection haptic triggers when moving to a new cell during drag",
+            "No haptic when staying on same cell (performance)"
+          ]
+        },
+        {
+          "id": "3.2",
+          "title": "Add haptics to palette color selection",
+          "description": "Add haptic feedback when user selects a region color from the palette",
+          "status": "pending",
+          "estimated_effort": "10 minutes",
+          "files_to_modify": [
+            "pips-solver/src/app/screens/builder/Step2RegionPainting.tsx"
+          ],
+          "acceptance_criteria": [
+            "Selection haptic triggers when palette color is tapped",
+            "Provides tactile confirmation of color selection"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "phase-4",
+      "name": "Testing and Polish",
+      "description": "Verify haptic feedback works correctly and adjust intensity for optimal user experience",
+      "subtasks": [
+        {
+          "id": "4.1",
+          "title": "Test TypeScript compilation",
+          "description": "Ensure the project compiles without TypeScript errors after all haptic integrations",
+          "status": "pending",
+          "estimated_effort": "5 minutes",
+          "files_to_modify": [],
+          "acceptance_criteria": [
+            "npx tsc --noEmit passes without errors",
+            "No type errors in modified files"
+          ]
+        },
+        {
+          "id": "4.2",
+          "title": "Document haptic patterns",
+          "description": "Add inline comments documenting the haptic feedback patterns used for each interaction type",
+          "status": "pending",
+          "estimated_effort": "5 minutes",
+          "files_to_modify": [
+            "pips-solver/src/utils/haptics.ts"
+          ],
+          "acceptance_criteria": [
+            "JSDoc comments explain each haptic function's purpose",
+            "Comments describe the tactile feel and when to use each pattern"
+          ]
+        }
+      ]
+    }
+  ],
+  "workflow_type": "development",
+  "services_involved": [
+    "pips-solver"
+  ],
+  "final_acceptance": [
+    "expo-haptics is installed and working",
+    "Grid edge dragging provides haptic feedback on start and end",
+    "Cell taps (hole toggle) provide medium impact haptic",
+    "Row/column +/- buttons provide light haptic feedback",
+    "Region painting provides haptic on start and when entering new cells",
+    "Palette color selection provides haptic feedback",
+    "TypeScript compiles without errors",
+    "Haptics gracefully degrade on unsupported platforms (web)"
+  ],
+  "spec_file": "spec.md",
+  "last_updated": "2025-12-22T08:36:11.855916+00:00"
+}
