@@ -1,6 +1,6 @@
 # Build Progress: Step1GridAlignment should use themed UI components
 
-## Status: In Progress (1/10 subtasks complete)
+## Status: In Progress (2/10 subtasks complete)
 
 ## Summary
 The Step1GridAlignment screen currently uses raw React Native primitives (TouchableOpacity, Text)
@@ -18,8 +18,13 @@ the component to use themed Button, Card, and Text components for consistency an
 
 ## Remaining Subtasks
 
-### Phase 2: Replace Button Components (0/4)
-- [ ] subtask-2-1: Replace pickButton with themed Button
+### Phase 2: Replace Button Components (1/4)
+- [x] subtask-2-1: Replace pickButton with themed Button
+  - Replaced 'Select Image' TouchableOpacity with Button component (variant='primary')
+  - Added import for Button from '../../components/ui'
+  - Simplified pickButton style to only include layout properties
+  - Removed pickButtonText style
+  - Committed: e03633d
 - [ ] subtask-2-2: Replace AI extraction button with themed Button
 - [ ] subtask-2-3: Replace row/col control buttons with themed Buttons
 - [ ] subtask-2-4: Replace newImageButton with themed Button

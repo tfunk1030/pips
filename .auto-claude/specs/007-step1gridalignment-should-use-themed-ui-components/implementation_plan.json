@@ -49,13 +49,13 @@
       "phase_id": "phase-2",
       "name": "Replace Button Components",
       "description": "Replace all TouchableOpacity-based buttons with themed Button components",
-      "status": "pending",
+      "status": "in_progress",
       "subtasks": [
         {
           "subtask_id": "subtask-2-1",
           "title": "Replace pickButton with themed Button",
           "description": "Replace the 'Select Image' TouchableOpacity button in the empty state with Button component using variant='primary'.",
-          "status": "pending",
+          "status": "completed",
           "files_to_modify": [
             "pips-solver/src/app/screens/builder/Step1GridAlignment.tsx"
           ],
