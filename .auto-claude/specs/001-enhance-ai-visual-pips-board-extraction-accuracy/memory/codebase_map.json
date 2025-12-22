@@ -1,0 +1,10 @@
+{
+  "discovered_files": {
+    "pips-solver/src/services/": {
+      "description": "AI extraction pipeline: 5-stage extraction (Grid Geometry, Cell Detection, Region Mapping, Constraint Extraction, Domino Extraction) with 3-model ensemble (Gemini, GPT, Claude). Known issues: code duplication between aiExtraction.ts and ensembleExtraction.ts, missing examples, prompt verbosity.",
+      "category": "architecture",
+      "discovered_at": "2025-12-22T04:25:33.826722+00:00"
+    }
+  },
+  "last_updated": "2025-12-22T04:25:33.826722+00:00"
+}

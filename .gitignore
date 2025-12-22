@@ -2,3 +2,4 @@ node_modules
 
 # Windows reserved device names
 nul
+.auto-claude/.env

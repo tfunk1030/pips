@@ -1,0 +1,676 @@
+{
+  "integrations_researched": [
+    {
+      "name": "Expo SDK",
+      "type": "framework",
+      "verified_package": {
+        "name": "expo",
+        "install_command": "npx create-expo-app",
+        "version": "~54.0.30",
+        "verified": true
+      },
+      "api_patterns": {
+        "imports": [
+          "import * as ImagePicker from 'expo-image-picker'",
+          "import * as FileSystem from 'expo-file-system'",
+          "import { Image } from 'expo-image'"
+        ],
+        "initialization": "npx expo start",
+        "key_functions": [
+          "ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, quality: 1 })",
+          "ImagePicker.requestMediaLibraryPermissionsAsync()",
+          "FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 })"
+        ],
+        "verified_against": "Context7 MCP: /expo/expo, /websites/expo_dev_versions_v54_0_0"
+      },
+      "configuration": {
+        "env_vars": [],
+        "config_files": ["app.json", "eas.json"],
+        "dependencies": [
+          "expo-image-picker",
+          "expo-file-system",
+          "expo-image-manipulator"
+        ]
+      },
+      "infrastructure": {
+        "requires_docker": false,
+        "docker_image": null,
+        "ports": [8081, 19000, 19001],
+        "volumes": []
+      },
+      "gotchas": [
+        "ImagePicker result.assets[0].uri contains the selected image URI",
+        "No permissions request needed for launching image library on most platforms",
+        "For videos on iOS with allowsEditing: false and videoExportPreset: 'Passthrough', manually request permissions"
+      ],
+      "research_sources": [
+        "Context7 MCP: /expo/expo",
+        "https://docs.expo.dev/versions/v54.0.0/sdk/imagepicker/"
+      ]
+    },
+    {
+      "name": "React Native SVG",
+      "type": "library",
+      "verified_package": {
+        "name": "react-native-svg",
+        "install_command": "npx expo install react-native-svg",
+        "version": "15.12.1",
+        "verified": true
+      },
+      "api_patterns": {
+        "imports": [
+          "import Svg, { Path, Rect, Circle, G, Text } from 'react-native-svg'"
+        ],
+        "initialization": "No initialization needed, import and use components directly",
+        "key_functions": [
+          "<Svg width={width} height={height} viewBox={viewBox}>",
+          "<Path d={pathData} fill={color} stroke={strokeColor} />",
+          "<Rect x={x} y={y} width={w} height={h} />",
+          "<Circle cx={cx} cy={cy} r={radius} />"
+        ],
+        "verified_against": "Context7 MCP: /software-mansion/react-native-svg"
+      },
+      "configuration": {
+        "env_vars": [],
+        "config_files": [],
+        "dependencies": []
+      },
+      "infrastructure": {
+        "requires_docker": false
+      },
+      "gotchas": [
+        "Supports most SVG elements and properties",
+        "Works with iOS, Android, macOS, Windows, and web"
+      ],
+      "research_sources": [
+        "Context7 MCP: /software-mansion/react-native-svg"
+      ]
+    },
+    {
+      "name": "Zod",
+      "type": "library",
+      "verified_package": {
+        "name": "zod",
+        "install_command": "npm install zod",
+        "version": "^4.2.1",
+        "verified": true
+      },
+      "api_patterns": {
+        "imports": [
+          "import { z } from 'zod'",
+          "import * as z from 'zod'"
+        ],
+        "initialization": "const schema = z.object({ ... })",
+        "key_functions": [
+          "z.object({ field: z.string() })",
+          "z.array(z.string())",
+          "z.enum(['option1', 'option2'])",
+          "schema.parse(data)",
+          "schema.safeParse(data)",
+          "z.string().min(1).max(100)",
+          "z.number().int().positive()"
+        ],
+        "verified_against": "Context7 MCP: /colinhacks/zod"
+      },
+      "configuration": {
+        "env_vars": [],
+        "config_files": [],
+        "dependencies": []
+      },
+      "infrastructure": {
+        "requires_docker": false
+      },
+      "gotchas": [
+        "parse() throws ZodError on validation failure",
+        "safeParse() returns { success: boolean, data?, error? } without throwing",
+        "Zod 4 has significant performance improvements over v3"
+      ],
+      "research_sources": [
+        "Context7 MCP: /colinhacks/zod",
+        "https://zod.dev"
+      ]
+    },
+    {
+      "name": "OpenAI API",
+      "type": "service",
+      "verified_package": {
+        "name": "openai",
+        "install_command": "npm install openai",
+        "version": "latest",
+        "verified": true
+      },
+      "api_patterns": {
+        "imports": [
+          "import OpenAI from 'openai'"
+        ],
+        "initialization": "const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })",
+        "key_functions": [
+          "openai.chat.completions.create({ model, messages, max_tokens })",
+          "openai.responses.create({ model, input })",
+          "openai.files.create({ file, purpose: 'vision' })"
+        ],
+        "verified_against": "Context7 MCP: /websites/platform_openai"
+      },
+      "configuration": {
+        "env_vars": ["OPENAI_API_KEY"],
+        "config_files": [],
+        "dependencies": []
+      },
+      "infrastructure": {
+        "requires_docker": false
+      },
+      "api_endpoints": {
+        "chat_completions": "https://api.openai.com/v1/chat/completions",
+        "responses": "https://api.openai.com/v1/responses",
+        "files": "https://api.openai.com/v1/files"
+      },
+      "vision_api_format": {
+        "image_url": {
+          "type": "image_url",
+          "image_url": {
+            "url": "data:image/jpeg;base64,{base64_string}",
+            "detail": "high|low|auto"
+          }
+        },
+        "supported_formats": ["PNG", "JPEG", "WEBP", "GIF (non-animated)"],
+        "max_payload_size": "50 MB",
+        "max_images_per_request": 500
+      },
+      "gotchas": [
+        "Vision API images should be clear, no watermarks",
+        "Low detail: 85 token budget, 512x512 resolution",
+        "High detail: Higher token cost for fine-grained analysis",
+        "May struggle with non-Latin alphabets, small text, rotated content",
+        "Not suitable for specialized medical image interpretation"
+      ],
+      "research_sources": [
+        "Context7 MCP: /websites/platform_openai",
+        "Context7 MCP: /openai/openai-node",
+        "https://platform.openai.com/docs/guides/vision"
+      ]
+    },
+    {
+      "name": "Anthropic API (Claude)",
+      "type": "service",
+      "verified_package": {
+        "name": "@anthropic-ai/sdk",
+        "install_command": "npm install @anthropic-ai/sdk",
+        "version": "latest",
+        "verified": true
+      },
+      "api_patterns": {
+        "imports": [
+          "import Anthropic from '@anthropic-ai/sdk'"
+        ],
+        "initialization": "const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })",
+        "key_functions": [
+          "anthropic.messages.create({ model, max_tokens, messages })"
+        ],
+        "verified_against": "Context7 MCP: /anthropics/anthropic-sdk-typescript"
+      },
+      "configuration": {
+        "env_vars": ["ANTHROPIC_API_KEY"],
+        "config_files": [],
+        "dependencies": ["zod (optional, for tool schemas)"]
+      },
+      "infrastructure": {
+        "requires_docker": false
+      },
+      "api_endpoints": {
+        "messages": "https://api.anthropic.com/v1/messages"
+      },
+      "vision_api_format": {
+        "image": {
+          "type": "image",
+          "source": {
+            "type": "base64",
+            "media_type": "image/jpeg",
+            "data": "{base64_string}"
+          }
+        }
+      },
+      "headers": {
+        "x-api-key": "API key header",
+        "anthropic-version": "2023-06-01"
+      },
+      "gotchas": [
+        "Uses x-api-key header instead of Authorization Bearer",
+        "Image source uses 'type: base64' and 'media_type' fields",
+        "anthropic-version header is required"
+      ],
+      "research_sources": [
+        "Context7 MCP: /anthropics/anthropic-sdk-typescript",
+        "https://docs.anthropic.com/en/api/messages"
+      ]
+    },
+    {
+      "name": "Google Gemini API",
+      "type": "service",
+      "verified_package": {
+        "name": "@google/generative-ai",
+        "install_command": "npm install @google/generative-ai",
+        "version": "latest",
+        "verified": true
+      },
+      "api_patterns": {
+        "imports": [
+          "import { GoogleGenAI } from '@google/generative-ai'"
+        ],
+        "initialization": "const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })",
+        "key_functions": [
+          "ai.models.generateContent({ model, contents, config })"
+        ],
+        "verified_against": "Context7 MCP: /websites/ai_google_dev_gemini-api"
+      },
+      "configuration": {
+        "env_vars": ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
+        "config_files": [],
+        "dependencies": []
+      },
+      "infrastructure": {
+        "requires_docker": false
+      },
+      "api_endpoints": {
+        "generate_content": "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+      },
+      "vision_api_format": {
+        "inline_data": {
+          "mime_type": "image/jpeg",
+          "data": "{base64_string}"
+        },
+        "openai_compatible": {
+          "type": "image_url",
+          "image_url": {
+            "url": "data:image/jpeg;base64,{base64_string}"
+          }
+        }
+      },
+      "models": {
+        "current": "gemini-2.0-flash",
+        "vision": "gemini-2.5-flash-image"
+      },
+      "gotchas": [
+        "Supports OpenAI-compatible endpoint at /v1beta/openai/chat/completions",
+        "Native API uses 'inline_data' with 'mime_type' and 'data' fields",
+        "Can use same request format as OpenAI with OpenAI SDK pointing to Google base URL"
+      ],
+      "research_sources": [
+        "Context7 MCP: /websites/ai_google_dev_gemini-api",
+        "https://ai.google.dev/gemini-api/docs"
+      ]
+    },
+    {
+      "name": "OpenRouter API",
+      "type": "service",
+      "verified_package": {
+        "name": null,
+        "install_command": "Uses OpenAI SDK with custom base URL",
+        "version": null,
+        "verified": true
+      },
+      "api_patterns": {
+        "imports": [
+          "import OpenAI from 'openai'"
+        ],
+        "initialization": "const openai = new OpenAI({ apiKey: OPENROUTER_KEY, baseURL: 'https://openrouter.ai/api/v1' })",
+        "key_functions": [
+          "openai.chat.completions.create({ model: 'google/gemini-3-pro', messages })"
+        ],
+        "verified_against": "Code inspection in pips-solver/src/services/extraction/apiClient.ts"
+      },
+      "configuration": {
+        "env_vars": ["OPENROUTER_API_KEY"],
+        "config_files": [],
+        "dependencies": ["openai (npm package for client)"]
+      },
+      "infrastructure": {
+        "requires_docker": false
+      },
+      "api_endpoints": {
+        "chat_completions": "https://openrouter.ai/api/v1/chat/completions"
+      },
+      "headers": {
+        "Authorization": "Bearer {API_KEY}",
+        "HTTP-Referer": "Your app URL",
+        "X-Title": "Your app name"
+      },
+      "model_format": {
+        "gemini": "google/gemini-3-pro-preview",
+        "gpt": "openai/gpt-5.2",
+        "claude": "anthropic/claude-opus-4.5"
+      },
+      "gotchas": [
+        "Uses OpenAI-compatible API format",
+        "Single API key provides access to multiple providers",
+        "Model names use provider/model format",
+        "Requires HTTP-Referer and X-Title headers for some features"
+      ],
+      "research_sources": [
+        "Code inspection: pips-solver/src/services/extraction/apiClient.ts",
+        "Code inspection: pips-solver/src/services/extraction/config.ts"
+      ]
+    },
+    {
+      "name": "OpenCV (Python)",
+      "type": "library",
+      "verified_package": {
+        "name": "opencv-python",
+        "install_command": "pip install opencv-python>=4.8.0",
+        "version": ">=4.8.0",
+        "verified": true
+      },
+      "api_patterns": {
+        "imports": [
+          "import cv2",
+          "import numpy as np"
+        ],
+        "initialization": "img = cv2.imread('image.png')",
+        "key_functions": [
+          "cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)",
+          "cv2.GaussianBlur(gray, (5,5), 0)",
+          "cv2.Canny(blur, threshold1, threshold2)",
+          "cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)",
+          "cv2.boundingRect(contour)",
+          "cv2.rectangle(img, (x,y), (x+w,y+h), color, thickness)"
+        ],
+        "verified_against": "Context7 MCP: /websites/opencv_5_x, /opencv/opencv-python"
+      },
+      "configuration": {
+        "env_vars": [],
+        "config_files": [],
+        "dependencies": ["numpy>=1.24.0"]
+      },
+      "infrastructure": {
+        "requires_docker": false
+      },
+      "gotchas": [
+        "opencv-python is the pre-built CPU-only package",
+        "opencv-python-headless is for server environments without GUI",
+        "Canny edge detection requires grayscale input",
+        "findContours modifies the source image in some versions"
+      ],
+      "research_sources": [
+        "Context7 MCP: /websites/opencv_5_x",
+        "Context7 MCP: /opencv/opencv-python",
+        "Code inspection: extract_board_cells.py"
+      ]
+    },
+    {
+      "name": "FastAPI",
+      "type": "framework",
+      "verified_package": {
+        "name": "fastapi",
+        "install_command": "pip install fastapi>=0.104.0 uvicorn>=0.24.0",
+        "version": ">=0.104.0",
+        "verified": true
+      },
+      "api_patterns": {
+        "imports": [
+          "from fastapi import FastAPI, File, UploadFile, Form",
+          "from typing import Annotated"
+        ],
+        "initialization": "app = FastAPI()",
+        "key_functions": [
+          "@app.post('/upload/')",
+          "async def upload_file(file: Annotated[UploadFile, File()])",
+          "content = await file.read()",
+          "uvicorn.run(app, host='0.0.0.0', port=8000)"
+        ],
+        "verified_against": "Context7 MCP: /fastapi/fastapi"
+      },
+      "configuration": {
+        "env_vars": [],
+        "config_files": [],
+        "dependencies": [
+          "uvicorn>=0.24.0",
+          "python-multipart>=0.0.6",
+          "pydantic>=2.0.0"
+        ]
+      },
+      "infrastructure": {
+        "requires_docker": false,
+        "ports": [8000]
+      },
+      "gotchas": [
+        "python-multipart is required for form data and file uploads",
+        "Use Annotated[UploadFile, File()] for file parameters",
+        "File.read() returns bytes, use await for async",
+        "Multiple files: Annotated[list[UploadFile], File()]"
+      ],
+      "research_sources": [
+        "Context7 MCP: /fastapi/fastapi",
+        "Code inspection: cv-service/requirements.txt"
+      ]
+    },
+    {
+      "name": "React Navigation",
+      "type": "library",
+      "verified_package": {
+        "name": "@react-navigation/native",
+        "install_command": "npm install @react-navigation/native @react-navigation/stack",
+        "version": "^7.1.25",
+        "verified": true
+      },
+      "api_patterns": {
+        "imports": [
+          "import { NavigationContainer } from '@react-navigation/native'",
+          "import { createStackNavigator } from '@react-navigation/stack'"
+        ],
+        "initialization": "const Stack = createStackNavigator()",
+        "key_functions": [
+          "<NavigationContainer>",
+          "<Stack.Navigator>",
+          "<Stack.Screen name='Home' component={HomeScreen} />",
+          "navigation.navigate('ScreenName')"
+        ],
+        "verified_against": "Package.json inspection"
+      },
+      "configuration": {
+        "env_vars": [],
+        "config_files": [],
+        "dependencies": [
+          "react-native-screens",
+          "react-native-safe-area-context",
+          "react-native-gesture-handler"
+        ]
+      },
+      "infrastructure": {
+        "requires_docker": false
+      },
+      "gotchas": [
+        "Requires react-native-screens and react-native-safe-area-context",
+        "Gesture handler must be imported at app entry point"
+      ],
+      "research_sources": [
+        "Package.json inspection: pips-solver/package.json"
+      ]
+    },
+    {
+      "name": "AsyncStorage",
+      "type": "library",
+      "verified_package": {
+        "name": "@react-native-async-storage/async-storage",
+        "install_command": "npx expo install @react-native-async-storage/async-storage",
+        "version": "^2.2.0",
+        "verified": true
+      },
+      "api_patterns": {
+        "imports": [
+          "import AsyncStorage from '@react-native-async-storage/async-storage'"
+        ],
+        "initialization": "No initialization needed",
+        "key_functions": [
+          "await AsyncStorage.setItem('key', JSON.stringify(value))",
+          "await AsyncStorage.getItem('key')",
+          "await AsyncStorage.removeItem('key')",
+          "await AsyncStorage.clear()"
+        ],
+        "verified_against": "Package.json inspection"
+      },
+      "configuration": {
+        "env_vars": [],
+        "config_files": [],
+        "dependencies": []
+      },
+      "infrastructure": {
+        "requires_docker": false
+      },
+      "gotchas": [
+        "Only stores strings - must JSON.stringify objects",
+        "Has size limitations - consider expo-file-system for large data"
+      ],
+      "research_sources": [
+        "Package.json inspection: pips-solver/package.json"
+      ]
+    },
+    {
+      "name": "PyYAML",
+      "type": "library",
+      "verified_package": {
+        "name": "PyYAML",
+        "install_command": "pip install PyYAML",
+        "version": "latest",
+        "verified": true
+      },
+      "api_patterns": {
+        "imports": [
+          "import yaml"
+        ],
+        "initialization": "No initialization needed",
+        "key_functions": [
+          "yaml.safe_load(file)",
+          "yaml.dump(data)"
+        ],
+        "verified_against": "Code inspection: solve_pips.py"
+      },
+      "configuration": {
+        "env_vars": [],
+        "config_files": [],
+        "dependencies": []
+      },
+      "infrastructure": {
+        "requires_docker": false
+      },
+      "gotchas": [
+        "Always use safe_load() instead of load() for security",
+        "YAML preserves multi-line strings with | or > syntax"
+      ],
+      "research_sources": [
+        "Code inspection: solve_pips.py"
+      ]
+    },
+    {
+      "name": "YAML (JavaScript)",
+      "type": "library",
+      "verified_package": {
+        "name": "yaml",
+        "install_command": "npm install yaml",
+        "version": "^2.8.2",
+        "verified": true
+      },
+      "api_patterns": {
+        "imports": [
+          "import YAML from 'yaml'"
+        ],
+        "initialization": "No initialization needed",
+        "key_functions": [
+          "YAML.parse(yamlString)",
+          "YAML.stringify(object)"
+        ],
+        "verified_against": "Package.json inspection"
+      },
+      "configuration": {
+        "env_vars": [],
+        "config_files": [],
+        "dependencies": []
+      },
+      "infrastructure": {
+        "requires_docker": false
+      },
+      "gotchas": [],
+      "research_sources": [
+        "Package.json inspection: pips-solver/package.json"
+      ]
+    }
+  ],
+  "unverified_claims": [
+    {
+      "claim": "Model IDs: google/gemini-3-pro-preview, openai/gpt-5.2, anthropic/claude-opus-4.5",
+      "reason": "These are future model versions referenced in code (Dec 2025 dates). Current models as of Dec 2024 are gemini-2.0-flash, gpt-4, claude-3.5-sonnet. The code appears to be forward-looking.",
+      "risk_level": "medium"
+    },
+    {
+      "claim": "OpenRouter full vision API support for all three providers",
+      "reason": "Could not fetch OpenRouter documentation directly to verify vision support. Code shows OpenRouter is used but API compatibility should be tested.",
+      "risk_level": "low"
+    }
+  ],
+  "project_context": {
+    "description": "NYT Pips puzzle solver with multi-stage AI extraction pipeline",
+    "components": {
+      "python_backend": {
+        "purpose": "Computer vision grid extraction and CSP puzzle solving",
+        "key_files": [
+          "solve_pips.py",
+          "extract_board_cells_gridlines.py",
+          "cv-service/"
+        ]
+      },
+      "react_native_app": {
+        "purpose": "Mobile app for puzzle solving with AI extraction",
+        "key_directory": "pips-solver/",
+        "extraction_service": "pips-solver/src/services/extraction/"
+      }
+    },
+    "ai_extraction_pipeline": {
+      "stages": 5,
+      "stage_names": [
+        "Grid Geometry",
+        "Cell Detection",
+        "Region Mapping",
+        "Constraint Extraction",
+        "Domino Extraction"
+      ],
+      "ensemble_approach": "3-model consensus (Gemini, GPT, Claude)",
+      "consensus_algorithm": "Confidence-weighted voting with majority fallback"
+    }
+  },
+  "recommendations": [
+    "Verify actual model availability on OpenRouter before deployment - model IDs in code reference future versions",
+    "Consider adding retry logic with exponential backoff for all AI API calls (already present in apiClient.ts)",
+    "Test extraction pipeline with multiple puzzle screenshots to verify accuracy improvements",
+    "Consider using opencv-python-headless for cv-service if running in containerized environment",
+    "Implement response caching for repeated extractions of the same image",
+    "Add logging/telemetry to measure extraction stage accuracy individually",
+    "Consider fallback to legacy extraction (aiExtraction.ts, ensembleExtraction.ts) if new pipeline fails"
+  ],
+  "existing_gotchas_in_codebase": [
+    {
+      "file": "CLAUDE.md",
+      "issue": "LLM JSON Response Handling - Vision LLMs often return multiline strings incorrectly formatted",
+      "solution": "Use parseJSONWithFallback() from jsonParsingUtils.ts"
+    },
+    {
+      "file": "CLAUDE.md",
+      "issue": "Prompt Engineering - DRY for prompts, magic numbers should be in config.ts",
+      "solution": "Use NYT_VALIDATION constants and shared prompt templates"
+    },
+    {
+      "file": "src/services/extraction/config.ts",
+      "issue": "Confidence threshold: 0.70 for retry trigger, 0.10 gap for high confidence",
+      "solution": "These are tunable parameters in DEFAULT_CONFIG"
+    }
+  ],
+  "context7_libraries_used": [
+    "/expo/expo",
+    "/software-mansion/react-native-svg",
+    "/colinhacks/zod",
+    "/websites/platform_openai",
+    "/anthropics/anthropic-sdk-typescript",
+    "/websites/ai_google_dev_gemini-api",
+    "/fastapi/fastapi",
+    "/websites/opencv_5_x",
+    "/opencv/opencv-python"
+  ],
+  "created_at": "2024-12-22T00:00:00Z"
+}
