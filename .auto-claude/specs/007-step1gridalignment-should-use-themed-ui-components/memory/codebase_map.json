@@ -1,0 +1,20 @@
+{
+  "discovered_files": {
+    "pips-solver/src/app/screens/builder/Step1GridAlignment.tsx": {
+      "description": "Step1GridAlignment uses raw TouchableOpacity and inline styles instead of themed UI components. Contains 5 different button types (pickButton, aiButton, controlButton, newImageButton) and multiple text elements that should use the UI library.",
+      "category": "ui_components",
+      "discovered_at": "2025-12-22T07:08:38.759687+00:00"
+    },
+    "pips-solver/src/app/components/ui/": {
+      "description": "UI component library added with Button (5 variants, 3 sizes, loading state), Card (4 variants with press animations), and Text components (Body, Heading, Label, Mono convenience components).",
+      "category": "architecture",
+      "discovered_at": "2025-12-22T07:22:42.554099+00:00"
+    },
+    "pips-solver/src/theme/": {
+      "description": "Theme system added with design tokens (colors, spacing, radii, shadows), typography configuration, animation utilities, React context, and styled helpers. Uses brass accent palette with obsidian/slate surfaces.",
+      "category": "architecture",
+      "discovered_at": "2025-12-22T07:22:42.390199+00:00"
+    }
+  },
+  "last_updated": "2025-12-22T07:22:42.554099+00:00"
+}

@@ -1,0 +1,63 @@
+# Build Progress: Step1GridAlignment should use themed UI components
+
+## Status: In Progress (1/10 subtasks complete)
+
+## Summary
+The Step1GridAlignment screen currently uses raw React Native primitives (TouchableOpacity, Text)
+with inline StyleSheet styles instead of the established UI component library. This task refactors
+the component to use themed Button, Card, and Text components for consistency and maintainability.
+
+## Completed Subtasks
+
+### Phase 1: Setup and Analysis ✅
+- [x] **subtask-1-1**: Merge UI component library from branch 001
+  - Added theme system: tokens.ts, fonts.ts, animations.ts, ThemeContext.tsx, styled.ts, index.ts
+  - Added UI components: Button.tsx, Card.tsx, Text.tsx, index.ts
+  - Added supporting files: Step1GridAlignment.tsx, overlayTypes.ts, gridCalculations.ts, ConfidenceIndicator.tsx
+  - Committed: f1ba6cb
+
+## Remaining Subtasks
+
+### Phase 2: Replace Button Components (0/4)
+- [ ] subtask-2-1: Replace pickButton with themed Button
+- [ ] subtask-2-2: Replace AI extraction button with themed Button
+- [ ] subtask-2-3: Replace row/col control buttons with themed Buttons
+- [ ] subtask-2-4: Replace newImageButton with themed Button
+
+### Phase 3: Replace Text Components (0/1)
+- [ ] subtask-3-1: Replace static text with themed Text components
+
+### Phase 4: Use Card and Theme Tokens (0/2)
+- [ ] subtask-4-1: Wrap confidence section in Card component
+- [ ] subtask-4-2: Replace hardcoded colors with theme tokens
+
+### Phase 5: Cleanup and Testing (0/2)
+- [ ] subtask-5-1: Remove unused StyleSheet styles
+- [ ] subtask-5-2: Verify component functionality and appearance
+
+## Files Created
+
+### Theme System
+- `pips-solver/src/theme/index.ts` - Main exports
+- `pips-solver/src/theme/tokens.ts` - Design tokens (colors, spacing, radii, shadows, etc.)
+- `pips-solver/src/theme/fonts.ts` - Font configuration and text styles
+- `pips-solver/src/theme/animations.ts` - Reanimated animation utilities
+- `pips-solver/src/theme/ThemeContext.tsx` - React context provider
+- `pips-solver/src/theme/styled.ts` - Style utilities
+
+### UI Components
+- `pips-solver/src/app/components/ui/Button.tsx` - Themed button with variants
+- `pips-solver/src/app/components/ui/Card.tsx` - Themed card container
+- `pips-solver/src/app/components/ui/Text.tsx` - Themed typography components
+- `pips-solver/src/app/components/ui/index.ts` - Barrel exports
+
+### Supporting Files
+- `pips-solver/src/app/screens/builder/Step1GridAlignment.tsx` - Target component for refactoring
+- `pips-solver/src/model/overlayTypes.ts` - Type definitions
+- `pips-solver/src/utils/gridCalculations.ts` - Grid utility functions
+- `pips-solver/src/app/components/ConfidenceIndicator.tsx` - Confidence indicator component
+
+## Notes
+- Theme system provides brass accent colors with obsidian/slate surfaces
+- UI components include press animations and multiple variants
+- Step1GridAlignment.tsx is ready for refactoring in subsequent subtasks

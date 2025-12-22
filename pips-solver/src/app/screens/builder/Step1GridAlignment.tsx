@@ -20,6 +20,7 @@ import Svg, { Circle, Line, Rect } from 'react-native-svg';
 import { BuilderAction, GridBounds, OverlayBuilderState } from '../../../model/overlayTypes';
 import { constrainBounds, hitTestCell } from '../../../utils/gridCalculations';
 import ConfidenceIndicator from '../../components/ConfidenceIndicator';
+import { Button } from '../../components/ui';
 
 interface StageConfidence {
   board?: number;
@@ -79,9 +80,12 @@ export default function Step1GridAlignment({
     return (
       <View style={styles.container}>
         <Text style={styles.emptyText}>No image selected</Text>
-        <TouchableOpacity style={styles.pickButton} onPress={onPickNewImage}>
-          <Text style={styles.pickButtonText}>Select Image</Text>
-        </TouchableOpacity>
+        <Button
+          title="Select Image"
+          variant="primary"
+          onPress={onPickNewImage}
+          style={styles.pickButton}
+        />
       </View>
     );
   }
@@ -496,17 +500,8 @@ const styles = StyleSheet.create({
     marginTop: 40,
   },
   pickButton: {
-    backgroundColor: '#007AFF',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
     alignSelf: 'center',
     marginTop: 16,
-  },
-  pickButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
   },
   imageContainer: {
     width: '100%',
