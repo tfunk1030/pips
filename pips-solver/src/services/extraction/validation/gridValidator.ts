@@ -27,10 +27,40 @@ import type {
  * Disagreement severity levels for visual highlighting and prioritization
  *
  * - critical: Affects puzzle solvability (must be resolved)
+ *   Examples: grid dimension mismatches, hole position differences, domino count mismatches
+ *
  * - warning: May affect solution quality (should be reviewed)
+ *   Examples: region boundary differences, constraint value differences, individual domino differences
+ *
  * - info: Cosmetic differences (optional to review)
+ *   Examples: confidence score variations, model response timing differences
  */
 export type DisagreementSeverity = 'critical' | 'warning' | 'info';
+
+/**
+ * Severity levels ordered by priority (highest to lowest)
+ * Used for sorting and comparison operations
+ */
+export const SEVERITY_ORDER: readonly DisagreementSeverity[] = ['critical', 'warning', 'info'] as const;
+
+/**
+ * Numerical priority values for severity comparison
+ * Lower number = higher priority
+ */
+export const SEVERITY_PRIORITY: Record<DisagreementSeverity, number> = {
+  critical: 0,
+  warning: 1,
+  info: 2,
+};
+
+/**
+ * Human-readable descriptions for each severity level
+ */
+export const SEVERITY_DESCRIPTIONS: Record<DisagreementSeverity, string> = {
+  critical: 'Affects puzzle solvability - must be resolved before solving',
+  warning: 'May affect solution quality - should be reviewed',
+  info: 'Cosmetic difference - optional to review',
+};
 
 // ════════════════════════════════════════════════════════════════════════════
 // Cell Detection Types
@@ -378,6 +408,158 @@ export function generateDisagreementId(type: DisagreementType, ...identifiers: (
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// Severity Classification Functions
+// ════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Classification rules for disagreement severity
+ *
+ * This mapping defines the severity classification for each disagreement type:
+ *
+ * CRITICAL (affects solvability):
+ * - grid_dimensions: Different grid sizes make it impossible to compare or solve
+ * - hole_position: Hole mismatches fundamentally change the puzzle structure
+ * - domino_count: Wrong number of dominoes means the puzzle can't be solved correctly
+ *
+ * WARNING (may affect solution):
+ * - region_assignment: Region boundaries affect constraint application
+ * - constraint_type: Wrong constraint type may lead to incorrect solutions
+ * - constraint_value: Wrong constraint value may lead to incorrect solutions
+ * - constraint_operator: Wrong operator may accept invalid solutions
+ * - domino_value: Individual domino mismatches may affect specific placements
+ *
+ * INFO (cosmetic):
+ * - Reserved for future use (e.g., confidence differences, formatting variations)
+ */
+export const DISAGREEMENT_SEVERITY_MAP: Record<DisagreementType, DisagreementSeverity> = {
+  grid_dimensions: 'critical',
+  hole_position: 'critical',
+  domino_count: 'critical',
+  region_assignment: 'warning',
+  constraint_type: 'warning',
+  constraint_value: 'warning',
+  constraint_operator: 'warning',
+  domino_value: 'warning',
+};
+
+/**
+ * Classify a disagreement type to its severity level
+ *
+ * Uses the central DISAGREEMENT_SEVERITY_MAP to ensure consistent
+ * classification across all comparison functions.
+ *
+ * @param type - The disagreement type to classify
+ * @returns The severity level for the disagreement type
+ *
+ * @example
+ * classifyDisagreementSeverity('grid_dimensions') // => 'critical'
+ * classifyDisagreementSeverity('region_assignment') // => 'warning'
+ */
+export function classifyDisagreementSeverity(type: DisagreementType): DisagreementSeverity {
+  return DISAGREEMENT_SEVERITY_MAP[type];
+}
+
+/**
+ * Check if a severity is at or above a threshold
+ *
+ * @param severity - The severity to check
+ * @param threshold - The minimum severity threshold
+ * @returns true if severity is at or above the threshold
+ *
+ * @example
+ * isSeverityAtLeast('critical', 'warning') // => true (critical >= warning)
+ * isSeverityAtLeast('info', 'warning') // => false (info < warning)
+ */
+export function isSeverityAtLeast(severity: DisagreementSeverity, threshold: DisagreementSeverity): boolean {
+  return SEVERITY_PRIORITY[severity] <= SEVERITY_PRIORITY[threshold];
+}
+
+/**
+ * Compare two severities for sorting
+ *
+ * @param a - First severity
+ * @param b - Second severity
+ * @returns Negative if a is more severe, positive if b is more severe, 0 if equal
+ *
+ * @example
+ * compareSeverities('critical', 'warning') // => -1 (critical comes first)
+ * compareSeverities('info', 'warning') // => 1 (warning comes first)
+ */
+export function compareSeverities(a: DisagreementSeverity, b: DisagreementSeverity): number {
+  return SEVERITY_PRIORITY[a] - SEVERITY_PRIORITY[b];
+}
+
+/**
+ * Sort disagreements by severity (most severe first)
+ *
+ * @param disagreements - Array of disagreements to sort
+ * @returns New array sorted by severity (critical > warning > info)
+ */
+export function sortDisagreementsBySeverity<T extends { severity: DisagreementSeverity }>(
+  disagreements: T[]
+): T[] {
+  return [...disagreements].sort((a, b) => compareSeverities(a.severity, b.severity));
+}
+
+/**
+ * Filter disagreements by minimum severity level
+ *
+ * @param disagreements - Array of disagreements to filter
+ * @param minSeverity - Minimum severity to include
+ * @returns Filtered array containing only disagreements at or above the threshold
+ *
+ * @example
+ * filterDisagreementsBySeverity(allDisagreements, 'warning')
+ * // Returns only 'critical' and 'warning' disagreements
+ */
+export function filterDisagreementsBySeverity<T extends { severity: DisagreementSeverity }>(
+  disagreements: T[],
+  minSeverity: DisagreementSeverity
+): T[] {
+  return disagreements.filter(d => isSeverityAtLeast(d.severity, minSeverity));
+}
+
+/**
+ * Get the highest (most severe) severity from a list of disagreements
+ *
+ * @param disagreements - Array of disagreements
+ * @returns The highest severity found, or undefined if array is empty
+ */
+export function getHighestSeverity(
+  disagreements: { severity: DisagreementSeverity }[]
+): DisagreementSeverity | undefined {
+  if (disagreements.length === 0) return undefined;
+
+  let highest: DisagreementSeverity = 'info';
+  for (const d of disagreements) {
+    if (SEVERITY_PRIORITY[d.severity] < SEVERITY_PRIORITY[highest]) {
+      highest = d.severity;
+    }
+  }
+  return highest;
+}
+
+/**
+ * Get a human-readable description of why a disagreement type has its severity
+ *
+ * @param type - The disagreement type
+ * @returns Human-readable explanation of the severity classification
+ */
+export function getSeverityReason(type: DisagreementType): string {
+  const reasons: Record<DisagreementType, string> = {
+    grid_dimensions: 'Grid size must match for the puzzle to be solvable',
+    hole_position: 'Hole positions define the fundamental puzzle structure',
+    domino_count: 'Incorrect domino count makes the puzzle unsolvable',
+    region_assignment: 'Region boundaries determine where constraints apply',
+    constraint_type: 'Wrong constraint type may invalidate the solution',
+    constraint_value: 'Wrong constraint value may lead to incorrect solutions',
+    constraint_operator: 'Wrong operator may accept or reject valid solutions',
+    domino_value: 'Individual domino differences may affect specific placements',
+  };
+  return reasons[type];
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // Parsing and Normalization
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -574,7 +756,7 @@ function compareDimensions(
       id: generateDisagreementId('grid_dimensions', 'rows'),
       type: 'grid_dimensions',
       dimension: 'rows',
-      severity: 'critical',
+      severity: classifyDisagreementSeverity('grid_dimensions'),
       description: `Row count disagreement: ${Object.entries(rowValues).map(([m, v]) => `${m}=${v}`).join(', ')}`,
       values: rowValues,
     });
@@ -585,7 +767,7 @@ function compareDimensions(
       id: generateDisagreementId('grid_dimensions', 'cols'),
       type: 'grid_dimensions',
       dimension: 'cols',
-      severity: 'critical',
+      severity: classifyDisagreementSeverity('grid_dimensions'),
       description: `Column count disagreement: ${Object.entries(colValues).map(([m, v]) => `${m}=${v}`).join(', ')}`,
       values: colValues,
     });
@@ -646,7 +828,7 @@ function compareHolePositions(
         disagreements.push({
           id: generateDisagreementId('hole_position', row, col),
           type: 'hole_position',
-          severity: 'critical',
+          severity: classifyDisagreementSeverity('hole_position'),
           coordinate: { row, col },
           description: `Hole disagreement at (${row},${col}): ${Object.entries(values).map(([m, v]) => `${m}=${v ? 'hole' : 'cell'}`).join(', ')}`,
           detections,
@@ -721,7 +903,7 @@ function compareRegionAssignments(
         disagreements.push({
           id: generateDisagreementId('region_assignment', row, col),
           type: 'region_assignment',
-          severity: 'warning',
+          severity: classifyDisagreementSeverity('region_assignment'),
           coordinate: { row, col },
           description: `Region disagreement at (${row},${col}): ${Object.entries(values).map(([m, v]) => `${m}=${v || 'null'}`).join(', ')}`,
           detections,
@@ -774,7 +956,7 @@ function compareConstraints(
       disagreements.push({
         id: generateDisagreementId('constraint_type', region),
         type: 'constraint_type',
-        severity: 'warning',
+        severity: classifyDisagreementSeverity('constraint_type'),
         region,
         description: `Constraint type disagreement for region ${region}: ${Object.entries(constraintsByModel).map(([m, c]) => `${m}=${c?.type || 'none'}`).join(', ')}`,
         values: constraintsByModel,
@@ -795,7 +977,7 @@ function compareConstraints(
         disagreements.push({
           id: generateDisagreementId('constraint_value', region),
           type: 'constraint_value',
-          severity: 'warning',
+          severity: classifyDisagreementSeverity('constraint_value'),
           region,
           description: `Constraint value disagreement for region ${region}: ${Array.from(values.entries()).map(([m, v]) => `${m}=${v ?? 'undefined'}`).join(', ')}`,
           values: constraintsByModel,
@@ -817,7 +999,7 @@ function compareConstraints(
         disagreements.push({
           id: generateDisagreementId('constraint_operator', region),
           type: 'constraint_operator',
-          severity: 'warning',
+          severity: classifyDisagreementSeverity('constraint_operator'),
           region,
           description: `Constraint operator disagreement for region ${region}: ${Array.from(operators.entries()).map(([m, o]) => `${m}=${o || '=='}`).join(', ')}`,
           values: constraintsByModel,
@@ -862,7 +1044,7 @@ function compareDominoes(
     disagreements.push({
       id: generateDisagreementId('domino_count'),
       type: 'domino_count',
-      severity: 'critical',
+      severity: classifyDisagreementSeverity('domino_count'),
       description: `Domino count disagreement: ${Object.entries(counts).map(([m, c]) => `${m}=${c}`).join(', ')}`,
       values: counts,
     });
@@ -905,7 +1087,7 @@ function compareDominoes(
       disagreements.push({
         id: generateDisagreementId('domino_value', pip1, pip2),
         type: 'domino_value',
-        severity: 'warning',
+        severity: classifyDisagreementSeverity('domino_value'),
         description: `Domino [${pip1},${pip2}] disagreement: present in ${modelsWithDomino.join(', ')} but missing in ${modelsWithoutDomino.join(', ')}`,
         values,
       });
