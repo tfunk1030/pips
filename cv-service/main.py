@@ -373,7 +373,13 @@ async def extract_geometry(request: ExtractRequest):
 async def crop_puzzle(request: ExtractRequest):
     """
     Crop image to puzzle region only (excludes dominoes, UI).
-    Returns cropped image for AI analysis.
+    Returns cropped image for AI analysis with calibrated confidence scoring.
+
+    Confidence scoring uses component-specific thresholds from confidence_config.py:
+    - confidence: Numeric score (0.0 to 1.0)
+    - threshold: Categorical level ("high", "medium", "low")
+    - confidence_breakdown: Individual factor scores
+    - is_borderline: True if confidence is near a threshold boundary
     """
     from hybrid_extraction import crop_puzzle_region
 
@@ -385,6 +391,11 @@ async def crop_puzzle(request: ExtractRequest):
         "cropped_image": result.cropped_image,
         "bounds": result.bounds,
         "grid_bounds": result.grid_bounds,  # Actual grid bounds for overlay alignment
+        # Calibrated confidence scoring (uses component-specific thresholds)
+        "confidence": result.confidence,
+        "threshold": result.confidence_level,  # "high", "medium", or "low"
+        "confidence_breakdown": result.confidence_breakdown,
+        "is_borderline": result.is_borderline,
         "extraction_ms": result.extraction_ms
     }
 
