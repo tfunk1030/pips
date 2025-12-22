@@ -937,3 +937,402 @@ export function validateRegionsMatchShape(shape: string, regions: string): strin
 
   return issues;
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// CV Service Fallback Logic
+// ════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Result type indicating whether CV service was used or fallback occurred
+ */
+export type CVFallbackMode = 'cv_enhanced' | 'cv_crop_only' | 'raw_image';
+
+/**
+ * Result of preprocessing with fallback information
+ */
+export interface CVPreprocessingWithFallbackResult extends CVPreprocessingResult {
+  /** Indicates which processing mode was used */
+  fallbackMode: CVFallbackMode;
+  /** Why fallback was triggered (if applicable) */
+  fallbackReason?: string;
+  /** Whether the result is from CV service or raw image */
+  usedCVService: boolean;
+}
+
+/**
+ * Configuration for CV fallback behavior
+ */
+export interface CVFallbackConfig {
+  /** Skip health check and assume CV service is available (default: false) */
+  skipHealthCheck?: boolean;
+  /** Timeout for health check in ms (default: 3000) */
+  healthCheckTimeoutMs?: number;
+  /** Retry count for CV operations before fallback (default: 1) */
+  retryCount?: number;
+  /** Whether to attempt preprocessing even if crop fails (default: true) */
+  attemptPreprocessOnCropFailure?: boolean;
+  /** Log fallback events for debugging (default: true) */
+  logFallback?: boolean;
+}
+
+const DEFAULT_FALLBACK_CONFIG: Required<CVFallbackConfig> = {
+  skipHealthCheck: false,
+  healthCheckTimeoutMs: 3000,
+  retryCount: 1,
+  attemptPreprocessOnCropFailure: true,
+  logFallback: true,
+};
+
+/**
+ * Check CV service health with timeout
+ */
+async function checkCVServiceHealthWithTimeout(timeoutMs: number): Promise<boolean> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    const response = await fetch(`${CV_SERVICE_URL}/health`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Create a raw image fallback result when CV service is unavailable
+ */
+function createRawImageFallback(
+  base64Image: string,
+  reason: string,
+  startTime: number
+): CVPreprocessingWithFallbackResult {
+  return {
+    success: true,
+    puzzleImage: base64Image,
+    dominoImage: undefined,
+    gridInfo: {
+      confidence: 0,
+      confidenceLevel: 'unknown',
+      warnings: [
+        'CV service unavailable - using raw image',
+        'Grid detection not available - AI will need to detect grid dimensions',
+      ],
+    },
+    totalMs: Date.now() - startTime,
+    fallbackMode: 'raw_image',
+    fallbackReason: reason,
+    usedCVService: false,
+  };
+}
+
+/**
+ * Preprocess image for AI extraction with automatic fallback to raw image.
+ *
+ * This function provides a robust preprocessing pipeline that:
+ * 1. Checks if CV service is available
+ * 2. Attempts CV preprocessing (crop + enhance)
+ * 3. Falls back gracefully to raw image if CV service fails
+ *
+ * The fallback hierarchy is:
+ * 1. cv_enhanced: Full CV preprocessing (crop + preprocess) - best quality
+ * 2. cv_crop_only: CV cropping without preprocessing - medium quality
+ * 3. raw_image: Original image unchanged - AI must handle everything
+ *
+ * @param base64Image - Full screenshot as base64 string
+ * @param preprocessOptions - Preprocessing options (if CV service available)
+ * @param fallbackConfig - Configuration for fallback behavior
+ * @returns Preprocessed result with fallback information
+ */
+export async function preprocessForAIExtractionWithFallback(
+  base64Image: string,
+  preprocessOptions: PreprocessOptions = {},
+  fallbackConfig: CVFallbackConfig = {}
+): Promise<CVPreprocessingWithFallbackResult> {
+  const config = { ...DEFAULT_FALLBACK_CONFIG, ...fallbackConfig };
+  const startTime = Date.now();
+
+  // Step 1: Check CV service availability
+  let cvAvailable = false;
+
+  if (config.skipHealthCheck) {
+    cvAvailable = true;
+  } else {
+    cvAvailable = await checkCVServiceHealthWithTimeout(config.healthCheckTimeoutMs);
+  }
+
+  if (!cvAvailable) {
+    if (config.logFallback) {
+      console.warn('[CV] CV service unavailable - falling back to raw image');
+    }
+    return createRawImageFallback(
+      base64Image,
+      'CV service health check failed',
+      startTime
+    );
+  }
+
+  // Step 2: Attempt full CV preprocessing with retry logic
+  let lastError: string | undefined;
+
+  for (let attempt = 0; attempt <= config.retryCount; attempt++) {
+    try {
+      const result = await preprocessForAIExtraction(base64Image, preprocessOptions);
+
+      if (result.success && result.puzzleImage) {
+        // Full CV preprocessing succeeded
+        return {
+          ...result,
+          fallbackMode: 'cv_enhanced',
+          usedCVService: true,
+        };
+      }
+
+      lastError = result.error || 'Preprocessing returned no image';
+
+      // If preprocessing failed but we have a cropped image, that's still useful
+      // This case is already handled inside preprocessForAIExtraction
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : 'Unknown error';
+
+      if (config.logFallback && attempt < config.retryCount) {
+        console.warn(`[CV] Preprocessing attempt ${attempt + 1} failed, retrying...`);
+      }
+    }
+  }
+
+  // Step 3: Try crop-only fallback (skip preprocessing)
+  if (config.attemptPreprocessOnCropFailure) {
+    try {
+      if (config.logFallback) {
+        console.warn('[CV] Full preprocessing failed, attempting crop-only fallback');
+      }
+
+      const cropResult = await cropPuzzleRegionEnhanced(base64Image);
+
+      if (cropResult.success && cropResult.croppedImage) {
+        return {
+          success: true,
+          puzzleImage: cropResult.croppedImage,
+          dominoImage: undefined, // Skip domino cropping in fallback
+          gridInfo: {
+            confidence: cropResult.gridConfidence ?? 0,
+            confidenceLevel: cropResult.confidenceLevel,
+            detectedRows: cropResult.detectedRows,
+            detectedCols: cropResult.detectedCols,
+            warnings: [
+              ...(cropResult.warnings || []),
+              'Image preprocessing skipped - using cropped image only',
+            ],
+          },
+          gridBounds: cropResult.gridBounds,
+          totalMs: Date.now() - startTime,
+          fallbackMode: 'cv_crop_only',
+          fallbackReason: lastError,
+          usedCVService: true,
+        };
+      }
+    } catch (cropError) {
+      lastError = cropError instanceof Error ? cropError.message : 'Crop failed';
+    }
+  }
+
+  // Step 4: Final fallback - use raw image
+  if (config.logFallback) {
+    console.warn('[CV] All CV operations failed - falling back to raw image');
+  }
+
+  return createRawImageFallback(
+    base64Image,
+    lastError || 'All CV operations failed',
+    startTime
+  );
+}
+
+/**
+ * Crop puzzle region with automatic fallback to raw image.
+ *
+ * Provides a safe wrapper around cropPuzzleRegion that returns
+ * the original image if CV service fails.
+ *
+ * @param base64Image - Input image as base64 string
+ * @param config - Fallback configuration
+ * @returns Crop result (cropped image or raw image on failure)
+ */
+export async function cropPuzzleRegionWithFallback(
+  base64Image: string,
+  config: CVFallbackConfig = {}
+): Promise<CropResult & { usedFallback: boolean; fallbackReason?: string }> {
+  const fullConfig = { ...DEFAULT_FALLBACK_CONFIG, ...config };
+  const startTime = Date.now();
+
+  // Check CV service availability
+  let cvAvailable = false;
+
+  if (fullConfig.skipHealthCheck) {
+    cvAvailable = true;
+  } else {
+    cvAvailable = await checkCVServiceHealthWithTimeout(fullConfig.healthCheckTimeoutMs);
+  }
+
+  if (!cvAvailable) {
+    if (fullConfig.logFallback) {
+      console.warn('[CV] CV service unavailable for crop - returning raw image');
+    }
+    return {
+      success: true,
+      croppedImage: base64Image,
+      extractionMs: Date.now() - startTime,
+      usedFallback: true,
+      fallbackReason: 'CV service unavailable',
+    };
+  }
+
+  // Attempt crop with retry
+  let lastError: string | undefined;
+
+  for (let attempt = 0; attempt <= fullConfig.retryCount; attempt++) {
+    try {
+      const result = await cropPuzzleRegion(base64Image);
+
+      if (result.success && result.croppedImage) {
+        return {
+          ...result,
+          usedFallback: false,
+        };
+      }
+
+      lastError = result.error || 'Crop returned no image';
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : 'Unknown error';
+    }
+  }
+
+  // Fallback to raw image
+  if (fullConfig.logFallback) {
+    console.warn(`[CV] Crop failed: ${lastError} - returning raw image`);
+  }
+
+  return {
+    success: true,
+    croppedImage: base64Image,
+    extractionMs: Date.now() - startTime,
+    usedFallback: true,
+    fallbackReason: lastError,
+  };
+}
+
+/**
+ * Crop domino region with automatic fallback.
+ *
+ * If CV service fails, returns undefined for cropped image
+ * (caller should use full image for domino extraction).
+ *
+ * @param base64Image - Input image as base64 string
+ * @param puzzleBottomY - Optional Y coordinate of puzzle bottom
+ * @param config - Fallback configuration
+ * @returns Crop result or empty result on failure
+ */
+export async function cropDominoRegionWithFallback(
+  base64Image: string,
+  puzzleBottomY?: number,
+  config: CVFallbackConfig = {}
+): Promise<CropResult & { usedFallback: boolean; fallbackReason?: string }> {
+  const fullConfig = { ...DEFAULT_FALLBACK_CONFIG, ...config };
+  const startTime = Date.now();
+
+  // Check CV service availability
+  let cvAvailable = false;
+
+  if (fullConfig.skipHealthCheck) {
+    cvAvailable = true;
+  } else {
+    cvAvailable = await checkCVServiceHealthWithTimeout(fullConfig.healthCheckTimeoutMs);
+  }
+
+  if (!cvAvailable) {
+    if (fullConfig.logFallback) {
+      console.warn('[CV] CV service unavailable for domino crop - skipping');
+    }
+    return {
+      success: false,
+      error: 'CV service unavailable',
+      extractionMs: Date.now() - startTime,
+      usedFallback: true,
+      fallbackReason: 'CV service unavailable',
+    };
+  }
+
+  // Attempt crop with retry
+  let lastError: string | undefined;
+
+  for (let attempt = 0; attempt <= fullConfig.retryCount; attempt++) {
+    try {
+      const result = await cropDominoRegion(base64Image, puzzleBottomY);
+
+      if (result.success && result.croppedImage) {
+        return {
+          ...result,
+          usedFallback: false,
+        };
+      }
+
+      lastError = result.error || 'Domino crop returned no image';
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : 'Unknown error';
+    }
+  }
+
+  // Return failure (caller should use full image)
+  if (fullConfig.logFallback) {
+    console.warn(`[CV] Domino crop failed: ${lastError}`);
+  }
+
+  return {
+    success: false,
+    error: lastError,
+    extractionMs: Date.now() - startTime,
+    usedFallback: true,
+    fallbackReason: lastError,
+  };
+}
+
+/**
+ * Get a summary of CV service status for debugging/logging.
+ *
+ * @returns Object with service status information
+ */
+export async function getCVServiceStatus(): Promise<{
+  available: boolean;
+  url: string;
+  responseTimeMs: number;
+  error?: string;
+}> {
+  const startTime = Date.now();
+
+  try {
+    const response = await fetch(`${CV_SERVICE_URL}/health`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    return {
+      available: response.ok,
+      url: CV_SERVICE_URL,
+      responseTimeMs: Date.now() - startTime,
+      error: response.ok ? undefined : `HTTP ${response.status}`,
+    };
+  } catch (error) {
+    return {
+      available: false,
+      url: CV_SERVICE_URL,
+      responseTimeMs: Date.now() - startTime,
+      error: error instanceof Error ? error.message : 'Connection failed',
+    };
+  }
+}
