@@ -99,6 +99,10 @@
         "utils": {
           "path": "utils",
           "purpose": "Utilities"
+        },
+        "tests": {
+          "path": "tests",
+          "purpose": "Tests"
         }
       },
       "entry_point": "main.py",
@@ -111,6 +115,7 @@
         "pytesseract",
         "scikit-learn"
       ],
+      "test_directory": "tests",
       "environment": {
         "variables": {
           "ANTHROPIC_API_KEY": {
@@ -131,6 +136,39 @@
         "required_count": 2,
         "optional_count": 0,
         "detected_count": 2
+      },
+      "api": {
+        "routes": [
+          {
+            "path": "/health",
+            "methods": [
+              "GET"
+            ],
+            "file": "api_server.py",
+            "framework": "FastAPI",
+            "requires_auth": false
+          },
+          {
+            "path": "/generate-hint",
+            "methods": [
+              "POST"
+            ],
+            "file": "api_server.py",
+            "framework": "FastAPI",
+            "requires_auth": false
+          }
+        ],
+        "total_routes": 2,
+        "methods": [
+          "GET",
+          "POST"
+        ],
+        "protected_routes": []
+      },
+      "monitoring": {
+        "health_checks": [
+          "/health"
+        ]
       }
     },
     "pips-solver": {
@@ -188,5 +226,7 @@
       "claude.yml"
     ]
   },
-  "conventions": {}
+  "conventions": {
+    "typescript": true
+  }
 }

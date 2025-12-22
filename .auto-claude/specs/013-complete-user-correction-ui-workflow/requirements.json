@@ -1,4 +1,0 @@
-{
-  "task_description": "# Complete User Correction UI Workflow\n\nFinish the user correction UI workflow to allow users to easily fix any detection errors before solving. Currently incomplete per project discovery.\n\n## Rationale\nEven with improved detection, some corrections will always be needed. A smooth correction workflow turns partial detection failures into successful solves, directly addressing user frustration.\n\n## User Stories\n- As a user, I want to quickly fix detection errors so that I don't have to start over from scratch\n- As a puzzle enthusiast, I want to correct constraint numbers without retyping everything\n\n## Acceptance Criteria\n- [ ] Users can edit detected grid dimensions\n- [ ] Users can correct region assignments for any cell\n- [ ] Users can fix constraint values with tap-to-edit\n- [ ] Users can adjust domino pip values visually\n- [ ] Changes are reflected in real-time preview\n",
-  "workflow_type": "feature"
-}

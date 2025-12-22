@@ -1,11 +1,11 @@
 {
-  "id": "ideation-20251222-031657",
+  "id": "ideation-20251222-104217",
   "project_id": "C:\\Users\\tfunk\\pips",
   "config": {
     "enabled_types": [
       "code_improvements",
       "ui_ux_improvements",
-      "security_hardening"
+      "documentation_gaps"
     ],
     "include_roadmap_context": true,
     "include_kanban_context": true,
@@ -15,143 +15,128 @@
     {
       "id": "ci-001",
       "type": "code_improvements",
-      "title": "Add Solution Export Formats (JSON/PNG)",
-      "description": "Extend the existing exportPuzzle() function to support multiple export formats beyond YAML. Add JSON export for data interchange and PNG export for sharing visual solutions on social media or messaging apps.",
-      "rationale": "The exportPuzzle() pattern exists in storage/puzzles.ts returning YAML via specToYAML(). The GridRenderer component already renders solutions visually. The Button component has icon support for format selection. react-native-view-shot could capture GridRenderer output. This is a natural extension of existing export infrastructure.",
+      "title": "Add Image Quality Pre-check Endpoint",
+      "description": "Expose a standalone /analyze-quality endpoint that returns image quality metrics (brightness, contrast, saturation, dynamic range) before attempting puzzle extraction. This allows the app to warn users about poor image quality upfront.",
+      "rationale": "The _calculate_image_stats function already exists in cv-service/main.py and computes comprehensive quality metrics. Currently this is only used internally during preprocessing. Exposing it as a standalone endpoint follows the existing endpoint pattern and enables proactive quality feedback.",
       "builds_upon": [
-        "exportPuzzle() in storage/puzzles.ts",
-        "GridRenderer visual rendering",
-        "specToYAML() in model/parser.ts"
+        "cv-service preprocessing pipeline",
+        "_calculate_image_stats function"
       ],
-      "estimated_effort": "small",
+      "estimated_effort": "trivial",
       "affected_files": [
-        "pips-solver/src/storage/puzzles.ts",
-        "pips-solver/src/model/parser.ts",
-        "pips-solver/src/app/screens/PuzzleViewerScreen.tsx"
+        "cv-service/main.py"
       ],
       "existing_patterns": [
-        "exportPuzzle() function pattern",
-        "GridRenderer for visual output",
-        "Button variant for format selection",
-        "Expo sharing APIs"
+        "CropPuzzleRequest/Response pydantic models",
+        "/health endpoint pattern",
+        "decode_image utility"
       ],
-      "implementation_approach": "1. Add exportPuzzleAsJSON() returning JSON.stringify(puzzle.spec). 2. Add exportPuzzleAsImage() using react-native-view-shot to capture GridRenderer ref. 3. Update PuzzleViewerScreen with export format dropdown/modal. 4. Use Expo.shareAsync for sharing. ~80 lines following existing patterns.",
+      "implementation_approach": "Create ImageQualityRequest and ImageQualityResponse pydantic models following existing patterns. Add @app.post('/analyze-quality') endpoint that calls decode_image and _calculate_image_stats, returning quality metrics with suggested thresholds for extraction success likelihood.",
       "status": "draft",
-      "created_at": "2025-12-22T03:15:00.000Z"
+      "created_at": "2025-12-22T10:40:00.000Z"
     },
     {
       "id": "ci-002",
       "type": "code_improvements",
-      "title": "Add Domino Tray Validator",
-      "description": "Create a new validator for domino tray completeness and validity following the existing validation pattern. Check for duplicate dominoes in non-duplicate mode, verify pip ranges match maxPip setting, and validate tray size against puzzle requirements.",
-      "rationale": "The validator pattern is well-established with validatePuzzleSpec, validateSolution, validateRegionMapping, and validateConstraints. Each returns {valid, errors, warnings}. The domino tray is a critical input but lacks dedicated validation. The dominoUtils.ts already has helper functions for domino manipulation.",
+      "title": "Add Extraction State Persistence",
+      "description": "Persist partial extraction results to AsyncStorage during the multi-stage pipeline, enabling recovery if the app is backgrounded or crashes mid-extraction. Users can resume from the last successful stage.",
+      "rationale": "HintModal.tsx already demonstrates the AsyncStorage persistence pattern for hint levels. The extraction pipeline has clear stage boundaries with validated results. Applying the same persistence pattern to extraction state follows existing code patterns.",
       "builds_upon": [
-        "validatePuzzleSpec() pattern",
-        "validateSolution() pattern",
-        "extraction/validation/* validators",
-        "utils/dominoUtils.ts"
+        "HintModal AsyncStorage persistence",
+        "Multi-stage extraction pipeline"
       ],
-      "estimated_effort": "trivial",
+      "estimated_effort": "small",
       "affected_files": [
-        "pips-solver/src/validator/validateDominoTray.ts",
-        "pips-solver/src/validator/validateSpec.ts"
+        "pips-solver/src/services/extraction/pipeline.ts",
+        "pips-solver/src/services/extraction/index.ts"
       ],
       "existing_patterns": [
-        "ValidationResult interface with valid/errors/warnings",
-        "Constraint validation in regionValidator.ts",
-        "Domino [pip1, pip2] tuple type"
+        "HINT_LEVEL_STORAGE_KEY pattern in HintModal",
+        "persistHintLevel callback pattern",
+        "Stage result interfaces"
       ],
-      "implementation_approach": "1. Create validateDominoTray(dominoes, spec) in new file. 2. Check for duplicates when allowDuplicates=false. 3. Verify all pips are in [0, maxPip] range. 4. Warn if tray size seems insufficient for grid. 5. Call from validatePuzzleSpec when spec.dominoes exists. ~60 lines.",
+      "implementation_approach": "Add EXTRACTION_STATE_STORAGE_KEY constant. After each stage completion, serialize the accumulated results to AsyncStorage. On pipeline start, check for existing state and offer to resume. Clear state on successful completion or explicit reset.",
       "status": "draft",
-      "created_at": "2025-12-22T03:15:00.000Z"
+      "created_at": "2025-12-22T10:40:00.000Z"
     },
     {
       "id": "ci-003",
       "type": "code_improvements",
-      "title": "Add CV Service Request Retry with Exponential Backoff",
-      "description": "Add retry logic with exponential backoff to CV service API calls. Handle transient network failures and server overload gracefully without requiring user intervention.",
-      "rationale": "The TASK_FALLBACK_CHAIN and StrategyConfig.maxRetries patterns in config/models.ts demonstrate failure handling concepts. The apiClient.ts in extraction/ makes HTTP calls that could benefit from retries. The cv-service endpoints return structured errors that can be used to determine retryability.",
+      "title": "Add Constraint Feasibility Pre-validation Endpoint",
+      "description": "Expose the explain_constraint_conflicts function from hint_engine.py as an API endpoint, allowing the app to validate puzzle constraints before attempting to solve. This catches impossible puzzles early.",
+      "rationale": "The explain_constraint_conflicts function already performs sophisticated feasibility analysis (checking if sum constraints are achievable given cell counts and pip ranges). Currently only accessible through the provide_hints tool. Exposing via API follows the existing cv-service endpoint pattern.",
       "builds_upon": [
-        "TASK_FALLBACK_CHAIN pattern in config/models.ts",
-        "StrategyConfig.maxRetries pattern",
-        "cvExtraction.ts API calls"
+        "hint_engine.py constraint analysis",
+        "provide_hints tool"
       ],
       "estimated_effort": "small",
       "affected_files": [
-        "pips-solver/src/services/cvExtraction.ts",
-        "pips-solver/src/utils/retry.ts"
+        "pips-agent/api_server.py",
+        "pips-agent/utils/hint_engine.py"
       ],
       "existing_patterns": [
-        "maxRetries in StrategyConfig",
-        "fetch with timeout pattern",
-        "Error response structure from cv-service"
+        "FastAPI endpoint pattern from cv-service",
+        "explain_constraint_conflicts function",
+        "YAML parsing from provide_hints"
       ],
-      "implementation_approach": "1. Create utils/retry.ts with retryWithBackoff<T>(fn, maxRetries, baseDelay). 2. Implement exponential backoff: delay = baseDelay * 2^attempt + jitter. 3. Wrap fetch calls in cvExtraction.ts with retry utility. 4. Only retry on network errors and 5xx responses, not 4xx. ~50 lines.",
+      "implementation_approach": "Add /validate-constraints POST endpoint to pips-agent/api_server.py that accepts puzzle specification and returns list of feasibility issues. Reuse existing parsing and explain_constraint_conflicts logic. Return empty issues array if puzzle is feasible.",
       "status": "draft",
-      "created_at": "2025-12-22T03:15:00.000Z"
+      "created_at": "2025-12-22T10:40:00.000Z"
     },
     {
       "id": "ci-004",
       "type": "code_improvements",
-      "title": "Add Skeleton Loading States to UI Components",
-      "description": "Create themed skeleton loading placeholder components following the existing UI component pattern. Add skeleton variants for puzzle grid, constraint cards, and domino tray that show during data loading.",
-      "rationale": "The theme system has comprehensive tokens (colors.surface.slate/ash, animations.ts timing configs) and the Button component demonstrates loading states and Reanimated animations. Currently loading states show text 'Loading...' but lack visual placeholders that match the final content shape.",
+      "title": "Add Debug Response Export Function",
+      "description": "Add a utility function to export extraction debug data (raw model responses, consensus details, timing) to a shareable format. This enables users to report extraction issues with full diagnostic data.",
+      "rationale": "The extraction pipeline already collects comprehensive debug information when saveDebugResponses is enabled. This data structure exists but there's no way to export/share it. Adding export follows the existing pattern of debug data collection.",
       "builds_upon": [
-        "Button component loading prop",
-        "theme/animations.ts timing configs",
-        "Card component structure",
-        "colors.surface.slate/ash palette"
+        "Pipeline debug info structure",
+        "ExtractionResult.debug interface"
       ],
-      "estimated_effort": "medium",
+      "estimated_effort": "trivial",
       "affected_files": [
-        "pips-solver/src/app/components/ui/Skeleton.tsx",
-        "pips-solver/src/app/components/ui/index.ts",
-        "pips-solver/src/app/screens/HomeScreen.tsx"
+        "pips-solver/src/services/extraction/pipeline.ts",
+        "pips-solver/src/services/extraction/index.ts"
       ],
       "existing_patterns": [
-        "AnimatedPressable pattern from Button",
-        "colors.surface.slate for bg",
-        "timingConfigs for animation",
-        "theme/styled.ts createStyles()"
+        "debug info structure in ExtractionResult",
+        "saveDebugResponses config option",
+        "JSON serialization patterns"
       ],
-      "implementation_approach": "1. Create Skeleton.tsx base with shimmer animation using Reanimated interpolation. 2. Use colors.surface.slate bg with lighter highlight sweep. 3. Add Skeleton.Grid matching 5x5 cell layout. 4. Add Skeleton.Card matching Card dimensions. 5. Export from ui/index.ts. ~120 lines.",
+      "implementation_approach": "Add exportDebugData(result: ExtractionResult): string function that serializes debug info to JSON with timestamps and version info. Add generateDebugReport(result) that creates a human-readable markdown summary. Both functions should handle missing debug data gracefully.",
       "status": "draft",
-      "created_at": "2025-12-22T03:15:00.000Z"
+      "created_at": "2025-12-22T10:40:00.000Z"
     },
     {
       "id": "ci-005",
       "type": "code_improvements",
-      "title": "Add Solver Progress Persistence for Resume",
-      "description": "Save solver progress to AsyncStorage periodically during long-running solves, enabling users to resume solving after app closure or background kill. The solver already has progress callbacks that track nodes/backtracks.",
-      "rationale": "The solvePuzzleAsync function (solver.ts) already has onProgress callbacks that fire every maxIterationsPerTick iterations with full state. AsyncStorage CRUD patterns (puzzles.ts) are well-established. This enables resumable solving for complex puzzles that may take minutes on mobile.",
+      "title": "Add Cross-Stage Confidence Warnings to ConfidenceSummary",
+      "description": "Enhance the ConfidenceSummary component to display cross-stage validation hints generated by the pipeline (high variance warnings, bottleneck indicators) directly in the UI.",
+      "rationale": "The pipeline already generates detailed confidence hints via generateConfidenceHints() including variance warnings and bottleneck identification. The ConfidenceSummary component displays per-stage scores but doesn't show these insights. The ConfidenceBreakdown component shows a pattern for displaying warnings.",
       "builds_upon": [
-        "solvePuzzleAsync function",
-        "SolverProgress interface",
-        "AsyncStorage patterns from puzzles.ts",
-        "SolverState type"
+        "generateConfidenceHints function in pipeline.ts",
+        "ConfidenceSummary component",
+        "ConfidenceBreakdown warning patterns"
       ],
-      "estimated_effort": "medium",
+      "estimated_effort": "small",
       "affected_files": [
-        "pips-solver/src/solver/solver.ts",
-        "pips-solver/src/storage/puzzles.ts",
-        "pips-solver/src/app/screens/SolveScreen.tsx"
+        "pips-solver/src/app/components/ui/ConfidenceIndicator.tsx"
       ],
       "existing_patterns": [
-        "AsyncStorage.setItem/getItem pattern",
-        "JSON.stringify for state serialization",
-        "onProgress callback pattern",
-        "SolverConfig interface"
+        "borderlineWarningStyle in ConfidenceBreakdown",
+        "lowestWarningStyle display pattern",
+        "isBorderline prop pattern"
       ],
-      "implementation_approach": "1. Add SOLVER_PROGRESS_KEY to puzzles.ts. 2. Create saveSolverProgress/loadSolverProgress functions following puzzle storage pattern. 3. In onProgress callback (every 1000 nodes), save serialized SolverState. 4. Add restoreFromProgress option to solvePuzzleAsync. 5. On SolveScreen mount, check for existing progress and offer resume. ~150 lines.",
+      "implementation_approach": "Extend ConfidenceSummaryProps to accept hints?: string[] and varianceWarning?: boolean. Add conditional rendering for hints below the confidence bars using the existing warning style patterns from ConfidenceBreakdown. Highlight the lowest stage with the existing isLowest pattern.",
       "status": "draft",
-      "created_at": "2025-12-22T03:15:00.000Z"
+      "created_at": "2025-12-22T10:40:00.000Z"
     },
     {
       "id": "uiux-001",
       "type": "ui_ux_improvements",
       "title": "Add Accessibility Labels Throughout App",
       "description": "Add comprehensive accessibility support including accessibilityLabel, accessibilityRole, and accessibilityHint attributes to all interactive elements across the React Native app",
-      "rationale": "Screen reader users currently cannot navigate or use the app effectively. Zero accessibility attributes were found in the codebase, making the app completely inaccessible to users with visual impairments. A grep search for 'accessibilityLabel|accessibilityRole|accessible|aria-' returned zero matches.",
+      "rationale": "Screen reader users cannot navigate most of the app. ExtractionComparisonModal.tsx is the ONLY component with comprehensive accessibility (80+ attributes found). All other screens and components lack accessibility support, creating an inconsistent and largely inaccessible experience.",
       "category": "accessibility",
       "affected_components": [
         "pips-solver/src/app/components/ui/Button.tsx",
@@ -159,10 +144,11 @@
         "pips-solver/src/app/screens/SolveScreen.tsx",
         "pips-solver/src/app/screens/builder/Step1GridAlignment.tsx",
         "pips-solver/src/app/components/AIVerificationModal.tsx",
-        "pips-solver/src/app/components/GridRenderer.tsx"
+        "pips-solver/src/app/components/GridRenderer.tsx",
+        "pips-solver/src/app/components/HintModal.tsx"
       ],
       "screenshots": [],
-      "current_state": "No accessibilityLabel, accessibilityRole, accessibilityHint, or accessible props exist anywhere in the codebase. Grep search for accessibility attributes returns zero matches across all .tsx files.",
+      "current_state": "ExtractionComparisonModal.tsx has excellent accessibility with 80+ attributes (accessibilityLabel, accessibilityRole, accessibilityHint). However, all other components including Button.tsx, HomeScreen.tsx, SolveScreen.tsx, AIVerificationModal.tsx, HintModal.tsx, and all builder steps have ZERO accessibility attributes.",
       "proposed_change": "1. Add accessibilityLabel to all Button components describing their action (e.g., 'Solve puzzle', 'Import YAML'). 2. Add accessibilityRole='button' to TouchableOpacity/Pressable elements. 3. Add accessibilityHint for complex interactions (e.g., 'Double tap to open puzzle'). 4. Mark decorative elements with accessible={false}. 5. Add accessibilityLabel to grid cells describing their content (e.g., 'Row 2, Column 3, Region A, pip value 5'). 6. Update GridRenderer to announce cell values when revealed in step-by-step mode.",
       "user_benefit": "Users with visual impairments can navigate and use the puzzle solver app with screen readers (VoiceOver/TalkBack). This also helps users with motor impairments who rely on switch control or voice commands.",
       "status": "draft",
@@ -237,170 +223,129 @@
       "created_at": "2025-12-22T03:25:00.000Z"
     },
     {
-      "id": "sec-001",
-      "type": "security_hardening",
-      "title": "Remediate exposed Anthropic API key in pips-agent/.env",
-      "description": "A real Anthropic API key (sk-ant-api03-vb9Pi...) is exposed in pips-agent/.env file. While pips-agent/.gitignore excludes .env files, the root .gitignore only excludes .auto-claude/.env. If this file was committed before the subdirectory gitignore was added, the key persists in git history.",
-      "rationale": "Exposed API keys allow attackers to make unauthorized API calls at the victim's expense. Anthropic API keys provide unrestricted access to Claude models. Once keys are in git history, they persist even after deletion from current files. This is an immediate, exploitable vulnerability.",
-      "category": "secrets_management",
-      "severity": "critical",
-      "affectedFiles": [
-        "pips-agent/.env",
-        ".gitignore"
+      "id": "doc-001",
+      "type": "documentation_gaps",
+      "title": "Update main README to reflect monorepo structure",
+      "description": "The root README.md only documents the React Native mobile app, but the project has evolved into a monorepo with three services: pips-solver (mobile app), cv-service (Python FastAPI), and pips-agent (Claude Agent SDK). Users and contributors landing on the repo see incomplete project context.",
+      "rationale": "The README is the first thing users and contributors see. Currently it mentions 'src/' paths that don't align with actual project structure (which uses pips-solver/src/). This causes confusion for onboarding developers and misrepresents the project scope.",
+      "category": "readme",
+      "targetAudience": "users",
+      "affectedAreas": [
+        "README.md",
+        "package.json"
       ],
-      "vulnerability": "CWE-798: Use of Hard-coded Credentials",
-      "currentRisk": "Real Anthropic API token (sk-ant-api03-...) is visible in pips-agent/.env. Attackers with repository access can immediately use this key for unauthorized Claude API access, potentially incurring significant costs.",
-      "remediation": "1) IMMEDIATELY rotate the Anthropic API key at console.anthropic.com. 2) Add '**/.env' and '.env' patterns to root .gitignore. 3) Verify git history for commits containing .env: `git log --all --full-history -- '**/.env'`. 4) Use BFG Repo-Cleaner or git-filter-repo to purge secrets from history if found. 5) Implement pre-commit hooks using gitleaks to prevent future commits. 6) Use environment injection at runtime for production deployments.",
-      "references": [
-        "https://owasp.org/www-community/vulnerabilities/Use_of_hard-coded_credentials",
-        "https://cwe.mitre.org/data/definitions/798.html",
-        "https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/removing-sensitive-data-from-a-repository"
-      ],
-      "compliance": [
-        "SOC2",
-        "PCI-DSS",
-        "GDPR"
-      ]
+      "currentDocumentation": "Basic mobile app documentation with outdated project structure references",
+      "proposedContent": "Add monorepo overview section, update project structure diagram to show cv-service/pips-agent/pips-solver layout, add quick links to each service's documentation, update installation instructions to cover all services",
+      "priority": "high",
+      "estimatedEffort": "medium"
     },
     {
-      "id": "sec-002",
-      "type": "security_hardening",
-      "title": "Use expo-secure-store for API keys in React Native app",
-      "description": "The pips-solver React Native app stores API keys in AsyncStorage (puzzles.ts lines 42-47). The AppSettings interface includes openrouterApiKey, anthropicApiKey, googleApiKey, and openaiApiKey fields, all stored in unencrypted local storage accessible to any app with storage permissions.",
-      "rationale": "Mobile devices are frequently lost, stolen, or compromised. AsyncStorage data is stored in plain SQLite on Android and plist on iOS, readable by any app with storage access. Users entering their personal API keys trust the app to protect these credentials.",
-      "category": "data_protection",
-      "severity": "high",
-      "affectedFiles": [
-        "pips-solver/src/storage/puzzles.ts"
+      "id": "doc-002",
+      "type": "documentation_gaps",
+      "title": "Create README for cv-service computer vision API",
+      "description": "The cv-service directory contains a FastAPI backend with 4 endpoints (/extract-geometry, /crop-puzzle, /crop-dominoes, /health) but has no README.md. While FastAPI auto-generates OpenAPI docs at /docs, there's no human-readable setup guide or architecture explanation.",
+      "rationale": "Developers needing to run or modify the CV service must read through main.py (800+ lines) to understand capabilities. The service handles critical puzzle extraction functionality and integrates with the mobile app - documentation is essential for maintenance.",
+      "category": "readme",
+      "targetAudience": "developers",
+      "affectedAreas": [
+        "cv-service/main.py",
+        "cv-service/hybrid_extraction.py",
+        "cv-service/confidence_config.py"
       ],
-      "vulnerability": "CWE-312: Cleartext Storage of Sensitive Information",
-      "currentRisk": "API keys entered by users are stored in plaintext AsyncStorage. A malicious app, rooted device, or backup extraction can access these keys, enabling unauthorized API usage billed to the user.",
-      "remediation": "1) Install expo-secure-store: `npx expo install expo-secure-store`. 2) Create secureStorage.ts module using SecureStore for sensitive data. 3) Move API key fields to SecureStore while keeping preferences in AsyncStorage. 4) Implement migration for existing users: read from AsyncStorage, write to SecureStore, delete from AsyncStorage. 5) SecureStore uses iOS Keychain and Android Keystore for encrypted storage.",
-      "references": [
-        "https://docs.expo.dev/versions/latest/sdk/securestore/",
-        "https://owasp.org/www-project-mobile-top-10/2016-risks/m2-insecure-data-storage",
-        "https://cwe.mitre.org/data/definitions/312.html"
-      ],
-      "compliance": [
-        "SOC2",
-        "PCI-DSS",
-        "GDPR"
-      ]
+      "currentDocumentation": "Only inline docstrings and auto-generated FastAPI /docs endpoint",
+      "proposedContent": "Create cv-service/README.md with: overview of CV extraction pipeline, API endpoint reference with request/response examples, environment setup (Docker/local), configuration options, debug output explanation, integration guide for mobile app",
+      "priority": "high",
+      "estimatedEffort": "medium"
     },
     {
-      "id": "sec-003",
-      "type": "security_hardening",
-      "title": "Restrict CORS origins and add security headers to CV service",
-      "description": "The cv-service FastAPI application (main.py:26-32) uses allow_origins=['*'] with allow_credentials=True - a particularly dangerous CORS configuration. No security headers (CSP, X-Frame-Options, HSTS) are configured. This allows any website to make authenticated cross-origin requests.",
-      "rationale": "The combination of wildcard origins with credentials is explicitly warned against in CORS specifications. While the service is currently stateless, this pattern creates security debt and enables CSRF-like attacks if authentication is added. Any malicious website can interact with the API.",
-      "category": "configuration",
-      "severity": "high",
-      "affectedFiles": [
-        "cv-service/main.py"
+      "id": "doc-003",
+      "type": "documentation_gaps",
+      "title": "Add architecture diagram for multi-service communication",
+      "description": "The project has complex service interactions: mobile app calls cv-service for image processing, calls AI APIs for extraction, and uses the local solver. CLAUDE.md describes this textually but there's no visual architecture diagram.",
+      "rationale": "Contributors need to understand data flow: Screenshot -> cv-service crop -> AI extraction -> solver -> UI display. A visual diagram would accelerate onboarding and help with debugging integration issues. The multi-model ensemble extraction pipeline is especially complex.",
+      "category": "architecture",
+      "targetAudience": "contributors",
+      "affectedAreas": [
+        "docs/",
+        "CLAUDE.md"
       ],
-      "vulnerability": "CWE-942: Overly Permissive Cross-domain Whitelist",
-      "currentRisk": "Any website can make cross-origin requests to the CV service. An attacker could trick users into visiting a malicious page that sends images to your service, potentially for reconnaissance or abuse.",
-      "remediation": "1) Use environment-based CORS: ALLOWED_ORIGINS env var. 2) Development: ['http://localhost:3000', 'http://localhost:19006', 'exp://*']. 3) Only enable allow_credentials when origins are explicitly listed. 4) Add security headers middleware for X-Content-Type-Options, X-Frame-Options, Referrer-Policy. 5) Consider adding HTTPS enforcement header (Strict-Transport-Security) for production.",
-      "references": [
-        "https://owasp.org/www-community/attacks/cors-chained-with-xss",
-        "https://fastapi.tiangolo.com/tutorial/cors/",
-        "https://cwe.mitre.org/data/definitions/942.html",
-        "https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS#credentialed_requests_and_wildcards"
-      ],
-      "compliance": [
-        "SOC2",
-        "OWASP Top 10"
-      ]
+      "currentDocumentation": "Text-based architecture description in CLAUDE.md, design doc for extraction pipeline in docs/plans/",
+      "proposedContent": "Create docs/architecture.md with Mermaid diagrams showing: service topology, puzzle extraction data flow, AI ensemble consensus algorithm flow, solver/validator pipeline, mobile app screen navigation",
+      "priority": "medium",
+      "estimatedEffort": "medium"
     },
     {
-      "id": "sec-004",
-      "type": "security_hardening",
-      "title": "Add rate limiting and request size validation to CV service",
-      "description": "The cv-service endpoints (/extract-geometry, /crop-puzzle, /crop-dominoes, /preprocess-image) accept base64-encoded images without rate limiting or pre-decode size validation. The decode_image function (line 70-83) processes any size payload. Image processing with OpenCV is CPU-intensive, making DoS attacks effective.",
-      "rationale": "Without rate limiting, a single client can exhaust server resources. The base64 decode and image processing operations are expensive. An attacker sending rapid requests or massive payloads can deny service to legitimate users or cause out-of-memory crashes.",
-      "category": "configuration",
-      "severity": "medium",
-      "affectedFiles": [
-        "cv-service/main.py"
+      "id": "doc-004",
+      "type": "documentation_gaps",
+      "title": "Document extraction service API surface with JSDoc",
+      "description": "The pips-solver/src/services/extraction/ module exports 30+ functions (extractPuzzle, resolveConsensus, validateExtractionResult, etc.) via index.ts, but most lack JSDoc parameter descriptions. This is the core AI extraction pipeline used throughout the app.",
+      "rationale": "Developers working on extraction features must read implementation code to understand function signatures. The consensus algorithm, validation rules, and stage parameters are non-obvious. Better docs would reduce bugs when calling these APIs.",
+      "category": "api_docs",
+      "targetAudience": "developers",
+      "affectedAreas": [
+        "pips-solver/src/services/extraction/index.ts",
+        "pips-solver/src/services/extraction/pipeline.ts",
+        "pips-solver/src/services/extraction/consensus.ts",
+        "pips-solver/src/services/extraction/validation/index.ts"
       ],
-      "vulnerability": "CWE-770: Allocation of Resources Without Limits or Throttling",
-      "currentRisk": "Attackers can submit unlimited requests or oversized images to crash the service, consume memory, or exhaust CPU, affecting availability for legitimate users.",
-      "remediation": "1) Install slowapi: `pip install slowapi`. 2) Add rate limiting decorator: @limiter.limit('10/minute') per IP. 3) Validate base64 string length before decode: max 15MB (len(base64_str) * 0.75 < 11MB). 4) Add uvicorn limit: --limit-request-body-size 15000000. 5) Validate decoded image dimensions: max 4096x4096 pixels. 6) Add request timeouts using asyncio.wait_for for CV operations.",
-      "references": [
-        "https://owasp.org/www-community/controls/Blocking_Brute_Force_Attacks",
-        "https://slowapi.readthedocs.io/en/latest/",
-        "https://cwe.mitre.org/data/definitions/770.html"
-      ],
-      "compliance": [
-        "SOC2"
-      ]
+      "currentDocumentation": "Module-level comment in index.ts, scattered JSDoc in some files like types.ts",
+      "proposedContent": "Add comprehensive JSDoc to all exported functions: @param/@returns for extractPuzzle, resolveConsensus, validate* functions; document confidence thresholds, retry behavior, and error conditions",
+      "priority": "medium",
+      "estimatedEffort": "large"
     },
     {
-      "id": "sec-005",
-      "type": "security_hardening",
-      "title": "Run Docker container as non-root user and pin dependencies",
-      "description": "The cv-service Dockerfile runs as root (no USER directive). Additionally, requirements.txt files use >= version specifiers without lock files, allowing dependency versions to drift between builds. No yarn.lock or package-lock.json found for complete dependency resolution.",
-      "rationale": "Running as root amplifies any container vulnerability impact. Dependency drift can introduce untested code or known CVEs. OpenCV image parsing vulnerabilities combined with root privileges could enable container escape. Defense-in-depth requires minimal privileges.",
-      "category": "configuration",
-      "severity": "medium",
-      "affectedFiles": [
-        "cv-service/Dockerfile",
-        "cv-service/requirements.txt",
-        "pips-agent/requirements.txt"
+      "id": "doc-005",
+      "type": "documentation_gaps",
+      "title": "Create project-wide troubleshooting guide",
+      "description": "Users report issues across services: OCR failures, CV extraction misses, solver timeouts, API key configuration. pips-agent/README.md has a small troubleshooting section, but there's no comprehensive guide covering common issues across all services.",
+      "rationale": "Support burden is high when users can't self-diagnose issues. Common problems include: Tesseract not found, cv-service connection refused, low extraction confidence, solver 'no solution' errors. A centralized troubleshooting doc would reduce friction.",
+      "category": "troubleshooting",
+      "targetAudience": "users",
+      "affectedAreas": [
+        "docs/",
+        "pips-agent/README.md",
+        "cv-service/"
       ],
-      "vulnerability": "CWE-250: Execution with Unnecessary Privileges",
-      "currentRisk": "Container runs as root. OpenCV, numpy, or Pillow vulnerabilities could be exploited to gain root access. Combined with kernel vulnerabilities, this enables container escape to host system.",
-      "remediation": "1) Add non-root user to Dockerfile: RUN adduser --disabled-password appuser && chown -R appuser /app && USER appuser. 2) Generate lock files: pip-compile requirements.txt -o requirements.lock. 3) Add security scanning: pip-audit in CI pipeline. 4) Consider distroless base images for minimal attack surface. 5) Add securityContext in K8s: runAsNonRoot: true, readOnlyRootFilesystem: true.",
-      "references": [
-        "https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html",
-        "https://docs.docker.com/develop/develop-images/dockerfile_best-practices/#user",
-        "https://cwe.mitre.org/data/definitions/250.html",
-        "https://pypi.org/project/pip-audit/"
-      ],
-      "compliance": [
-        "SOC2",
-        "CIS Docker Benchmark"
-      ]
+      "currentDocumentation": "Scattered: pips-agent/README.md has 4 troubleshooting entries, cv-service has validation report MDs, CLAUDE.md has debugging notes",
+      "proposedContent": "Create docs/troubleshooting.md covering: API key setup (OpenRouter vs individual providers), Tesseract installation, cv-service Docker deployment, common extraction failures with example images, solver debugging (constraint conflicts, domino feasibility), mobile app build issues",
+      "priority": "medium",
+      "estimatedEffort": "medium"
     }
   ],
   "project_context": {
     "existing_features": [],
     "tech_stack": [
-      "Python",
       "React",
       "FastAPI",
-      "TypeScript"
+      "TypeScript",
+      "Python"
     ],
     "target_audience": "NYT Pips puzzle enthusiasts who want AI-assisted solving",
     "planned_features": [
-      "Add Image Stats Diagnostic Endpoint",
-      "Graduated Hint System",
-      "AI Verification Modal lacks keyboard accessibility for constraint editing",
-      "Enhanced OCR Constraint Detection",
-      "Share Solutions",
-      "Step1GridAlignment should use themed UI components",
-      "Automated Test Suite",
-      "Multi-Puzzle Type Support",
-      "Diamond Cell Inference Completion",
-      "Premium Features Tier",
       "Add Domino Tray Preprocessing",
-      "Add Cross-Stage Confidence Warnings to UI",
-      "Offline Mode",
-      "Add haptic feedback for puzzle grid interactions",
-      "Solution Verification Mode",
-      "Strategy Tutorial Mode",
-      "Performance Optimization",
-      "Puzzle History & Favorites",
-      "Inconsistent button styling in Step1GridAlignment uses hardcoded colors",
-      "Add Extraction Comparison/Diff View",
       "Complete Domino Pip Detection",
-      "ML-Based Puzzle Detection",
-      "Accurate Confidence Scoring",
+      "Puzzle History & Favorites",
       "Specification: Enhance AI Visual Pips Board Extraction Accuracy",
+      "ML-Based Puzzle Detection",
+      "Share Solutions",
+      "Enhanced OCR Constraint Detection",
+      "Performance Optimization",
+      "Automated Test Suite",
+      "Offline Mode",
       "Improved Region Detection for Complex Layouts",
+      "Premium Features Tier",
       "Puzzle Analytics Dashboard",
+      "Multi-Puzzle Type Support",
+      "AI Verification Modal lacks keyboard accessibility for constraint editing",
+      "Specification: Commit and Merge All Auto-Claude Branches into Copilot-Fixes",
       "Complete User Correction UI Workflow",
-      "Enhanced Confidence Feedback UI"
+      "Specification: Diamond Cell Inference Completion",
+      "Accurate Confidence Scoring",
+      "Enhanced Confidence Feedback UI",
+      "Diamond Cell Inference Completion",
+      "Solution Verification Mode",
+      "Graduated Hint System",
+      "Strategy Tutorial Mode"
     ]
   },
   "summary": {
@@ -408,12 +353,12 @@
     "by_type": {
       "code_improvements": 5,
       "ui_ux_improvements": 5,
-      "security_hardening": 5
+      "documentation_gaps": 5
     },
     "by_status": {
       "draft": 15
     }
   },
-  "generated_at": "2025-12-22T03:16:57.151502",
-  "updated_at": "2025-12-22T03:16:57.151502"
+  "generated_at": "2025-12-22T10:42:17.599536",
+  "updated_at": "2025-12-22T10:42:17.599536"
 }

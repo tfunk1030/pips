@@ -1,133 +1,136 @@
 {
-  "project_name": "Pips Puzzle Solver",
+  "project_name": "Pips (NYT Pips Assistant)",
   "project_type": "mobile-app",
   "tech_stack": {
     "primary_language": "TypeScript",
-    "frameworks": ["React Native", "Expo", "FastAPI", "Claude Agent SDK"],
+    "frameworks": [
+      "React Native",
+      "Expo",
+      "FastAPI"
+    ],
     "key_dependencies": [
       "expo",
       "react-native",
+      "react-native-svg",
       "react-navigation",
-      "fastapi",
+      "async-storage",
       "opencv-python",
-      "numpy",
-      "scikit-learn",
-      "pytesseract",
       "claude-agent-sdk",
-      "pydantic"
+      "pytesseract",
+      "zod",
+      "yaml"
     ]
   },
   "target_audience": {
-    "primary_persona": "NYT Pips puzzle enthusiasts who want AI-assisted solving",
+    "primary_persona": "Casual puzzle enthusiasts who enjoy NYT Pips domino puzzles and want an efficient way to solve or get hints for challenging puzzles",
     "secondary_personas": [
-      "Casual mobile puzzle gamers seeking quick solutions",
-      "Puzzle learners who prefer hints over direct answers",
-      "Power users who want to understand puzzle-solving strategies"
+      "Competitive puzzle solvers seeking to verify their solutions",
+      "NYT Games subscribers who play daily puzzles",
+      "Mobile-first users who prefer solving puzzles on their phones"
     ],
     "pain_points": [
-      "Stuck on difficult Pips puzzles with no in-game hints",
-      "Manual puzzle-solving takes too long",
-      "Hard to track constraint logic mentally",
-      "Want to learn strategies without spoiling the puzzle completely",
-      "No easy way to get partial hints"
+      "Manually entering puzzle data is tedious and error-prone",
+      "No easy way to import puzzles directly from screenshots",
+      "Difficult to track and manage solved vs unsolved puzzles offline",
+      "Getting stuck on hard puzzles with no way to get progressive hints",
+      "Verifying if a partial solution is still valid requires mental computation"
     ],
     "goals": [
-      "Quickly solve Pips puzzles from screenshots",
-      "Get strategic hints without full spoilers",
-      "Learn puzzle-solving techniques",
-      "Verify their solutions are correct",
-      "Reduce frustration on harder puzzles"
+      "Quickly import puzzles via camera/screenshot without manual data entry",
+      "Get intelligent hints when stuck without revealing the full solution",
+      "Solve puzzles offline while commuting or traveling",
+      "Validate their manual solutions against the solver",
+      "Build a personal library of puzzles to revisit"
     ],
-    "usage_context": "Mobile users playing NYT Pips on their phone who take a screenshot when stuck and want AI assistance to solve or get hints for the puzzle"
+    "usage_context": "Users typically play during commutes, breaks, or leisure time on mobile devices. They want quick puzzle import via camera, offline capability for areas with poor connectivity, and graduated hints that respect the puzzle-solving experience without spoiling it entirely."
   },
   "product_vision": {
-    "one_liner": "AI-powered mobile app that solves NYT Pips puzzles from screenshots with optional hints or full solutions",
-    "problem_statement": "NYT Pips puzzles can be challenging with no built-in hint system, leaving players stuck with no way to progress without fully looking up solutions online and spoiling the experience",
-    "value_proposition": "Unlike looking up solutions online, Pips Solver offers graduated assistance - from strategic hints to full solutions - using AI to extract puzzles from screenshots and a constraint-satisfaction solver for accurate answers",
+    "one_liner": "An offline-first mobile app that imports, validates, and solves NYT Pips domino puzzles using AI-powered image extraction and constraint satisfaction algorithms.",
+    "problem_statement": "NYT Pips players struggle to get help when stuck on puzzles, manually entering puzzle data into digital tools is cumbersome, and there's no elegant mobile solution for storing, solving, and validating domino puzzles offline.",
+    "value_proposition": "Pips combines computer vision for instant puzzle import from photos, a sophisticated CSP solver that runs entirely on-device, and AI-powered graduated hints that help users progress without spoiling the puzzle - all working offline.",
     "success_metrics": [
-      "Puzzle extraction accuracy rate (currently ~40-60% on complex puzzles)",
-      "Time from screenshot to solution under 10 seconds",
-      "User engagement with hints vs full solve feature",
-      "Successful puzzle solve rate",
-      "App retention for repeat usage"
+      "Image extraction accuracy rate (currently targeting 89%+)",
+      "Solver success rate across different puzzle difficulties",
+      "Time from photo capture to imported puzzle ready for solving",
+      "User retention and return rate for daily puzzle solving",
+      "Hint usage patterns showing users complete puzzles with help"
     ]
   },
   "current_state": {
     "maturity": "mvp",
     "existing_features": [
-      "Mobile app with React Native/Expo",
-      "4-step puzzle builder wizard (Grid alignment, Region painting, Constraints, Dominoes)",
-      "Screenshot capture and image upload",
-      "CV-based grid geometry extraction from screenshots",
-      "Multi-strategy detection system (region contours, color segmentation, constraint labels)",
-      "Puzzle cropping and preprocessing endpoints",
-      "Image preprocessing with CLAHE contrast enhancement",
-      "CSP-based puzzle solver",
-      "Hints generation system",
-      "AI agent for puzzle analysis using Claude",
-      "OCR for constraint text detection",
-      "Confidence indicator UI component",
-      "AI verification modal for user corrections",
-      "Theme system support",
-      "Health check endpoints"
+      "YAML/JSON puzzle import with sample puzzles",
+      "Local library stored in AsyncStorage for offline use",
+      "React Native SVG grid viewer with pan/zoom and region coloring",
+      "CSP-style solver with MRV, forward checking, and region-bound propagation",
+      "Validation pipeline for puzzle specs and solver outputs",
+      "CV service for extracting grid geometry from images",
+      "AI-powered image extraction using vision models",
+      "Ensemble extraction combining CV and AI approaches",
+      "Confidence scoring with calibration for extraction quality",
+      "Multi-step puzzle builder (grid alignment, region painting, constraints, dominoes)",
+      "AI verification modal for extraction review",
+      "Extraction comparison diff view",
+      "Graduated hint system with AI-powered hint generation",
+      "Haptic feedback for grid interactions",
+      "Domino tray preprocessing",
+      "Diamond cell inference for complex layouts",
+      "Theme system with dark/light mode support",
+      "Health check endpoints for services"
     ],
     "known_gaps": [
-      "Automated test suite (noted as TODO)",
-      "Domino pip detection not complete",
-      "OCR improvements needed for better constraint reading",
-      "User correction UI workflow incomplete",
-      "ML-based detection not implemented (future)",
-      "Confidence scores are conservative",
-      "Region detection imperfect on complex layouts",
-      "Grid dimension estimation approximate for irregular layouts"
+      "No automated tests visible for mobile app components",
+      "Limited error recovery for failed extractions",
+      "No user accounts or cloud sync capability",
+      "No sharing or export functionality for puzzles",
+      "No tutorial or onboarding flow for new users",
+      "No accessibility features (screen reader support, etc.)",
+      "No analytics or crash reporting integration"
     ],
     "technical_debt": [
-      "Automated tests missing - marked as TODO throughout codebase",
-      "Diamond detection works but cell inference from markers incomplete",
-      "40% confidence when actual accuracy may be higher",
-      "Detection accuracy ~40-60% on complex puzzles (was 10-15%)",
-      "Multiple worktrees suggest active parallel development that may need consolidation"
+      "Multiple test files in cv-service suggest active debugging/refinement phase",
+      "Extraction accuracy at 89.2% indicates room for improvement",
+      "Services may need containerization for easier deployment",
+      "No visible CI/CD pipeline beyond GitHub Actions workflows for Claude"
     ]
   },
   "competitive_context": {
     "alternatives": [
-      "Manual solving without assistance",
-      "Online puzzle solution lookup sites",
-      "General AI assistants (ChatGPT, Claude) with manual description",
-      "Other puzzle solver apps (Sudoku solvers, crossword helpers)"
+      "Manual paper-based solving",
+      "Generic puzzle-solving apps (not Pips-specific)",
+      "Web-based domino puzzle solvers",
+      "Reddit/community forums for hints"
     ],
     "differentiators": [
-      "Screenshot-based automatic puzzle extraction - no manual input needed",
-      "Graduated assistance from hints to full solutions",
-      "Specialized for NYT Pips game specifically",
-      "Mobile-first design for on-device puzzle solving",
-      "AI-powered with computer vision for puzzle understanding",
-      "CSP solver for mathematically correct solutions"
+      "Camera-based puzzle import using computer vision and AI ensemble",
+      "Fully offline-capable with on-device solver",
+      "Graduated hint system that preserves puzzle-solving enjoyment",
+      "Purpose-built for NYT Pips domino puzzles specifically",
+      "CSP solver with explanation capabilities for why solutions work"
     ],
-    "market_position": "Niche productivity tool for NYT Pips players - first-to-market specialized solver with screenshot extraction, competing against generic online solutions that require manual input or spoil the entire puzzle",
+    "market_position": "A specialized mobile companion app for NYT Pips enthusiasts, filling the niche between manual solving and full spoiler solutions by providing intelligent, graduated assistance.",
     "competitor_pain_points": [],
     "competitor_analysis_available": false
   },
   "constraints": {
     "technical": [
-      "CV extraction accuracy varies with puzzle complexity (40-60% on complex puzzles)",
-      "OCR performance depends on image quality and text clarity",
-      "Requires API key for Claude AI agent functionality",
-      "Mobile device camera/screenshot quality affects detection",
-      "Processing time ~2-5 seconds per image",
-      "Memory usage ~50MB per image during processing"
+      "Expo SDK compatibility requirements (currently on SDK 54)",
+      "React Native performance constraints for complex grid rendering",
+      "Image processing needs balance between accuracy and mobile device capabilities",
+      "AI API calls require network connectivity for hint generation",
+      "OCR/Tesseract accuracy limitations for constraint detection"
     ],
     "resources": [
-      "Solo developer or small team (no multi-contributor git history)",
-      "Active development with multiple parallel worktrees",
-      "Reliance on external AI API (Anthropic Claude)"
+      "Solo developer project (tfunk1030 is primary contributor with 239 commits)",
+      "Dependent on third-party AI APIs (Anthropic Claude) for intelligent hints",
+      "Open source/personal project constraints on time and budget"
     ],
     "dependencies": [
-      "Anthropic API for Claude agent (ANTHROPIC_API_KEY required)",
-      "OpenCV and scikit-learn for computer vision",
-      "Expo/React Native ecosystem for mobile",
-      "FastAPI backend must be accessible from mobile app"
+      "Anthropic API for Claude-based hint generation",
+      "Expo ecosystem for mobile app distribution",
+      "OpenCV for computer vision processing",
+      "Tesseract OCR for text extraction from puzzle images"
     ]
   },
-  "created_at": "2025-12-22T18:30:00Z"
+  "created_at": "2025-06-22T22:30:00Z"
 }
