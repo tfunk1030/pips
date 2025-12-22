@@ -766,6 +766,97 @@ def detect_rotation_angle_from_image(
     return angle, center, size, box_points, largest_contour
 
 
+def rotate_domino(
+    image: np.ndarray,
+    angle: float,
+    expand_canvas: bool = True,
+    border_value: Tuple[int, int, int] = (0, 0, 0)
+) -> np.ndarray:
+    """
+    Rotate a domino image by a specified angle using cv2.warpAffine.
+
+    Applies rotation correction to straighten a domino before pip detection.
+    Rotation is performed around the image center.
+
+    Args:
+        image: Input BGR or grayscale image to rotate.
+        angle: Rotation angle in degrees. Positive values rotate
+            counter-clockwise, negative values rotate clockwise.
+        expand_canvas: If True, expand the canvas to fit the entire
+            rotated image without cropping. If False, maintain original
+            image dimensions (may crop corners).
+        border_value: Color value for border pixels (default black).
+            For grayscale images, only the first value is used.
+
+    Returns:
+        Rotated image as numpy array. Same dtype as input.
+
+    Raises:
+        ValueError: If image is None or empty.
+
+    Notes:
+        This function uses cv2.getRotationMatrix2D to create the
+        transformation matrix and cv2.warpAffine to apply it.
+        The rotation preserves the image center point.
+    """
+    if image is None or image.size == 0:
+        raise ValueError("Input image is empty or None")
+
+    # Get image dimensions
+    h, w = image.shape[:2]
+
+    # Calculate center of image
+    center = (w / 2.0, h / 2.0)
+
+    # Create rotation matrix
+    # getRotationMatrix2D(center, angle, scale)
+    # angle: positive = counter-clockwise rotation
+    M = cv2.getRotationMatrix2D(center, angle, 1.0)
+
+    if expand_canvas:
+        # Calculate new image bounds to fit rotated image
+        # Convert angle to radians
+        abs_cos = abs(np.cos(np.radians(angle)))
+        abs_sin = abs(np.sin(np.radians(angle)))
+
+        # New width and height after rotation
+        new_w = int(h * abs_sin + w * abs_cos)
+        new_h = int(h * abs_cos + w * abs_sin)
+
+        # Adjust rotation matrix to account for new canvas size
+        # Shift the center to the new image center
+        M[0, 2] += (new_w / 2.0) - center[0]
+        M[1, 2] += (new_h / 2.0) - center[1]
+
+        output_size = (new_w, new_h)
+    else:
+        # Keep original dimensions
+        output_size = (w, h)
+
+    # Apply rotation using warpAffine
+    # borderMode: use constant border with specified color
+    if len(image.shape) == 2:
+        # Grayscale image - use single channel border value
+        border = border_value[0] if isinstance(border_value, tuple) else border_value
+    else:
+        border = border_value
+
+    rotated = cv2.warpAffine(
+        image,
+        M,
+        output_size,
+        flags=cv2.INTER_LINEAR,
+        borderMode=cv2.BORDER_CONSTANT,
+        borderValue=border
+    )
+
+    # Save debug visualization if enabled
+    if DEBUG_OUTPUT_DIR is not None:
+        save_debug_image("12_rotated_domino.png", rotated)
+
+    return rotated
+
+
 def detect_pips_hough_adaptive(
     image: np.ndarray,
     param2_range: Tuple[int, int, int] = (20, 40, 5),
@@ -860,6 +951,21 @@ def _self_test():
     assert isinstance(contour_info, dict)
     assert "mean_area" in contour_info
     assert "circularities" in contour_info
+
+    # Test rotation function
+    rotated = rotate_domino(test_img, 45.0)
+    assert rotated is not None
+    assert rotated.shape[2] == 3  # Still BGR
+
+    # Test rotation without canvas expansion
+    rotated_no_expand = rotate_domino(test_img, 30.0, expand_canvas=False)
+    assert rotated_no_expand.shape[:2] == test_img.shape[:2]  # Same dimensions
+
+    # Test grayscale rotation
+    gray_img = np.zeros((100, 200), dtype=np.uint8)
+    rotated_gray = rotate_domino(gray_img, 45.0)
+    assert rotated_gray is not None
+    assert len(rotated_gray.shape) == 2  # Still grayscale
 
     return True
 
