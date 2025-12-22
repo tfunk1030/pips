@@ -127,7 +127,7 @@ export default function Step1GridAlignment({
             size="small"
             onPress={() => handleRowChange(-1)}
           />
-          <Body style={styles.controlValue}>{grid.rows}</Body>
+          <Body align="center" style={styles.controlValue}>{grid.rows}</Body>
           <Button
             title="+"
             variant="secondary"
@@ -144,7 +144,7 @@ export default function Step1GridAlignment({
             size="small"
             onPress={() => handleColChange(-1)}
           />
-          <Body style={styles.controlValue}>{grid.cols}</Body>
+          <Body align="center" style={styles.controlValue}>{grid.cols}</Body>
           <Button
             title="+"
             variant="secondary"
@@ -429,7 +429,6 @@ function DraggableGridOverlay({
         <Animated.View
           style={[
             styles.edgeHandle,
-            styles.verticalEdge,
             {
               left: leftPx - HANDLE_SIZE / 2,
               top: topPx,
@@ -445,7 +444,6 @@ function DraggableGridOverlay({
         <Animated.View
           style={[
             styles.edgeHandle,
-            styles.verticalEdge,
             {
               left: rightPx - HANDLE_SIZE / 2,
               top: topPx,
@@ -461,7 +459,6 @@ function DraggableGridOverlay({
         <Animated.View
           style={[
             styles.edgeHandle,
-            styles.horizontalEdge,
             {
               left: leftPx,
               top: topPx - HANDLE_SIZE / 2,
@@ -477,7 +474,6 @@ function DraggableGridOverlay({
         <Animated.View
           style={[
             styles.edgeHandle,
-            styles.horizontalEdge,
             {
               left: leftPx,
               top: bottomPx - HANDLE_SIZE / 2,
@@ -530,7 +526,6 @@ const styles = StyleSheet.create({
   },
   controlValue: {
     width: 30,
-    textAlign: 'center',
     fontWeight: '600',
   },
   hint: {
@@ -552,7 +547,6 @@ const styles = StyleSheet.create({
   },
   confidenceTitle: {
     marginBottom: 8,
-    textTransform: 'uppercase',
   },
   stageConfidenceContainer: {
     marginTop: spacing[3],
@@ -565,8 +559,6 @@ const styles = StyleSheet.create({
   },
   stageConfidenceTitle: {
     marginBottom: 8,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
   stageConfidenceIndicators: {
     flexDirection: 'row',
@@ -575,12 +567,5 @@ const styles = StyleSheet.create({
   },
   edgeHandle: {
     position: 'absolute',
-    // Touch targets are invisible - visual feedback via SVG circles
-  },
-  verticalEdge: {
-    // Vertical edge (left/right)
-  },
-  horizontalEdge: {
-    // Horizontal edge (top/bottom)
   },
 });
