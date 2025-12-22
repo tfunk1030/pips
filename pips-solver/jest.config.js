@@ -21,7 +21,7 @@ const config = {
       },
     }],
   },
-  setupFilesAfterEnv: [],
+  setupFilesAfterEnv: ['<rootDir>/src/setupTests.ts'],
   collectCoverageFrom: [
     'src/**/*.{ts,tsx}',
     '!src/**/*.d.ts',
