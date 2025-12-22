@@ -67,6 +67,67 @@ class ExtractResponse(BaseModel):
     extraction_ms: int = 0
 
 
+# Image Stats models for diagnostic endpoint
+class ROIBounds(BaseModel):
+    """Region of interest bounds within the image"""
+    x: int
+    y: int
+    width: int
+    height: int
+
+
+class ImageStatsRequest(BaseModel):
+    """Request for image statistics calculation"""
+    image: str  # base64 encoded
+    roi: Optional[ROIBounds] = None  # Optional region of interest
+
+
+class DynamicRange(BaseModel):
+    """Min and max luminance values"""
+    min: int
+    max: int
+
+
+class ColorBalance(BaseModel):
+    """RGB channel means and ratios"""
+    r_mean: float
+    g_mean: float
+    b_mean: float
+    r_ratio: float
+    g_ratio: float
+    b_ratio: float
+
+
+class SaturationStats(BaseModel):
+    """Saturation statistics from HSV color space"""
+    mean: float
+    min: int
+    max: int
+
+
+class ImageStatsResponse(BaseModel):
+    """Response containing image quality metrics"""
+    success: bool
+    error: Optional[str] = None
+
+    # Image quality metrics
+    brightness: Optional[float] = None  # Mean luminance (0-255)
+    contrast: Optional[float] = None  # Std dev of luminance
+    dynamic_range: Optional[DynamicRange] = None
+    color_balance: Optional[ColorBalance] = None
+    saturation: Optional[SaturationStats] = None
+
+    # Image dimensions (for reference)
+    image_width: Optional[int] = None
+    image_height: Optional[int] = None
+
+    # ROI info (if specified)
+    roi_applied: bool = False
+
+    # Timing
+    extraction_ms: int = 0
+
+
 def decode_image(base64_str: str) -> np.ndarray:
     """Decode base64 image to OpenCV format"""
     # Strip data URL prefix if present
