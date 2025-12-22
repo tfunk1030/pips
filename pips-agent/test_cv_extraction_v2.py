@@ -638,5 +638,126 @@ def test_calculate_confidence_range():
         assert 0.0 <= confidence <= 1.0, f"Confidence {confidence} out of range for {count} cells"
 
 
+# =============================================================================
+# Multi-Strategy Integration Tests
+# =============================================================================
+
+def test_multi_strategy_includes_constraint_labels(diamond_grid_image_path, temp_dir):
+    """
+    Test that the multi-strategy system includes constraint_labels strategy.
+
+    This integration test verifies:
+    1. constraint_labels strategy is included in the default strategy list
+    2. All strategies run and contribute to results
+    3. Best result is selected by confidence
+    4. The result structure is correct
+    """
+    # Run multi-strategy extraction
+    result = extract_puzzle_multi_strategy(diamond_grid_image_path, temp_dir)
+
+    # Verify result structure
+    assert isinstance(result, dict), "Result should be a dictionary"
+    assert "success" in result, "Result should have 'success' field"
+    assert "method_used" in result, "Result should have 'method_used' field"
+    assert "cells" in result, "Result should have 'cells' field"
+    assert "grid_dims" in result, "Result should have 'grid_dims' field"
+    assert "regions" in result, "Result should have 'regions' field"
+    assert "confidence" in result, "Result should have 'confidence' field"
+    assert "num_cells" in result, "Result should have 'num_cells' field"
+    assert "all_attempts" in result, "Result should have 'all_attempts' field"
+
+    # Verify all_attempts contains results from all strategies
+    all_attempts = result["all_attempts"]
+    assert isinstance(all_attempts, list), "all_attempts should be a list"
+    assert len(all_attempts) == 3, f"Expected 3 strategy attempts, got {len(all_attempts)}"
+
+    # Verify constraint_labels is in all_attempts
+    methods = [attempt["method"] for attempt in all_attempts]
+    assert "constraint_labels" in methods, "constraint_labels should be in all_attempts"
+    assert "region_contours" in methods, "region_contours should be in all_attempts"
+    assert "color_segmentation" in methods, "color_segmentation should be in all_attempts"
+
+    # Verify each attempt has the expected structure
+    for attempt in all_attempts:
+        assert "method" in attempt, "Each attempt should have 'method' field"
+        assert "success" in attempt, "Each attempt should have 'success' field"
+        assert "confidence" in attempt, "Each attempt should have 'confidence' field"
+        assert "error" in attempt, "Each attempt should have 'error' field"
+        assert "num_cells" in attempt, "Each attempt should have 'num_cells' field"
+
+    # Verify constraint_labels detected the diamonds in our test image
+    constraint_labels_attempt = next(
+        (a for a in all_attempts if a["method"] == "constraint_labels"), None
+    )
+    assert constraint_labels_attempt is not None
+    assert constraint_labels_attempt["success"] is True, \
+        f"constraint_labels should succeed on diamond image. Error: {constraint_labels_attempt['error']}"
+    assert constraint_labels_attempt["num_cells"] == 4, \
+        f"constraint_labels should detect 4 cells, got {constraint_labels_attempt['num_cells']}"
+
+    # Verify that if successful, best method is selected by confidence
+    if result["success"]:
+        successful_attempts = [a for a in all_attempts if a["success"]]
+        if len(successful_attempts) > 0:
+            max_confidence = max(a["confidence"] for a in successful_attempts)
+            assert result["confidence"] == max_confidence, \
+                f"Best result confidence {result['confidence']} should match max {max_confidence}"
+
+
+def test_multi_strategy_constraint_labels_wins_on_diamond_image(diamond_grid_image_path, temp_dir):
+    """
+    Test that constraint_labels strategy wins (is selected) on a diamond-marked puzzle.
+
+    When provided with an image containing clear diamond markers and no colored
+    regions, constraint_labels should produce the highest confidence result.
+    """
+    result = extract_puzzle_multi_strategy(diamond_grid_image_path, temp_dir)
+
+    # On a pure diamond grid image, constraint_labels should win
+    assert result["success"] is True, f"Multi-strategy should succeed. Error: {result.get('error')}"
+    assert result["method_used"] == "constraint_labels", \
+        f"constraint_labels should win on diamond image, but {result['method_used']} was selected"
+    assert result["num_cells"] == 4, f"Expected 4 cells, got {result['num_cells']}"
+
+
+def test_multi_strategy_all_fail(blank_image_path, temp_dir):
+    """
+    Test multi-strategy behavior when all strategies fail.
+
+    On a blank image with no puzzle features, all strategies should fail
+    and the result should indicate failure with appropriate error message.
+    """
+    result = extract_puzzle_multi_strategy(blank_image_path, temp_dir)
+
+    assert result["success"] is False, "Should fail on blank image"
+    assert result["method_used"] is None, "No method should be selected when all fail"
+    assert result["confidence"] == 0.0, "Confidence should be 0 when all fail"
+    assert result["num_cells"] == 0, "Should have 0 cells when all fail"
+    assert "error" in result, "Should have error message"
+
+    # Verify all strategies were attempted and failed
+    all_attempts = result["all_attempts"]
+    assert len(all_attempts) == 3, "Should have 3 attempts"
+    for attempt in all_attempts:
+        assert attempt["success"] is False, f"{attempt['method']} should have failed on blank image"
+
+
+def test_multi_strategy_explicit_strategies_list(diamond_grid_image_path, temp_dir):
+    """
+    Test that providing an explicit strategies list works correctly.
+    """
+    # Test with only constraint_labels
+    result = extract_puzzle_multi_strategy(
+        diamond_grid_image_path,
+        temp_dir,
+        strategies=["constraint_labels"]
+    )
+
+    assert result["success"] is True
+    assert len(result["all_attempts"]) == 1, "Should only have 1 attempt"
+    assert result["all_attempts"][0]["method"] == "constraint_labels"
+    assert result["method_used"] == "constraint_labels"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
