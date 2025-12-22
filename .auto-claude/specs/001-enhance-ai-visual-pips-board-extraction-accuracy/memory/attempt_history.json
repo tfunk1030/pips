@@ -71,11 +71,107 @@
         }
       ],
       "status": "completed"
+    },
+    "subtask-2-2": {
+      "attempts": [
+        {
+          "session": 7,
+          "timestamp": "2025-12-22T00:23:10.037249",
+          "approach": "Implemented: Add inter-stage validation in pipeline to validate each stage output before passing to next",
+          "success": true,
+          "error": null
+        }
+      ],
+      "status": "completed"
+    },
+    "subtask-2-3": {
+      "attempts": [
+        {
+          "session": 8,
+          "timestamp": "2025-12-22T00:26:37.844966",
+          "approach": "Implemented: Add confidence aggregation logic to compute overall extraction quality score",
+          "success": true,
+          "error": null
+        }
+      ],
+      "status": "completed"
+    },
+    "subtask-3-1": {
+      "attempts": [
+        {
+          "session": 9,
+          "timestamp": "2025-12-22T00:31:08.242162",
+          "approach": "Implemented: Improve hybrid_extraction.py with better grid line detection using adaptive thresholding",
+          "success": true,
+          "error": null
+        }
+      ],
+      "status": "completed"
+    },
+    "subtask-3-2": {
+      "attempts": [
+        {
+          "session": 10,
+          "timestamp": "2025-12-22T00:34:31.259896",
+          "approach": "Implemented: Enhance main.py crop-puzzle endpoint with better boundary detection",
+          "success": true,
+          "error": null
+        }
+      ],
+      "status": "completed"
+    },
+    "subtask-3-3": {
+      "attempts": [
+        {
+          "session": 11,
+          "timestamp": "2025-12-22T00:37:56.319803",
+          "approach": "Implemented: Add image preprocessing endpoint for contrast/brightness normalization before AI extraction",
+          "success": true,
+          "error": null
+        }
+      ],
+      "status": "completed"
+    },
+    "subtask-4-1": {
+      "attempts": [
+        {
+          "session": 12,
+          "timestamp": "2025-12-22T00:43:15.725362",
+          "approach": "Implemented: Add per-stage confidence indicators to OverlayBuilderScreen during extraction",
+          "success": true,
+          "error": null
+        }
+      ],
+      "status": "completed"
+    },
+    "subtask-4-2": {
+      "attempts": [
+        {
+          "session": 13,
+          "timestamp": "2025-12-22T00:49:04.311494",
+          "approach": "Implemented: Enhance AIVerificationModal with visual diff showing extraction vs image overlay",
+          "success": true,
+          "error": null
+        }
+      ],
+      "status": "completed"
+    },
+    "subtask-4-3": {
+      "attempts": [
+        {
+          "session": 14,
+          "timestamp": "2025-12-22T00:57:38.702812",
+          "approach": "Implemented: Add cell-by-cell correction UI to AIVerificationModal for manual fixes",
+          "success": true,
+          "error": null
+        }
+      ],
+      "status": "completed"
     }
   },
   "stuck_subtasks": [],
   "metadata": {
     "created_at": "2025-12-21T23:48:42.838189",
-    "last_updated": "2025-12-22T00:18:22.075267"
+    "last_updated": "2025-12-22T00:57:38.702812"
   }
 }

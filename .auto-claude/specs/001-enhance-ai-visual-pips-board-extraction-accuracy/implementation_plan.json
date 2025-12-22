@@ -160,7 +160,9 @@
             "command": "cd pips-solver && npx tsc --noEmit src/services/extraction/pipeline.ts",
             "expected": "No compilation errors"
           },
-          "status": "pending"
+          "status": "completed",
+          "notes": "Added inter-stage validation to pipeline.ts with 5 validation functions: validateGridOutput(), validateCellOutput() with cross-validation, validateRegionOutput(), validateConstraintOutput(), validateDominoOutput() with feasibility checking. Critical errors block pipeline progress and return partial results. Non-critical errors are flagged for user review with specific hints. TypeScript compilation verified. Commit: 598d01a",
+          "updated_at": "2025-12-22T05:22:56.448537+00:00"
         },
         {
           "id": "subtask-2-3",
@@ -178,7 +180,9 @@
             "command": "cd pips-solver && npx tsc --noEmit src/services/extraction/pipeline.ts",
             "expected": "No compilation errors"
           },
-          "status": "pending"
+          "status": "completed",
+          "notes": "Added confidence aggregation logic to pipeline.ts with: weighted stage confidence aggregation (grid/cells: 25%, regions: 20%, constraints/dominoes: 15%), validation penalty system (0.05 per error, 0.50 for critical errors, max 0.30), ConfidenceBreakdown interface with detailed quality metrics (weightedAverage, minimum, maximum, standardDeviation, validationPenalty, qualityScore, qualityClass, stageContributions), generateConfidenceHints() for automated review hint generation based on confidence analysis, updated result building to use aggregateConfidence() instead of simple Math.min(). Follows pattern from ensembleExtraction.ts for weighted scoring approach. TypeScript compilation verified. Commit: a426729",
+          "updated_at": "2025-12-22T05:26:27.755672+00:00"
         }
       ]
     },
@@ -204,7 +208,9 @@
             "command": "cd cv-service && python -c \"from hybrid_extraction import *; print('OK')\"",
             "expected": "OK"
           },
-          "status": "pending"
+          "status": "completed",
+          "notes": "Improved hybrid_extraction.py with better grid line detection using adaptive thresholding. Added: detect_grid_lines_adaptive() using Gaussian and Mean adaptive thresholding, detect_grid_with_canny() as fallback for low contrast images, Hough line detection for precise boundaries, line clustering with _cluster_lines(), grid confidence scoring with _calculate_grid_confidence(), find_puzzle_roi_saturation() preserving original method, enhanced find_puzzle_roi() combining all methods. Updated CropResult model with grid_confidence, detected_rows, detected_cols fields. Verification passed. Commit: 2e911e8",
+          "updated_at": "2025-12-22T05:30:50.339299+00:00"
         },
         {
           "id": "subtask-3-2",
@@ -223,7 +229,9 @@
             "url": "http://localhost:8080/health",
             "expected_status": 200
           },
-          "status": "pending"
+          "status": "completed",
+          "notes": "Enhanced crop-puzzle endpoint with: CropPuzzleRequest model with configurable options (exclude_bottom_percent, min_confidence_threshold, padding_percent), CropPuzzleResponse model with full grid detection info (grid_confidence, confidence_level, warnings, detected_rows, detected_cols, detection_method), _get_confidence_level() helper for categorical confidence mapping (high/medium/low/unknown), _generate_warnings() helper for user-facing warnings based on detection quality (confidence issues, dimension anomalies, bounds validation), improved error handling with specific ValueError and general Exception cases. Python syntax and imports verified. Commit: 6c04bb5",
+          "updated_at": "2025-12-22T05:34:20.429418+00:00"
         },
         {
           "id": "subtask-3-3",
@@ -242,7 +250,9 @@
             "url": "http://localhost:8080/health",
             "expected_status": 200
           },
-          "status": "pending"
+          "status": "completed",
+          "notes": "Added POST /preprocess-image endpoint to cv-service/main.py with: CLAHE adaptive contrast enhancement (configurable clip_limit and grid_size), brightness normalization to target level with tolerance checking, automatic white balance using Gray World algorithm, optional sharpening via unsharp masking, image statistics calculation for quality assessment (brightness, contrast, dynamic range, color balance, saturation), before/after stats returned for comparison. All preprocessing functions follow existing patterns from hybrid_extraction.py. Python syntax verification passed. Commit: 422f1c9",
+          "updated_at": "2025-12-22T05:37:39.290701+00:00"
         }
       ]
     },
@@ -273,7 +283,9 @@
             "command": "cd pips-solver && npx tsc --noEmit src/app/screens/OverlayBuilderScreen.tsx",
             "expected": "No compilation errors"
           },
-          "status": "pending"
+          "status": "completed",
+          "notes": "Added per-stage confidence indicators to OverlayBuilderScreen during extraction. Changes include: stageConfidence state tracking, onProgress callback updates, confidence display in Step1GridAlignment with compact ConfidenceIndicator components. Commit: 8e19a81",
+          "updated_at": "2025-12-22T05:42:49.357382+00:00"
         },
         {
           "id": "subtask-4-2",
@@ -291,7 +303,9 @@
             "command": "cd pips-solver && npx tsc --noEmit src/app/components/AIVerificationModal.tsx",
             "expected": "No compilation errors"
           },
-          "status": "pending"
+          "status": "completed",
+          "notes": "Enhanced AIVerificationModal with visual diff view: Added SVG-based grid visualization showing extracted cells with region color coding and constraint indicators. Implemented toggle between Visual and Text view modes. Added visual region legend, visual domino rendering with pip dots (following GridRenderer patterns), ConfidenceBar component with color-coded progress bars. Support for optional source image overlay comparison. Uses theme tokens from src/theme/tokens.ts. TypeScript compilation verified. Commit: 6163cf3",
+          "updated_at": "2025-12-22T05:48:39.947613+00:00"
         },
         {
           "id": "subtask-4-3",
@@ -309,7 +323,9 @@
             "command": "cd pips-solver && npx tsc --noEmit src/app/components/AIVerificationModal.tsx",
             "expected": "No compilation errors"
           },
-          "status": "pending"
+          "status": "completed",
+          "notes": "Added cell-by-cell correction UI to AIVerificationModal. Features include: 1) Cell editing panel with toggle hole/cell and region assignment, 2) Domino pip editing via tap/long-press to cycle values 0-6, 3) Constraint editing panel with type/op/value controls, 4) Edit tracking with Modified badge and Reset button, 5) Touch overlay layer for cell selection in visual grid. Changed onAccept callback signature to pass edited results. TypeScript compilation verified. Commit: ac91aed",
+          "updated_at": "2025-12-22T05:57:27.150171+00:00"
         },
         {
           "id": "subtask-4-4",
@@ -564,5 +580,5 @@
   "status": "human_review",
   "planStatus": "review",
   "updated_at": "2025-12-22T04:42:42.970Z",
-  "last_updated": "2025-12-22T05:18:05.076548+00:00"
+  "last_updated": "2025-12-22T05:57:27.150171+00:00"
 }
