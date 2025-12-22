@@ -102,15 +102,119 @@ Starting Metro Bundler
    - Tap "Reset" to undo changes
    - Tap "Accept" to apply corrections
 
-#### Test Flow: Low Confidence
+#### Test Flow: Low Confidence (Subtask 6-2)
 
-1. Select a poor quality or partial puzzle image
-2. Trigger AI extraction
-3. Verify:
-   - Confidence indicators show low values (< 70%)
-   - User is prompted with warning about low confidence
-   - Review modal highlights uncertain areas
-   - User can make corrections before accepting
+This flow verifies that users are properly prompted for verification when extraction confidence is low.
+
+**Confidence Thresholds (from OverlayBuilderScreen.tsx):**
+- `LOW_CONFIDENCE_THRESHOLD` = 70% - Shows "Review Recommended" alert
+- `STAGE_CONFIDENCE_THRESHOLD` = 60% - Per-stage warning displayed
+- `CRITICAL_CONFIDENCE_THRESHOLD` = 45% - Shows "Low Confidence Extraction" alert
+
+**Test Steps:**
+
+1. **Prepare a low-quality test image:**
+   - Use a blurry or partially cropped puzzle screenshot
+   - Or use the test script to create a degraded version:
+     ```bash
+     cd cv-service
+     python test_low_confidence_flow.py ../IMG_2050.png
+     ```
+
+2. **Select low-quality image in app:**
+   - Open app and navigate to "New Puzzle"
+   - Select the degraded/partial image
+
+3. **Trigger AI extraction:**
+   - Tap "AI Extract" button
+   - Watch the extraction progress
+
+4. **Verify confidence indicators show low values:**
+   - During extraction: Stage confidence % displayed in progress
+   - After extraction: Overall confidence calculated and analyzed
+   - Expected: At least one stage shows < 60% confidence
+
+5. **Verify user is prompted to review/correct:**
+   - **Critical confidence (< 45%):**
+     - Alert: "Low Confidence Extraction"
+     - Message includes confidence percentage and issues detected
+     - Single button: "Review Results"
+   - **Low confidence (< 70%):**
+     - Alert: "Review Recommended"
+     - Message shows confidence percentage
+     - Lists low-confidence stages (e.g., "Please verify: Grid dimensions, Region mapping")
+     - Single button: "Review Now"
+
+6. **Verify AIVerificationModal opens:**
+   - Modal displays automatically after alert is dismissed
+   - Shows visual grid with region colors
+   - Shows confidence bars at bottom (color-coded):
+     - Green (>= 90%): High confidence
+     - Amber (>= 80%): Medium confidence
+     - Red (< 80%): Low confidence
+   - Shows "Tap cells to correct errors" instruction
+
+7. **Apply corrections and verify they persist:**
+   - **Test cell editing:**
+     - Tap a cell in the visual grid
+     - Cell Edit Panel appears with options:
+       - "Convert to Cell" / "Mark as Hole" toggle
+       - Region letter buttons (A, B, C, etc.) to change region
+     - Make a change and verify "Modified" badge appears in header
+
+   - **Test domino editing:**
+     - Scroll to Dominoes section
+     - Tap a domino half to cycle pip value (0->1->2...->6->0)
+     - Long-press to cycle backwards (6->5->4...->0->6)
+     - Verify the pip dots update visually
+
+   - **Test constraint editing:**
+     - Tap a constraint in the Constraints section
+     - Constraint Edit Panel appears with:
+       - Type selection (Sum / All Equal)
+       - Operator buttons (==, <, >, !=) for sum type
+       - Value input field
+       - Delete and Save buttons
+     - Change value and tap Save
+
+   - **Verify Reset functionality:**
+     - Tap "Reset" button in header
+     - All changes should revert to original AI extraction
+     - "Modified" badge disappears
+
+   - **Accept with corrections:**
+     - Make some edits again
+     - Tap "Accept with edits" button (changes to brass color when edited)
+     - Verify app moves to Step 2 (Region Painting)
+     - Navigate back to Step 1 and verify corrections are applied
+
+**Automated Testing:**
+
+Run the dedicated low-confidence flow test:
+```bash
+cd cv-service
+python test_low_confidence_flow.py ../IMG_2050.png
+```
+
+This tests:
+- Low confidence detection from degraded images
+- Warning generation for uncertain extractions
+- Partial image handling
+- Confidence level classification (high/medium/low)
+- Preprocessing quality assessment
+- Correction data completeness
+
+**Expected Test Output:**
+```
+[PASS] original_confidence: Original: XX% (high/medium)
+[PASS] degraded_confidence: Degraded: XX% (medium/low)
+[PASS] warning_generation: N warnings: ...
+[PASS] actionable_warnings: Warnings include user-actionable guidance
+[PASS] partial_image_handling: Handled gracefully
+[PASS] confidence_classification: Classified correctly
+[PASS] quality_metrics: Quality metrics available
+[PASS] correction_data: All data for corrections available
+```
 
 ### Step 5: Verify CV Service Endpoints
 
@@ -182,7 +286,13 @@ Verify response includes:
 | Extraction pipeline | Completes all 5 stages with confidence |
 | Progress indicators | Shows stage progress and confidence in app |
 | Low confidence warning | Prompts user when confidence < 70% |
+| Critical confidence warning | Shows strong warning when confidence < 45% |
+| Low-confidence stages listed | Alert lists specific stages with low confidence |
 | Manual correction | Can edit cells, regions, constraints, dominoes |
+| Corrections persist | Edited values passed to builder state on Accept |
+| Reset functionality | Reset button reverts all edits to original |
+| Modified badge | "Modified" badge shows when edits made |
+| Accept with edits | Button text changes and passes edited data |
 | Fallback behavior | Uses raw image when CV service unavailable |
 
 ## Troubleshooting
@@ -230,7 +340,7 @@ Verify response includes:
 | `main.py` | Enhanced /crop-puzzle, new /preprocess-image endpoint |
 | `hybrid_extraction.py` | Adaptive thresholding, grid line detection |
 
-## Automated Test Script
+## Automated Test Scripts
 
 Run the complete E2E test suite:
 
@@ -239,14 +349,36 @@ Run the complete E2E test suite:
 cd cv-service
 uvicorn main:app --host 0.0.0.0 --port 8080
 
-# Terminal 2: Run tests
+# Terminal 2: Run general E2E tests
 cd cv-service
 python test_e2e_extraction.py ../IMG_2050.png
+
+# Terminal 3: Run low-confidence flow tests (Subtask 6-2)
+cd cv-service
+python test_low_confidence_flow.py ../IMG_2050.png
 ```
 
-The test script verifies:
+### test_e2e_extraction.py
+
+The general E2E test script verifies:
 1. Health check endpoint
 2. Enhanced crop-puzzle with grid confidence
 3. Image preprocessing with statistics
 4. Full extraction flow (crop -> preprocess)
 5. Domino region cropping
+
+### test_low_confidence_flow.py (Subtask 6-2)
+
+The low-confidence flow test script verifies:
+1. Low confidence detection from degraded/partial images
+2. Appropriate warning generation for uncertain extractions
+3. Graceful handling of partial images
+4. Correct confidence level classification (high/medium/low/unknown)
+5. Quality assessment metrics in preprocessing
+6. Completeness of data required for correction UI
+
+**Optional dependencies for full testing:**
+```bash
+pip install numpy scipy pillow
+```
+These enable synthetic image degradation for more thorough low-confidence scenario testing.
