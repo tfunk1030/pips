@@ -84,4 +84,52 @@ Or manually:
 
 === END SESSION 1 (PLANNER) ===
 
-Next: Coder agent will pick up implementation from subtask-1-1
+=== SESSION 2-N (CODER SESSIONS) ===
+
+Phases 1-5 completed by coder agents:
+- Phase 1: All 5 extraction prompt improvements completed
+- Phase 2: Cross-stage validation with grid validator enhancements
+- Phase 3: CV service preprocessing with adaptive thresholding
+- Phase 4: Frontend UI/UX with confidence indicators and correction UI
+- Phase 5: CV-AI integration with fallback logic
+
+=== PHASE 6: INTEGRATION TESTING ===
+
+Session: subtask-6-1 - End-to-end verification of extraction flow
+Date: 2025-12-22
+
+Completed:
+1. TypeScript compilation verification
+   - Key modified files compile successfully
+   - Note: Bare `npx tsc --noEmit` produces expected Expo/RN type conflicts
+
+2. Created E2E verification test script
+   - File: cv-service/test_e2e_extraction.py
+   - Tests: health check, enhanced crop-puzzle, preprocess-image, full flow
+
+3. Created E2E verification documentation
+   - File: E2E_VERIFICATION.md
+   - Includes: step-by-step manual testing procedures
+   - Covers: happy path, low-confidence flow, manual correction workflow
+
+4. Verification artifacts created:
+   - test_e2e_extraction.py: Automated endpoint tests
+   - E2E_VERIFICATION.md: Manual testing guide
+
+Test images available:
+- IMG_2050.png (421KB) - Sample NYT Pips puzzle
+- IMG_2051.png (529KB) - Alternative puzzle
+
+To run E2E verification:
+```bash
+# Terminal 1: Start CV service
+cd cv-service && uvicorn main:app --host 0.0.0.0 --port 8080
+
+# Terminal 2: Run automated tests
+cd cv-service && python test_e2e_extraction.py ../IMG_2050.png
+
+# Terminal 3: Start Expo (for manual app testing)
+cd pips-solver && npm run start
+```
+
+Next: subtask-6-2 - Verify low-confidence flow prompts user for verification

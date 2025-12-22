@@ -1,0 +1,237 @@
+{
+  "subtasks": {
+    "subtask-1-1": {
+      "attempts": [
+        {
+          "session": 1,
+          "timestamp": "2025-12-21T23:57:52.003378",
+          "approach": "Implemented: Improve grid geometry prompt with clearer instructions and examples for counting rows/cols",
+          "success": true,
+          "error": null
+        }
+      ],
+      "status": "completed"
+    },
+    "subtask-1-2": {
+      "attempts": [
+        {
+          "session": 2,
+          "timestamp": "2025-12-22T00:01:41.366844",
+          "approach": "Implemented: Improve cell detection prompt to better distinguish cells vs holes with visual examples",
+          "success": true,
+          "error": null
+        }
+      ],
+      "status": "completed"
+    },
+    "subtask-1-3": {
+      "attempts": [
+        {
+          "session": 3,
+          "timestamp": "2025-12-22T00:06:14.990272",
+          "approach": "Implemented: Improve region mapping prompt with better color distinction instructions",
+          "success": true,
+          "error": null
+        }
+      ],
+      "status": "completed"
+    },
+    "subtask-1-4": {
+      "attempts": [
+        {
+          "session": 4,
+          "timestamp": "2025-12-22T00:10:21.621233",
+          "approach": "Implemented: Improve constraint extraction prompt with clearer diamond label reading instructions",
+          "success": true,
+          "error": null
+        }
+      ],
+      "status": "completed"
+    },
+    "subtask-1-5": {
+      "attempts": [
+        {
+          "session": 5,
+          "timestamp": "2025-12-22T00:13:55.204834",
+          "approach": "Implemented: Improve domino extraction prompt with pip counting visual patterns",
+          "success": true,
+          "error": null
+        }
+      ],
+      "status": "completed"
+    },
+    "subtask-2-1": {
+      "attempts": [
+        {
+          "session": 6,
+          "timestamp": "2025-12-22T00:18:22.075267",
+          "approach": "Implemented: Enhance grid validator with cross-validation checks between geometry and cell detection",
+          "success": true,
+          "error": null
+        }
+      ],
+      "status": "completed"
+    },
+    "subtask-2-2": {
+      "attempts": [
+        {
+          "session": 7,
+          "timestamp": "2025-12-22T00:23:10.037249",
+          "approach": "Implemented: Add inter-stage validation in pipeline to validate each stage output before passing to next",
+          "success": true,
+          "error": null
+        }
+      ],
+      "status": "completed"
+    },
+    "subtask-2-3": {
+      "attempts": [
+        {
+          "session": 8,
+          "timestamp": "2025-12-22T00:26:37.844966",
+          "approach": "Implemented: Add confidence aggregation logic to compute overall extraction quality score",
+          "success": true,
+          "error": null
+        }
+      ],
+      "status": "completed"
+    },
+    "subtask-3-1": {
+      "attempts": [
+        {
+          "session": 9,
+          "timestamp": "2025-12-22T00:31:08.242162",
+          "approach": "Implemented: Improve hybrid_extraction.py with better grid line detection using adaptive thresholding",
+          "success": true,
+          "error": null
+        }
+      ],
+      "status": "completed"
+    },
+    "subtask-3-2": {
+      "attempts": [
+        {
+          "session": 10,
+          "timestamp": "2025-12-22T00:34:31.259896",
+          "approach": "Implemented: Enhance main.py crop-puzzle endpoint with better boundary detection",
+          "success": true,
+          "error": null
+        }
+      ],
+      "status": "completed"
+    },
+    "subtask-3-3": {
+      "attempts": [
+        {
+          "session": 11,
+          "timestamp": "2025-12-22T00:37:56.319803",
+          "approach": "Implemented: Add image preprocessing endpoint for contrast/brightness normalization before AI extraction",
+          "success": true,
+          "error": null
+        }
+      ],
+      "status": "completed"
+    },
+    "subtask-4-1": {
+      "attempts": [
+        {
+          "session": 12,
+          "timestamp": "2025-12-22T00:43:15.725362",
+          "approach": "Implemented: Add per-stage confidence indicators to OverlayBuilderScreen during extraction",
+          "success": true,
+          "error": null
+        }
+      ],
+      "status": "completed"
+    },
+    "subtask-4-2": {
+      "attempts": [
+        {
+          "session": 13,
+          "timestamp": "2025-12-22T00:49:04.311494",
+          "approach": "Implemented: Enhance AIVerificationModal with visual diff showing extraction vs image overlay",
+          "success": true,
+          "error": null
+        }
+      ],
+      "status": "completed"
+    },
+    "subtask-4-3": {
+      "attempts": [
+        {
+          "session": 14,
+          "timestamp": "2025-12-22T00:57:38.702812",
+          "approach": "Implemented: Add cell-by-cell correction UI to AIVerificationModal for manual fixes",
+          "success": true,
+          "error": null
+        }
+      ],
+      "status": "completed"
+    },
+    "subtask-4-4": {
+      "attempts": [
+        {
+          "session": 15,
+          "timestamp": "2025-12-22T01:01:58.150769",
+          "approach": "Implemented: Add low-confidence warning prompts to trigger user verification when confidence is below threshold",
+          "success": true,
+          "error": null
+        }
+      ],
+      "status": "completed"
+    },
+    "subtask-5-1": {
+      "attempts": [
+        {
+          "session": 16,
+          "timestamp": "2025-12-22T01:05:54.826225",
+          "approach": "Implemented: Enhance cvExtraction.ts to use CV preprocessing before AI extraction",
+          "success": true,
+          "error": null
+        }
+      ],
+      "status": "completed"
+    },
+    "subtask-5-2": {
+      "attempts": [
+        {
+          "session": 17,
+          "timestamp": "2025-12-22T01:08:30.724420",
+          "approach": "Implemented: Add fallback logic to use raw image when CV service unavailable",
+          "success": true,
+          "error": null
+        }
+      ],
+      "status": "completed"
+    },
+    "subtask-6-1": {
+      "attempts": [
+        {
+          "session": 18,
+          "timestamp": "2025-12-22T01:14:26.909337",
+          "approach": "Implemented: End-to-end verification of extraction flow with sample puzzle images",
+          "success": true,
+          "error": null
+        }
+      ],
+      "status": "completed"
+    },
+    "subtask-6-2": {
+      "attempts": [
+        {
+          "session": 19,
+          "timestamp": "2025-12-22T01:20:40.537149",
+          "approach": "Implemented: Verify low-confidence flow prompts user for verification",
+          "success": true,
+          "error": null
+        }
+      ],
+      "status": "completed"
+    }
+  },
+  "stuck_subtasks": [],
+  "metadata": {
+    "created_at": "2025-12-21T23:48:42.838189",
+    "last_updated": "2025-12-22T01:20:40.537149"
+  }
+}

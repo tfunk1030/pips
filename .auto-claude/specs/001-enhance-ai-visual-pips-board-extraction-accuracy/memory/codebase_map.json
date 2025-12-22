@@ -4,7 +4,42 @@
       "description": "AI extraction pipeline: 5-stage extraction (Grid Geometry, Cell Detection, Region Mapping, Constraint Extraction, Domino Extraction) with 3-model ensemble (Gemini, GPT, Claude). Known issues: code duplication between aiExtraction.ts and ensembleExtraction.ts, missing examples, prompt verbosity.",
       "category": "architecture",
       "discovered_at": "2025-12-22T04:25:33.826722+00:00"
+    },
+    "pips-solver/src/services/extraction/stages/gridGeometry.ts": {
+      "description": "Grid geometry extraction stage with improved prompts including ASCII visual examples for counting rows/columns, common mistakes to avoid, and dynamic retry hints when models disagree by 1",
+      "category": "extraction-prompts",
+      "discovered_at": "2025-12-22T04:57:44.920586+00:00"
+    },
+    "pips-solver/src/services/extraction/validation/gridValidator.ts": {
+      "description": "Enhanced with cross-validation functions: crossValidateGridAndCells() performs cell connectivity check (BFS), hole pattern detection, grid utilization validation, and confidence consistency checks. Also added compareCellDetections() and validateGridConsensus() for multi-model validation.",
+      "category": "validation",
+      "discovered_at": "2025-12-22T05:18:10.580594+00:00"
+    },
+    "cv-service/hybrid_extraction.py": {
+      "description": "Enhanced grid detection with multi-method approach: adaptive thresholding (Gaussian + Mean), Canny edge detection fallback, Hough line detection, line clustering, and confidence scoring. Methods are combined with saturation-based detection as baseline. CropResult now includes grid_confidence (0-1), detected_rows, and detected_cols fields for AI pipeline consumption.",
+      "category": "cv_processing",
+      "discovered_at": "2025-12-22T05:30:57.989532+00:00"
+    },
+    "pips-solver/src/app/screens/OverlayBuilderScreen.tsx": {
+      "description": "Per-stage confidence tracking during AI extraction uses the ExtractionProgress callback. Confidence is tracked in state and passed to Step1GridAlignment which displays compact ConfidenceIndicator components during extraction.",
+      "category": "pattern",
+      "discovered_at": "2025-12-22T05:43:00.823420+00:00"
+    },
+    "pips-solver/src/app/components/AIVerificationModal.tsx": {
+      "description": "Enhanced with visual diff mode: Supports toggle between Visual/Text views. Visual mode uses SVG rendering (Rect, Line, SvgText) with parseRegionsToGrid() and parseShapeToHoles() helper functions to parse extraction results into renderable format. Includes region color legend, visual domino rendering with pip dots (getPipPositions()), and ConfidenceBar component for visual confidence display. Optional sourceImage prop enables image overlay comparison.",
+      "category": "architecture",
+      "discovered_at": "2025-12-22T05:48:53.972046+00:00"
+    },
+    "pips-solver/src/services/cvExtraction.ts": {
+      "description": "Enhanced with CV preprocessing pipeline. Key functions: preprocessForAIExtraction() chains crop+preprocess for optimal AI extraction, preprocessImage() calls /preprocess-image endpoint, cropPuzzleRegionEnhanced() gets enhanced crop with grid detection confidence/dimensions/warnings. Helper functions: shouldPreprocess() analyzes image stats for quality issues, getPreprocessingRecommendations() generates targeted options. Types: PreprocessOptions, ImageStats, PreprocessResult, EnhancedCropResult, CVPreprocessingResult.",
+      "category": "CV-AI Integration",
+      "discovered_at": "2025-12-22T06:05:42.861735+00:00"
+    },
+    "cv-service/test_low_confidence_flow.py": {
+      "description": "Dedicated E2E test script for low-confidence extraction flow verification. Tests: low confidence detection from degraded images, warning generation, partial image handling, confidence level classification (high/medium/low/unknown), preprocessing quality assessment, and correction data completeness. Optional numpy/scipy/pillow deps enable synthetic image degradation for more thorough testing.",
+      "category": "testing",
+      "discovered_at": "2025-12-22T06:20:29.749687+00:00"
     }
   },
-  "last_updated": "2025-12-22T04:25:33.826722+00:00"
+  "last_updated": "2025-12-22T06:20:29.749687+00:00"
 }

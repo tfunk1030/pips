@@ -2,4 +2,6 @@ node_modules
 
 # Windows reserved device names
 nul
+
+# Auto Claude sensitive files
 .auto-claude/.env
