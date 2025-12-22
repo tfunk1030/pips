@@ -484,7 +484,7 @@ const styles = StyleSheet.create({
   },
   imageContainer: {
     width: '100%',
-    backgroundColor: '#000',
+    backgroundColor: tokens.colors.surface.dark,
     borderRadius: 12,
     overflow: 'hidden',
   },
@@ -555,7 +555,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   aiButtonDisabled: {
-    backgroundColor: '#666',
+    backgroundColor: tokens.colors.state.disabled,
   },
   aiButtonLoading: {
     flexDirection: 'row',
@@ -577,7 +577,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#222',
+    backgroundColor: tokens.colors.surface.secondary,
     borderRadius: 8,
   },
   confidenceTitle: {
