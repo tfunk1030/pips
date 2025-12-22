@@ -45,25 +45,17 @@ dominoes:
 board:
   # '.' = cell exists, '#' = no cell
   shape: |
-    ##....####
-    ##....####
-    ....###..#
-    ....##..##
-    ##..###.##
-    ##..###.##
-    ##..######
-    ##..######
+    ...#
+    ....
+    ....
+    ...#
   # same dimensions as shape, but each '.' becomes a region label
-  # Put '#' where there is no cell.
+  # Put '#' where there isno cell.
   regions: |
-    ##BBCC####
-    ##HGFD####
-    AAHG###MN#
-    EEEI##OM##
-    ##EI###M##
-    ##LJ###M##
-    ##KJ######
-    ##KJ######
+    A.F#
+    ABBD
+    BBCD
+    .EE#
 
 region_constraints:
   # Each key is a region label used above.
