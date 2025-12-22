@@ -207,7 +207,8 @@
           "subtask_id": "subtask-5-1",
           "title": "Remove unused StyleSheet styles",
           "description": "Clean up the StyleSheet by removing all styles that are now handled by themed components.",
-          "status": "pending",
+          "status": "completed",
+          "completion_notes": "Cleaned up StyleSheet by removing redundant styles: removed textAlign from controlValue (now uses Body align prop), removed textTransform from confidenceTitle and stageConfidenceTitle (handled by labelSmall variant), removed letterSpacing from stageConfidenceTitle, removed empty verticalEdge and horizontalEdge placeholder styles. Updated Body components to use align=\"center\" prop. Layout-only styles retained for positioning. Committed as 55c6fff.",
           "files_to_modify": [
             "pips-solver/src/app/screens/builder/Step1GridAlignment.tsx"
           ],
