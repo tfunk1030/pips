@@ -41,7 +41,7 @@ const DEFAULT_PUZZLE_SPEC: PuzzleSpec = {
     ],
   },
   board: {
-    shape: ['####', '####'],
+    shape: ['....', '....'],
     regions: ['AABB', 'CCDD'],
   },
   region_constraints: {
