@@ -159,20 +159,5 @@
     "tests_passed": {},
     "timestamp": "2025-12-22T08:23:59.377615+00:00",
     "ready_for_qa_revalidation": false
-  },
-  "qa_iteration_history": [
-    {
-      "iteration": 1,
-      "status": "approved",
-      "timestamp": "2025-12-22T08:25:15.073654+00:00",
-      "issues": [],
-      "duration_seconds": 465.87
-    }
-  ],
-  "qa_stats": {
-    "total_iterations": 1,
-    "last_iteration": 1,
-    "last_status": "approved",
-    "issues_by_type": {}
   }
 }
