@@ -3,7 +3,7 @@
   "description": "Refactor Step1GridAlignment screen to use the established Button, Card, and Text components from the UI library instead of raw TouchableOpacity and inline StyleSheet styles. This improves consistency, accessibility, and maintainability.",
   "created_at": "2025-12-22T07:01:11.961Z",
   "updated_at": "2025-12-22T08:00:00.000Z",
-  "status": "planned",
+  "status": "completed",
   "planStatus": "approved",
   "workflow_type": "development",
   "services_involved": ["pips-solver"],
@@ -201,7 +201,7 @@
       "phase_id": "phase-5",
       "name": "Cleanup and Testing",
       "description": "Remove unused styles and verify the refactored component",
-      "status": "pending",
+      "status": "completed",
       "subtasks": [
         {
           "subtask_id": "subtask-5-1",
@@ -228,7 +228,8 @@
           "subtask_id": "subtask-5-2",
           "title": "Verify component functionality and appearance",
           "description": "Test all interactive elements and verify visual appearance matches the theme design system.",
-          "status": "pending",
+          "status": "completed",
+          "completion_notes": "Verification completed successfully: (1) All buttons use Button component with correct variants and handlers - Select Image (primary), AI Extract (primary with loading), +/- controls (secondary small), Choose Different Image (ghost). (2) Loading state uses Button's loading prop with aiProgress. (3) Row/col controls pass correct deltas to handleRowChange/handleColChange. (4) Body and Label components used with color='secondary' for hints. (5) Empty and loaded states render correctly. (6) TypeScript check passed with no errors. (7) No TouchableOpacity, no hardcoded hex colors, no console.log statements.",
           "files_to_modify": [],
           "dependencies": ["subtask-5-1"],
           "acceptance_criteria": [
