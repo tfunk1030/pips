@@ -17,7 +17,7 @@ import Svg, { Circle, Line, Rect } from 'react-native-svg';
 import { BuilderAction, GridBounds, OverlayBuilderState } from '../../../model/overlayTypes';
 import { constrainBounds, hitTestCell } from '../../../utils/gridCalculations';
 import ConfidenceIndicator from '../../components/ConfidenceIndicator';
-import { Body, Button, Label } from '../../components/ui';
+import { Body, Button, Card, Label } from '../../components/ui';
 
 interface StageConfidence {
   board?: number;
@@ -155,10 +155,10 @@ export default function Step1GridAlignment({
 
       {/* AI Confidence Indicator */}
       {state.aiStatus === 'done' && state.aiConfidence?.grid && (
-        <View style={styles.confidenceSection}>
+        <Card style={styles.confidenceSection}>
           <Label size="small" color="secondary" style={styles.confidenceTitle}>AI Extraction Confidence</Label>
           <ConfidenceIndicator label="Grid Layout" confidence={state.aiConfidence.grid} compact />
-        </View>
+        </Card>
       )}
 
       {/* AI Extraction Button */}
@@ -548,10 +548,6 @@ const styles = StyleSheet.create({
   },
   confidenceSection: {
     marginTop: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#222',
-    borderRadius: 8,
   },
   confidenceTitle: {
     marginBottom: 8,
