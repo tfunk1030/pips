@@ -13,6 +13,8 @@ Key features:
 - Histogram analysis fallback for when Hough detection fails
 - Intensity gradient analysis for edge-poor images
 - Perspective correction for distorted mobile camera images
+- Image quality validation (blur, noise, lighting, resolution)
+- Pre-flight distortion detection for mobile camera captures
 """
 
 import cv2
@@ -22,6 +24,10 @@ from typing import List, Tuple, Optional, Dict
 from pathlib import Path
 from scipy import signal
 from scipy.ndimage import uniform_filter1d
+import logging
+
+# Configure module logger
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -175,6 +181,754 @@ class PerspectiveCorrectionResult:
             "original_size": list(self.original_size) if self.original_size else None,
             "corrected_size": list(self.corrected_size) if self.corrected_size else None
         }
+
+
+@dataclass
+class ImageQualityResult:
+    """
+    Result of image quality validation.
+
+    Provides comprehensive quality metrics to determine if an image
+    is suitable for puzzle detection processing.
+
+    Attributes:
+        is_acceptable: Overall pass/fail for image quality
+        blur_score: Measure of image sharpness (higher = sharper, 0-1 normalized)
+        noise_score: Measure of image noise level (higher = less noise, 0-1)
+        lighting_score: Measure of lighting quality (higher = better, 0-1)
+        contrast_score: Measure of contrast quality (higher = better, 0-1)
+        resolution_score: Measure of resolution adequacy (higher = better, 0-1)
+        overall_score: Weighted combination of all scores (0-1)
+        issues: List of detected quality issues
+        recommendations: List of suggestions to improve image quality
+        min_dimension: Smallest image dimension in pixels
+        blur_variance: Raw Laplacian variance for blur detection
+        brightness_mean: Mean brightness value (0-255)
+        brightness_std: Standard deviation of brightness
+    """
+    is_acceptable: bool = True
+    blur_score: float = 1.0
+    noise_score: float = 1.0
+    lighting_score: float = 1.0
+    contrast_score: float = 1.0
+    resolution_score: float = 1.0
+    overall_score: float = 1.0
+    issues: List[str] = field(default_factory=list)
+    recommendations: List[str] = field(default_factory=list)
+    min_dimension: int = 0
+    blur_variance: float = 0.0
+    brightness_mean: float = 128.0
+    brightness_std: float = 50.0
+
+    def to_dict(self) -> Dict:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "is_acceptable": self.is_acceptable,
+            "blur_score": round(self.blur_score, 4),
+            "noise_score": round(self.noise_score, 4),
+            "lighting_score": round(self.lighting_score, 4),
+            "contrast_score": round(self.contrast_score, 4),
+            "resolution_score": round(self.resolution_score, 4),
+            "overall_score": round(self.overall_score, 4),
+            "issues": self.issues,
+            "recommendations": self.recommendations,
+            "min_dimension": self.min_dimension,
+            "blur_variance": round(self.blur_variance, 2),
+            "brightness_mean": round(self.brightness_mean, 2),
+            "brightness_std": round(self.brightness_std, 2)
+        }
+
+
+@dataclass
+class DistortionAnalysisResult:
+    """
+    Result of pre-flight distortion analysis.
+
+    Analyzes an image for various types of distortion that may affect
+    puzzle detection accuracy.
+
+    Attributes:
+        has_significant_distortion: Whether distortion exceeds acceptable threshold
+        perspective_distortion: Measure of perspective/keystone distortion (0-1)
+        barrel_distortion: Measure of lens barrel/pincushion distortion (0-1)
+        rotation_angle: Detected rotation angle in degrees
+        skew_angle: Detected skew/shear angle in degrees
+        overall_distortion: Combined distortion metric (0-1)
+        distortion_type: Primary distortion type detected
+        correction_recommended: Whether correction should be applied
+        detected_corners: Corner points if quadrilateral detected
+        line_analysis: Results from line straightness analysis
+    """
+    has_significant_distortion: bool = False
+    perspective_distortion: float = 0.0
+    barrel_distortion: float = 0.0
+    rotation_angle: float = 0.0
+    skew_angle: float = 0.0
+    overall_distortion: float = 0.0
+    distortion_type: str = "none"
+    correction_recommended: bool = False
+    detected_corners: Optional[np.ndarray] = None
+    line_analysis: Optional[Dict] = None
+
+    def to_dict(self) -> Dict:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "has_significant_distortion": self.has_significant_distortion,
+            "perspective_distortion": round(self.perspective_distortion, 4),
+            "barrel_distortion": round(self.barrel_distortion, 4),
+            "rotation_angle": round(self.rotation_angle, 2),
+            "skew_angle": round(self.skew_angle, 2),
+            "overall_distortion": round(self.overall_distortion, 4),
+            "distortion_type": self.distortion_type,
+            "correction_recommended": self.correction_recommended,
+            "detected_corners": self.detected_corners.tolist() if self.detected_corners is not None else None,
+            "line_analysis": self.line_analysis
+        }
+
+
+def validate_image_quality(
+    image: np.ndarray,
+    min_resolution: int = 200,
+    blur_threshold: float = 100.0,
+    min_brightness: float = 30.0,
+    max_brightness: float = 225.0,
+    min_contrast: float = 20.0,
+    noise_threshold: float = 15.0,
+    overall_threshold: float = 0.4,
+    debug_dir: Optional[str] = None
+) -> ImageQualityResult:
+    """
+    Validate image quality for puzzle detection suitability.
+
+    Performs comprehensive quality analysis including:
+    - Blur detection using Laplacian variance
+    - Noise estimation using local variance analysis
+    - Lighting assessment (brightness and uniformity)
+    - Contrast measurement
+    - Resolution adequacy check
+
+    Args:
+        image: Input BGR or grayscale image
+        min_resolution: Minimum acceptable dimension in pixels
+        blur_threshold: Laplacian variance threshold (lower = more blur)
+        min_brightness: Minimum acceptable mean brightness (0-255)
+        max_brightness: Maximum acceptable mean brightness (0-255)
+        min_contrast: Minimum acceptable standard deviation of brightness
+        noise_threshold: Maximum acceptable noise level
+        overall_threshold: Minimum overall quality score (0-1)
+        debug_dir: Optional directory to save debug images
+
+    Returns:
+        ImageQualityResult with quality metrics and recommendations
+    """
+    if image is None or image.size == 0:
+        return ImageQualityResult(
+            is_acceptable=False,
+            overall_score=0.0,
+            issues=["Image is empty or None"],
+            recommendations=["Provide a valid image"]
+        )
+
+    result = ImageQualityResult()
+    issues = []
+    recommendations = []
+
+    # Convert to grayscale for analysis
+    if len(image.shape) == 3:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = image.copy()
+
+    h, w = gray.shape[:2]
+    result.min_dimension = min(h, w)
+
+    # ========== 1. Resolution Check ==========
+    if result.min_dimension < min_resolution:
+        result.resolution_score = result.min_dimension / min_resolution
+        issues.append(f"Low resolution: {result.min_dimension}px (minimum: {min_resolution}px)")
+        recommendations.append("Capture image at higher resolution or move closer to puzzle")
+    else:
+        # Score based on how much above minimum
+        result.resolution_score = min(1.0, result.min_dimension / (min_resolution * 2))
+
+    # ========== 2. Blur Detection (Laplacian Variance) ==========
+    laplacian = cv2.Laplacian(gray, cv2.CV_64F)
+    blur_variance = laplacian.var()
+    result.blur_variance = blur_variance
+
+    if blur_variance < blur_threshold:
+        # Normalize to 0-1 scale (0 = very blurry, 1 = sharp)
+        result.blur_score = min(blur_variance / blur_threshold, 1.0)
+        issues.append(f"Image appears blurry (variance: {blur_variance:.1f}, threshold: {blur_threshold})")
+        recommendations.append("Hold camera steady or use auto-focus before capture")
+    else:
+        # Score based on how much above threshold
+        result.blur_score = min(1.0, blur_variance / (blur_threshold * 3))
+
+    # ========== 3. Lighting Assessment ==========
+    brightness_mean = np.mean(gray)
+    brightness_std = np.std(gray)
+    result.brightness_mean = float(brightness_mean)
+    result.brightness_std = float(brightness_std)
+
+    lighting_score = 1.0
+
+    # Check for underexposure
+    if brightness_mean < min_brightness:
+        lighting_penalty = (min_brightness - brightness_mean) / min_brightness
+        lighting_score -= lighting_penalty * 0.5
+        issues.append(f"Image too dark (brightness: {brightness_mean:.1f})")
+        recommendations.append("Increase lighting or adjust camera exposure")
+
+    # Check for overexposure
+    if brightness_mean > max_brightness:
+        lighting_penalty = (brightness_mean - max_brightness) / (255 - max_brightness)
+        lighting_score -= lighting_penalty * 0.5
+        issues.append(f"Image too bright (brightness: {brightness_mean:.1f})")
+        recommendations.append("Reduce lighting or adjust camera exposure")
+
+    # Check for uneven lighting by analyzing quadrant brightness
+    quadrant_means = [
+        np.mean(gray[:h//2, :w//2]),      # Top-left
+        np.mean(gray[:h//2, w//2:]),      # Top-right
+        np.mean(gray[h//2:, :w//2]),      # Bottom-left
+        np.mean(gray[h//2:, w//2:])       # Bottom-right
+    ]
+    quadrant_variation = max(quadrant_means) - min(quadrant_means)
+    if quadrant_variation > 60:
+        lighting_penalty = min((quadrant_variation - 60) / 100, 0.3)
+        lighting_score -= lighting_penalty
+        issues.append(f"Uneven lighting across image (variation: {quadrant_variation:.1f})")
+        recommendations.append("Ensure uniform lighting across the puzzle")
+
+    result.lighting_score = max(0.0, lighting_score)
+
+    # ========== 4. Contrast Assessment ==========
+    if brightness_std < min_contrast:
+        result.contrast_score = brightness_std / min_contrast
+        issues.append(f"Low contrast (std: {brightness_std:.1f})")
+        recommendations.append("Ensure good lighting contrast between puzzle elements")
+    else:
+        result.contrast_score = min(1.0, brightness_std / (min_contrast * 3))
+
+    # ========== 5. Noise Estimation ==========
+    # Use local variance to estimate noise
+    # Apply median filter and compare with original
+    denoised = cv2.medianBlur(gray, 3)
+    noise_estimate = np.std(gray.astype(float) - denoised.astype(float))
+
+    if noise_estimate > noise_threshold:
+        result.noise_score = max(0.0, 1.0 - (noise_estimate - noise_threshold) / noise_threshold)
+        issues.append(f"High noise level detected ({noise_estimate:.1f})")
+        recommendations.append("Use better lighting or reduce camera ISO")
+    else:
+        result.noise_score = 1.0 - (noise_estimate / noise_threshold) * 0.3
+
+    # ========== Calculate Overall Score ==========
+    # Weighted combination of all scores
+    weights = {
+        'blur': 0.30,      # Blur is critical for edge detection
+        'lighting': 0.25,  # Lighting affects all processing
+        'contrast': 0.20,  # Contrast needed for segmentation
+        'noise': 0.15,     # Noise affects clustering
+        'resolution': 0.10 # Resolution is a baseline requirement
+    }
+
+    result.overall_score = (
+        weights['blur'] * result.blur_score +
+        weights['lighting'] * result.lighting_score +
+        weights['contrast'] * result.contrast_score +
+        weights['noise'] * result.noise_score +
+        weights['resolution'] * result.resolution_score
+    )
+
+    # Determine if image is acceptable
+    result.is_acceptable = result.overall_score >= overall_threshold and result.min_dimension >= min_resolution
+    result.issues = issues
+    result.recommendations = recommendations
+
+    # Log quality assessment
+    logger.debug(f"Image quality: overall={result.overall_score:.2f}, blur={result.blur_score:.2f}, "
+                f"lighting={result.lighting_score:.2f}, contrast={result.contrast_score:.2f}")
+
+    # Save debug output
+    if debug_dir:
+        out_dir = Path(debug_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create visualization
+        debug_img = image.copy() if len(image.shape) == 3 else cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+
+        # Add quality info text
+        y_offset = 30
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        color = (0, 255, 0) if result.is_acceptable else (0, 0, 255)
+
+        cv2.putText(debug_img, f"Quality: {result.overall_score:.2f}", (10, y_offset),
+                   font, 0.7, color, 2)
+        y_offset += 25
+        cv2.putText(debug_img, f"Blur: {result.blur_score:.2f}", (10, y_offset),
+                   font, 0.5, (255, 255, 255), 1)
+        y_offset += 20
+        cv2.putText(debug_img, f"Lighting: {result.lighting_score:.2f}", (10, y_offset),
+                   font, 0.5, (255, 255, 255), 1)
+        y_offset += 20
+        cv2.putText(debug_img, f"Contrast: {result.contrast_score:.2f}", (10, y_offset),
+                   font, 0.5, (255, 255, 255), 1)
+
+        cv2.imwrite(str(out_dir / "image_quality.png"), debug_img)
+
+        # Save detailed report
+        with open(str(out_dir / "image_quality_report.txt"), "w") as f:
+            f.write(f"Image Quality Report\n")
+            f.write(f"====================\n\n")
+            f.write(f"Overall Score: {result.overall_score:.4f}\n")
+            f.write(f"Acceptable: {result.is_acceptable}\n\n")
+            f.write(f"Individual Scores:\n")
+            f.write(f"  - Blur: {result.blur_score:.4f} (variance: {result.blur_variance:.2f})\n")
+            f.write(f"  - Noise: {result.noise_score:.4f}\n")
+            f.write(f"  - Lighting: {result.lighting_score:.4f}\n")
+            f.write(f"  - Contrast: {result.contrast_score:.4f}\n")
+            f.write(f"  - Resolution: {result.resolution_score:.4f}\n\n")
+            f.write(f"Image Stats:\n")
+            f.write(f"  - Dimensions: {w}x{h}\n")
+            f.write(f"  - Min dimension: {result.min_dimension}px\n")
+            f.write(f"  - Brightness: {result.brightness_mean:.2f} (std: {result.brightness_std:.2f})\n\n")
+            if issues:
+                f.write(f"Issues:\n")
+                for issue in issues:
+                    f.write(f"  - {issue}\n")
+            if recommendations:
+                f.write(f"\nRecommendations:\n")
+                for rec in recommendations:
+                    f.write(f"  - {rec}\n")
+
+    return result
+
+
+def analyze_line_straightness(
+    edges: np.ndarray,
+    min_line_length: int = 50
+) -> Dict:
+    """
+    Analyze straightness of detected lines to assess barrel/pincushion distortion.
+
+    Barrel and pincushion distortion cause straight lines to appear curved,
+    especially near image edges. This function detects such curvature.
+
+    Args:
+        edges: Edge image (output of Canny or similar)
+        min_line_length: Minimum line segment length to analyze
+
+    Returns:
+        Dictionary with line straightness metrics
+    """
+    h, w = edges.shape[:2]
+
+    # Detect line segments
+    lines = cv2.HoughLinesP(
+        edges,
+        rho=1,
+        theta=np.pi / 180,
+        threshold=50,
+        minLineLength=min_line_length,
+        maxLineGap=10
+    )
+
+    if lines is None or len(lines) < 4:
+        return {
+            "analyzed": False,
+            "line_count": 0 if lines is None else len(lines),
+            "curvature_score": 0.0
+        }
+
+    # Analyze lines in different image regions
+    edge_margin = min(h, w) // 5
+    edge_lines = []
+    center_lines = []
+
+    for line in lines:
+        x1, y1, x2, y2 = line[0]
+        line_len = np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
+
+        # Classify by position
+        midx = (x1 + x2) / 2
+        midy = (y1 + y2) / 2
+
+        is_edge = (midx < edge_margin or midx > w - edge_margin or
+                  midy < edge_margin or midy > h - edge_margin)
+
+        if is_edge:
+            edge_lines.append((x1, y1, x2, y2, line_len))
+        else:
+            center_lines.append((x1, y1, x2, y2, line_len))
+
+    # Compare line segment consistency between edge and center
+    # Barrel distortion causes edge lines to be shorter than expected
+    avg_edge_len = np.mean([l[4] for l in edge_lines]) if edge_lines else 0
+    avg_center_len = np.mean([l[4] for l in center_lines]) if center_lines else 0
+
+    # Curvature score based on ratio (perfect = 1.0, distorted < 1.0)
+    if avg_center_len > 0 and avg_edge_len > 0:
+        length_ratio = avg_edge_len / avg_center_len
+        curvature_score = min(length_ratio, 1.0 / length_ratio) if length_ratio > 0 else 0
+    else:
+        curvature_score = 1.0  # Can't assess
+
+    return {
+        "analyzed": True,
+        "line_count": len(lines),
+        "edge_line_count": len(edge_lines),
+        "center_line_count": len(center_lines),
+        "avg_edge_length": float(avg_edge_len),
+        "avg_center_length": float(avg_center_len),
+        "curvature_score": float(curvature_score)
+    }
+
+
+def detect_rotation_angle(
+    edges: np.ndarray,
+    angle_threshold: float = 2.0
+) -> Tuple[float, float]:
+    """
+    Detect image rotation angle from dominant line orientations.
+
+    Uses Hough line detection to find the dominant angle of lines
+    in the image, which indicates rotation from horizontal/vertical.
+
+    Args:
+        edges: Edge image
+        angle_threshold: Maximum angle to consider as valid rotation (degrees)
+
+    Returns:
+        Tuple of (rotation_angle, confidence):
+        - rotation_angle: Detected rotation in degrees
+        - confidence: Confidence in the detection (0-1)
+    """
+    lines = cv2.HoughLines(edges, 1, np.pi / 180, 100)
+
+    if lines is None or len(lines) < 3:
+        return 0.0, 0.0
+
+    # Collect angles
+    angles = []
+    for line in lines:
+        rho, theta = line[0]
+        # Convert to degrees and normalize to -90 to 90
+        angle_deg = np.degrees(theta)
+        # Normalize: 0-180 -> closest to 0 or 90
+        if angle_deg > 90:
+            angle_deg -= 180
+        angles.append(angle_deg)
+
+    angles = np.array(angles)
+
+    # Find angles near 0 (horizontal) and near 90/-90 (vertical)
+    horizontal_angles = angles[np.abs(angles) < 45]
+    vertical_angles = angles[np.abs(np.abs(angles) - 90) < 45]
+
+    # Calculate rotation from these
+    h_rotation = np.median(horizontal_angles) if len(horizontal_angles) > 0 else 0
+    v_rotation = np.median(vertical_angles) - 90 if len(vertical_angles) > 0 else 0
+
+    # Average rotation estimate
+    if len(horizontal_angles) > 0 and len(vertical_angles) > 0:
+        rotation = (h_rotation + v_rotation) / 2
+        confidence = min(len(horizontal_angles), len(vertical_angles)) / len(lines)
+    elif len(horizontal_angles) > 0:
+        rotation = h_rotation
+        confidence = len(horizontal_angles) / len(lines) * 0.7
+    elif len(vertical_angles) > 0:
+        rotation = v_rotation
+        confidence = len(vertical_angles) / len(lines) * 0.7
+    else:
+        rotation = 0.0
+        confidence = 0.0
+
+    return float(rotation), float(confidence)
+
+
+def detect_distortion(
+    image: np.ndarray,
+    perspective_threshold: float = 0.05,
+    barrel_threshold: float = 0.15,
+    rotation_threshold: float = 3.0,
+    debug_dir: Optional[str] = None
+) -> DistortionAnalysisResult:
+    """
+    Perform pre-flight distortion analysis on an image.
+
+    Detects various types of image distortion that may affect puzzle
+    detection accuracy:
+    - Perspective distortion (keystone effect from camera angle)
+    - Barrel/pincushion distortion (lens distortion)
+    - Image rotation
+    - Skew/shear
+
+    Args:
+        image: Input BGR or grayscale image
+        perspective_threshold: Threshold for significant perspective distortion (0-1)
+        barrel_threshold: Threshold for significant barrel distortion (0-1)
+        rotation_threshold: Threshold for significant rotation (degrees)
+        debug_dir: Optional directory to save debug images
+
+    Returns:
+        DistortionAnalysisResult with distortion metrics and recommendations
+    """
+    if image is None or image.size == 0:
+        return DistortionAnalysisResult(
+            has_significant_distortion=False,
+            distortion_type="error",
+            overall_distortion=0.0
+        )
+
+    result = DistortionAnalysisResult()
+    h, w = image.shape[:2]
+
+    # Convert to grayscale
+    if len(image.shape) == 3:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = image.copy()
+
+    # Edge detection for analysis
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    edges = cv2.Canny(blurred, 50, 150)
+
+    # ========== 1. Perspective Distortion ==========
+    # Try to detect quadrilateral corners
+    corners = detect_quadrilateral_corners(image, debug_dir=None)
+
+    if corners is not None:
+        result.detected_corners = corners
+        perspective_score = compute_distortion_score(corners)
+        result.perspective_distortion = perspective_score
+    else:
+        # Fallback: analyze parallelism of detected lines
+        result.perspective_distortion = 0.0
+
+    # ========== 2. Barrel/Pincushion Distortion ==========
+    line_analysis = analyze_line_straightness(edges)
+    result.line_analysis = line_analysis
+
+    if line_analysis.get("analyzed", False):
+        curvature = line_analysis.get("curvature_score", 1.0)
+        # Convert curvature score to distortion measure (1.0 = no distortion)
+        result.barrel_distortion = max(0.0, 1.0 - curvature)
+    else:
+        result.barrel_distortion = 0.0
+
+    # ========== 3. Rotation Detection ==========
+    rotation_angle, rotation_conf = detect_rotation_angle(edges)
+    result.rotation_angle = rotation_angle
+
+    # ========== 4. Skew Detection ==========
+    # Estimate skew from line angle variance
+    lines = cv2.HoughLinesP(edges, 1, np.pi / 180, 50, minLineLength=50, maxLineGap=10)
+
+    if lines is not None and len(lines) > 5:
+        h_angles = []
+        v_angles = []
+
+        for line in lines:
+            x1, y1, x2, y2 = line[0]
+            if abs(x2 - x1) > abs(y2 - y1):  # More horizontal
+                angle = np.degrees(np.arctan2(y2 - y1, x2 - x1))
+                h_angles.append(angle)
+            else:  # More vertical
+                angle = np.degrees(np.arctan2(x2 - x1, y2 - y1))
+                v_angles.append(angle)
+
+        # Skew is the difference between horizontal and vertical deviations
+        h_dev = np.std(h_angles) if h_angles else 0
+        v_dev = np.std(v_angles) if v_angles else 0
+        result.skew_angle = abs(h_dev - v_dev)
+    else:
+        result.skew_angle = 0.0
+
+    # ========== Calculate Overall Distortion ==========
+    # Weighted combination
+    result.overall_distortion = (
+        0.50 * result.perspective_distortion +
+        0.25 * result.barrel_distortion +
+        0.15 * min(abs(result.rotation_angle) / 10.0, 1.0) +
+        0.10 * min(result.skew_angle / 5.0, 1.0)
+    )
+
+    # ========== Determine Distortion Type ==========
+    distortion_types = []
+
+    if result.perspective_distortion >= perspective_threshold:
+        distortion_types.append("perspective")
+
+    if result.barrel_distortion >= barrel_threshold:
+        distortion_types.append("barrel")
+
+    if abs(result.rotation_angle) >= rotation_threshold:
+        distortion_types.append("rotation")
+
+    if result.skew_angle >= 3.0:
+        distortion_types.append("skew")
+
+    if len(distortion_types) == 0:
+        result.distortion_type = "none"
+        result.has_significant_distortion = False
+        result.correction_recommended = False
+    elif len(distortion_types) == 1:
+        result.distortion_type = distortion_types[0]
+        result.has_significant_distortion = True
+        result.correction_recommended = True
+    else:
+        result.distortion_type = "multiple"
+        result.has_significant_distortion = True
+        result.correction_recommended = True
+
+    # Log distortion analysis
+    logger.debug(f"Distortion analysis: type={result.distortion_type}, overall={result.overall_distortion:.3f}, "
+                f"perspective={result.perspective_distortion:.3f}, barrel={result.barrel_distortion:.3f}")
+
+    # Save debug output
+    if debug_dir:
+        out_dir = Path(debug_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create visualization
+        debug_img = image.copy() if len(image.shape) == 3 else cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+
+        # Draw detected corners if available
+        if result.detected_corners is not None:
+            pts = result.detected_corners.astype(np.int32)
+            cv2.polylines(debug_img, [pts], True, (0, 255, 0), 2)
+            for i, pt in enumerate(pts):
+                cv2.circle(debug_img, tuple(pt), 5, (0, 0, 255), -1)
+                cv2.putText(debug_img, str(i), (pt[0] + 5, pt[1] + 5),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+
+        # Add distortion info
+        y_offset = 30
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        color = (0, 0, 255) if result.has_significant_distortion else (0, 255, 0)
+
+        cv2.putText(debug_img, f"Distortion: {result.overall_distortion:.3f}", (10, y_offset),
+                   font, 0.7, color, 2)
+        y_offset += 25
+        cv2.putText(debug_img, f"Type: {result.distortion_type}", (10, y_offset),
+                   font, 0.5, (255, 255, 255), 1)
+        y_offset += 20
+        cv2.putText(debug_img, f"Perspective: {result.perspective_distortion:.3f}", (10, y_offset),
+                   font, 0.5, (255, 255, 255), 1)
+        y_offset += 20
+        cv2.putText(debug_img, f"Barrel: {result.barrel_distortion:.3f}", (10, y_offset),
+                   font, 0.5, (255, 255, 255), 1)
+        y_offset += 20
+        cv2.putText(debug_img, f"Rotation: {result.rotation_angle:.2f}°", (10, y_offset),
+                   font, 0.5, (255, 255, 255), 1)
+
+        cv2.imwrite(str(out_dir / "distortion_analysis.png"), debug_img)
+        cv2.imwrite(str(out_dir / "distortion_edges.png"), edges)
+
+        # Save detailed report
+        with open(str(out_dir / "distortion_report.txt"), "w") as f:
+            f.write(f"Distortion Analysis Report\n")
+            f.write(f"==========================\n\n")
+            f.write(f"Overall Distortion: {result.overall_distortion:.4f}\n")
+            f.write(f"Significant Distortion: {result.has_significant_distortion}\n")
+            f.write(f"Correction Recommended: {result.correction_recommended}\n")
+            f.write(f"Primary Type: {result.distortion_type}\n\n")
+            f.write(f"Individual Metrics:\n")
+            f.write(f"  - Perspective: {result.perspective_distortion:.4f}\n")
+            f.write(f"  - Barrel/Pincushion: {result.barrel_distortion:.4f}\n")
+            f.write(f"  - Rotation: {result.rotation_angle:.2f}°\n")
+            f.write(f"  - Skew: {result.skew_angle:.2f}°\n\n")
+            if result.line_analysis:
+                f.write(f"Line Analysis:\n")
+                for key, val in result.line_analysis.items():
+                    f.write(f"  - {key}: {val}\n")
+
+    return result
+
+
+def validate_image_for_processing(
+    image: np.ndarray,
+    check_quality: bool = True,
+    check_distortion: bool = True,
+    auto_correct_distortion: bool = False,
+    quality_threshold: float = 0.4,
+    distortion_threshold: float = 0.05,
+    debug_dir: Optional[str] = None
+) -> Tuple[np.ndarray, ImageQualityResult, DistortionAnalysisResult, bool]:
+    """
+    Comprehensive pre-flight validation of image for puzzle detection.
+
+    Combines image quality validation and distortion detection to determine
+    if an image is suitable for processing. Optionally applies automatic
+    perspective correction.
+
+    Args:
+        image: Input BGR image
+        check_quality: Whether to perform quality validation
+        check_distortion: Whether to perform distortion analysis
+        auto_correct_distortion: Whether to automatically correct perspective distortion
+        quality_threshold: Minimum quality score to pass validation
+        distortion_threshold: Maximum distortion level before requiring correction
+        debug_dir: Optional directory for debug output
+
+    Returns:
+        Tuple of (processed_image, quality_result, distortion_result, is_suitable):
+        - processed_image: Original or corrected image
+        - quality_result: ImageQualityResult with quality metrics
+        - distortion_result: DistortionAnalysisResult with distortion metrics
+        - is_suitable: Whether image passes all validation checks
+    """
+    if image is None or image.size == 0:
+        return (
+            image,
+            ImageQualityResult(is_acceptable=False, issues=["Invalid image"]),
+            DistortionAnalysisResult(distortion_type="error"),
+            False
+        )
+
+    processed_image = image.copy()
+    is_suitable = True
+
+    # Quality validation
+    quality_result = ImageQualityResult(is_acceptable=True)
+    if check_quality:
+        quality_result = validate_image_quality(
+            image,
+            overall_threshold=quality_threshold,
+            debug_dir=debug_dir
+        )
+        if not quality_result.is_acceptable:
+            is_suitable = False
+            logger.warning(f"Image quality below threshold: {quality_result.overall_score:.2f}")
+
+    # Distortion analysis
+    distortion_result = DistortionAnalysisResult()
+    if check_distortion:
+        distortion_result = detect_distortion(
+            image,
+            perspective_threshold=distortion_threshold,
+            debug_dir=debug_dir
+        )
+
+        # Auto-correct if requested and needed
+        if auto_correct_distortion and distortion_result.correction_recommended:
+            correction = correct_perspective(
+                processed_image,
+                source_corners=distortion_result.detected_corners,
+                distortion_threshold=distortion_threshold,
+                auto_detect_corners=(distortion_result.detected_corners is None),
+                debug_dir=debug_dir
+            )
+            if correction.was_corrected:
+                processed_image = correction.corrected_image
+                logger.info(f"Applied perspective correction (distortion: {distortion_result.perspective_distortion:.3f})")
+        elif distortion_result.has_significant_distortion and not auto_correct_distortion:
+            # Significant distortion but not auto-correcting
+            logger.warning(f"Significant distortion detected ({distortion_result.distortion_type}) but auto-correction disabled")
+
+    return processed_image, quality_result, distortion_result, is_suitable
 
 
 def order_corner_points(pts: np.ndarray) -> np.ndarray:
@@ -2092,6 +2846,7 @@ def detect_grid_with_partial_support(
 
 if __name__ == "__main__":
     import argparse
+    import json
 
     parser = argparse.ArgumentParser(description="Detect grid lines in puzzle images")
     parser.add_argument("image", help="Path to input image")
@@ -2102,26 +2857,94 @@ if __name__ == "__main__":
     parser.add_argument("--perspective", action="store_true", help="Apply perspective correction before grid detection")
     parser.add_argument("--distortion-threshold", type=float, default=0.05,
                        help="Minimum distortion score to trigger perspective correction (0.0-1.0)")
+    parser.add_argument("--validate-quality", action="store_true",
+                       help="Validate image quality before processing")
+    parser.add_argument("--quality-threshold", type=float, default=0.4,
+                       help="Minimum quality score to accept image (0.0-1.0)")
+    parser.add_argument("--analyze-distortion", action="store_true",
+                       help="Perform detailed distortion analysis")
+    parser.add_argument("--auto-correct", action="store_true",
+                       help="Automatically correct perspective distortion if detected")
+    parser.add_argument("--json-output", action="store_true",
+                       help="Output results in JSON format")
     args = parser.parse_args()
 
     img = cv2.imread(args.image)
     if img is None:
         raise FileNotFoundError(f"Could not read image: {args.image}")
 
-    # Apply perspective correction if requested
+    # Track validation results for JSON output
+    validation_results = {}
+
+    # Image quality validation if requested
+    quality_result = None
+    if args.validate_quality:
+        quality_result = validate_image_quality(
+            img,
+            overall_threshold=args.quality_threshold,
+            debug_dir=args.debug_dir
+        )
+        validation_results["quality"] = quality_result.to_dict()
+
+        if not args.json_output:
+            print(f"\n=== Image Quality Validation ===")
+            print(f"Overall Score: {quality_result.overall_score:.3f}")
+            print(f"Acceptable: {quality_result.is_acceptable}")
+            print(f"  - Blur: {quality_result.blur_score:.3f}")
+            print(f"  - Lighting: {quality_result.lighting_score:.3f}")
+            print(f"  - Contrast: {quality_result.contrast_score:.3f}")
+            print(f"  - Noise: {quality_result.noise_score:.3f}")
+            print(f"  - Resolution: {quality_result.resolution_score:.3f}")
+            if quality_result.issues:
+                print(f"Issues: {', '.join(quality_result.issues)}")
+            if quality_result.recommendations:
+                print(f"Recommendations: {', '.join(quality_result.recommendations)}")
+
+        if not quality_result.is_acceptable and not args.auto_correct:
+            if not args.json_output:
+                print(f"\nWarning: Image quality below threshold ({quality_result.overall_score:.3f} < {args.quality_threshold})")
+                print("Consider recapturing the image or use --auto-correct for best results.")
+
+    # Distortion analysis if requested
+    distortion_result = None
+    if args.analyze_distortion:
+        distortion_result = detect_distortion(
+            img,
+            perspective_threshold=args.distortion_threshold,
+            debug_dir=args.debug_dir
+        )
+        validation_results["distortion"] = distortion_result.to_dict()
+
+        if not args.json_output:
+            print(f"\n=== Distortion Analysis ===")
+            print(f"Overall Distortion: {distortion_result.overall_distortion:.3f}")
+            print(f"Has Significant Distortion: {distortion_result.has_significant_distortion}")
+            print(f"Distortion Type: {distortion_result.distortion_type}")
+            print(f"  - Perspective: {distortion_result.perspective_distortion:.3f}")
+            print(f"  - Barrel: {distortion_result.barrel_distortion:.3f}")
+            print(f"  - Rotation: {distortion_result.rotation_angle:.2f}°")
+            print(f"  - Skew: {distortion_result.skew_angle:.2f}°")
+            print(f"Correction Recommended: {distortion_result.correction_recommended}")
+
+    # Apply perspective correction if requested (either via --perspective or --auto-correct)
     perspective_result = None
-    if args.perspective:
+    if args.perspective or (args.auto_correct and distortion_result and distortion_result.correction_recommended):
+        # Use detected corners from distortion analysis if available
+        source_corners = distortion_result.detected_corners if distortion_result else None
         perspective_result = correct_perspective(
             img,
+            source_corners=source_corners,
             distortion_threshold=args.distortion_threshold,
-            auto_detect_corners=True,
+            auto_detect_corners=(source_corners is None),
             debug_dir=args.debug_dir
         )
         if perspective_result.was_corrected:
             img = perspective_result.corrected_image
-            print(f"Perspective correction applied (distortion: {perspective_result.distortion_score:.3f})")
+            if not args.json_output:
+                print(f"\nPerspective correction applied (distortion: {perspective_result.distortion_score:.3f})")
         else:
-            print(f"Perspective correction skipped (distortion: {perspective_result.distortion_score:.3f} < threshold: {args.distortion_threshold})")
+            if not args.json_output:
+                print(f"\nPerspective correction skipped (distortion: {perspective_result.distortion_score:.3f} < threshold: {args.distortion_threshold})")
 
     # Find ROI
     roi = find_puzzle_roi(img, debug_dir=args.debug_dir)
@@ -2161,37 +2984,49 @@ if __name__ == "__main__":
                  for i, (cx, cy, cw, ch) in enumerate(cell_tuples)]
 
     # Output results
-    print(f"Method: {result.method}")
-    print(f"Confidence: {result.confidence:.3f}")
-    print(f"Horizontal lines: {len(result.horizontal_lines)}")
-    print(f"Vertical lines: {len(result.vertical_lines)}")
-    print(f"Estimated cell size: {result.estimated_cell_width:.1f} x {result.estimated_cell_height:.1f}" if result.estimated_cell_width else "Cell size: N/A")
-    print(f"Grid dimensions: {result.grid_dims}" if result.grid_dims else "Grid dims: N/A")
-    print(f"Cells detected: {len(cells)}")
+    if args.json_output:
+        # Build JSON output
+        output = {
+            "grid_detection": result.to_dict(),
+            "cells": [c.to_dict() if isinstance(c, GridCell) else {"x": c[0], "y": c[1], "width": c[2], "height": c[3]} for c in cells],
+            "validation": validation_results
+        }
+        if perspective_result:
+            output["perspective_correction"] = perspective_result.to_dict()
+        print(json.dumps(output, indent=2))
+    else:
+        print(f"\n=== Grid Detection Results ===")
+        print(f"Method: {result.method}")
+        print(f"Confidence: {result.confidence:.3f}")
+        print(f"Horizontal lines: {len(result.horizontal_lines)}")
+        print(f"Vertical lines: {len(result.vertical_lines)}")
+        print(f"Estimated cell size: {result.estimated_cell_width:.1f} x {result.estimated_cell_height:.1f}" if result.estimated_cell_width else "Cell size: N/A")
+        print(f"Grid dimensions: {result.grid_dims}" if result.grid_dims else "Grid dims: N/A")
+        print(f"Cells detected: {len(cells)}")
 
-    # Output perspective correction info if available
-    if perspective_result:
-        print(f"Perspective distortion: {perspective_result.distortion_score:.3f}")
-        print(f"Perspective corrected: {perspective_result.was_corrected}")
-        if perspective_result.was_corrected and perspective_result.corrected_size:
-            print(f"Corrected size: {perspective_result.corrected_size[1]}x{perspective_result.corrected_size[0]}")
+        # Output perspective correction info if available
+        if perspective_result:
+            print(f"Perspective distortion: {perspective_result.distortion_score:.3f}")
+            print(f"Perspective corrected: {perspective_result.was_corrected}")
+            if perspective_result.was_corrected and perspective_result.corrected_size:
+                print(f"Corrected size: {perspective_result.corrected_size[1]}x{perspective_result.corrected_size[0]}")
 
-    # Output partial grid info if available
-    if result.partial_grid_info:
-        pgi = result.partial_grid_info
-        print(f"Is rectangular: {pgi.is_rectangular}")
-        print(f"Is partial: {pgi.is_partial}")
-        print(f"Boundary type: {pgi.boundary_type}")
-        if pgi.missing_cells:
-            print(f"Missing cells: {len(pgi.missing_cells)}")
-        if pgi.extrapolated_dims:
-            print(f"Extrapolated dims: {pgi.extrapolated_dims}")
+        # Output partial grid info if available
+        if result.partial_grid_info:
+            pgi = result.partial_grid_info
+            print(f"Is rectangular: {pgi.is_rectangular}")
+            print(f"Is partial: {pgi.is_partial}")
+            print(f"Boundary type: {pgi.boundary_type}")
+            if pgi.missing_cells:
+                print(f"Missing cells: {len(pgi.missing_cells)}")
+            if pgi.extrapolated_dims:
+                print(f"Extrapolated dims: {pgi.extrapolated_dims}")
 
-    # Write cells to file
-    with open("cells.txt", "w") as f:
-        for cell in cells:
-            if isinstance(cell, GridCell):
-                f.write(f"{cell.x},{cell.y},{cell.width},{cell.height},{cell.row},{cell.col},{cell.is_present}\n")
-            else:
-                f.write(f"{cell[0]},{cell[1]},{cell[2]},{cell[3]}\n")
-    print("Wrote cells.txt")
+        # Write cells to file
+        with open("cells.txt", "w") as f:
+            for cell in cells:
+                if isinstance(cell, GridCell):
+                    f.write(f"{cell.x},{cell.y},{cell.width},{cell.height},{cell.row},{cell.col},{cell.is_present}\n")
+                else:
+                    f.write(f"{cell[0]},{cell[1]},{cell[2]},{cell[3]}\n")
+        print("Wrote cells.txt")
