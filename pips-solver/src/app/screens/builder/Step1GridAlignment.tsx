@@ -353,7 +353,7 @@ function DraggableGridOverlay({
           cx={`${bounds.left}%`}
           cy={`${(bounds.top + bounds.bottom) / 2}%`}
           r={8}
-          fill="#007AFF"
+          fill={tokens.colors.grid.handle}
           stroke="white"
           strokeWidth={2}
         />
@@ -361,7 +361,7 @@ function DraggableGridOverlay({
           cx={`${bounds.right}%`}
           cy={`${(bounds.top + bounds.bottom) / 2}%`}
           r={8}
-          fill="#007AFF"
+          fill={tokens.colors.grid.handle}
           stroke="white"
           strokeWidth={2}
         />
@@ -369,7 +369,7 @@ function DraggableGridOverlay({
           cx={`${(bounds.left + bounds.right) / 2}%`}
           cy={`${bounds.top}%`}
           r={8}
-          fill="#007AFF"
+          fill={tokens.colors.grid.handle}
           stroke="white"
           strokeWidth={2}
         />
@@ -377,7 +377,7 @@ function DraggableGridOverlay({
           cx={`${(bounds.left + bounds.right) / 2}%`}
           cy={`${bounds.bottom}%`}
           r={8}
-          fill="#007AFF"
+          fill={tokens.colors.grid.handle}
           stroke="white"
           strokeWidth={2}
         />
