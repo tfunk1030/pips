@@ -8,7 +8,9 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   Image,
+  Keyboard,
   Modal,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -559,9 +561,14 @@ export default function AIVerificationModal({
     );
   };
 
+  // Dismiss keyboard on background tap
+  const dismissKeyboard = useCallback(() => {
+    Keyboard.dismiss();
+  }, []);
+
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
-      <View style={styles.container}>
+      <Pressable style={styles.container} onPress={dismissKeyboard}>
         <View style={styles.header}>
           <View style={styles.headerRow}>
             <View>
@@ -605,7 +612,11 @@ export default function AIVerificationModal({
           </View>
         </View>
 
-        <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={styles.contentContainer}
+          keyboardShouldPersistTaps="handled"
+        >
           {viewMode === 'visual' ? (
             <>
               {/* Visual Grid Preview with Image Overlay */}
@@ -857,7 +868,7 @@ export default function AIVerificationModal({
             </Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </Pressable>
     </Modal>
   );
 }
