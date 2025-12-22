@@ -3,7 +3,7 @@
   "description": "Refactor Step1GridAlignment screen to use the established Button, Card, and Text components from the UI library instead of raw TouchableOpacity and inline StyleSheet styles. This improves consistency, accessibility, and maintainability.",
   "created_at": "2025-12-22T07:01:11.961Z",
   "updated_at": "2025-12-22T08:00:00.000Z",
-  "status": "in_progress",
+  "status": "planned",
   "planStatus": "approved",
   "workflow_type": "development",
   "services_involved": ["pips-solver"],
@@ -20,6 +20,7 @@
           "title": "Merge UI component library from branch 001",
           "description": "The UI components (Button, Card, Text, etc.) exist in branch auto-claude/001-enhance-ai-visual-pips-board-extraction-accuracy. Merge or cherry-pick the theme system and UI components into this branch to make them available for the refactoring.",
           "status": "completed",
+          "completion_notes": "UI components and theme system already exist in branch. Verified: Button (primary/secondary/ghost/danger/success variants), Card (default/elevated/outlined/accent variants), Text/Heading/Body/Label components, full theme system with colors/spacing/radii/shadows/animations.",
           "files_to_modify": [],
           "files_to_create": [
             "pips-solver/src/theme/index.ts",
@@ -49,13 +50,13 @@
       "phase_id": "phase-2",
       "name": "Replace Button Components",
       "description": "Replace all TouchableOpacity-based buttons with themed Button components",
-      "status": "in_progress",
+      "status": "pending",
       "subtasks": [
         {
           "subtask_id": "subtask-2-1",
           "title": "Replace pickButton with themed Button",
           "description": "Replace the 'Select Image' TouchableOpacity button in the empty state with Button component using variant='primary'.",
-          "status": "completed",
+          "status": "pending",
           "files_to_modify": [
             "pips-solver/src/app/screens/builder/Step1GridAlignment.tsx"
           ],
