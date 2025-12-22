@@ -14,8 +14,11 @@ import { APIKeys, ExtractionStrategy, MODELS, STRATEGIES } from '../config/model
 import {
   AIExtractionResult,
   BoardExtractionResult,
+  BoardModelResponse,
   DominoExtractionResult,
+  DominoModelResponse,
   DominoPair,
+  RawResponses,
 } from '../model/overlayTypes';
 import {
   callMultipleModels,
@@ -443,6 +446,8 @@ function selectBestDominoes(results: DominoResult[]): DominoResult {
 export interface EnsembleExtractionOptions {
   strategy: ExtractionStrategy;
   onProgress?: (progress: ExtractionProgress) => void;
+  /** When true, stores raw per-model responses for comparison/debugging */
+  saveDebugResponses?: boolean;
 }
 
 /**
@@ -452,16 +457,20 @@ async function extractBoardEnsemble(
   base64Image: string,
   keys: APIKeys,
   strategy: ExtractionStrategy,
-  onProgress?: (progress: ExtractionProgress) => void
+  onProgress?: (progress: ExtractionProgress) => void,
+  saveDebugResponses?: boolean
 ): Promise<{
   success: boolean;
   data?: BoardExtractionResult;
   error?: string;
   modelsUsed: string[];
+  rawResponses?: BoardModelResponse[];
+  selectedModel?: string;
 }> {
   const config = STRATEGIES[strategy];
   const modelsUsed: string[] = [];
   const results: BoardResult[] = [];
+  const rawResponses: BoardModelResponse[] = [];
 
   const normalized = normalizeBase64(base64Image);
   const mediaType = inferMediaType(base64Image);
@@ -478,6 +487,7 @@ async function extractBoardEnsemble(
   });
 
   // Query models in parallel
+  const queryStartTime = Date.now();
   const responses = await callMultipleModels(
     keys,
     modelsToQuery as (keyof typeof MODELS)[],
@@ -496,12 +506,18 @@ async function extractBoardEnsemble(
     ],
     { temperature: 0.1, jsonMode: true, maxTokens: 16384 }
   );
+  const queryEndTime = Date.now();
+  const responseMs = queryEndTime - queryStartTime;
 
   // Process results
   for (const resp of responses) {
     modelsUsed.push(resp.modelKey);
+
     if (resp.result) {
+      const parseStartTime = Date.now();
       const parsed = parseJSONSafely(resp.result.text, BoardExtractionSchema);
+      const parseMs = Date.now() - parseStartTime;
+
       if (parsed.success) {
         const confidence = parsed.data.confidence
           ? (parsed.data.confidence.grid +
@@ -509,29 +525,78 @@ async function extractBoardEnsemble(
               parsed.data.confidence.constraints) /
             3
           : 0.8;
+
+        const boardData: BoardExtractionResult = {
+          rows: parsed.data.rows,
+          cols: parsed.data.cols,
+          shape: parsed.data.shape,
+          regions: parsed.data.regions,
+          constraints: parsed.data.constraints || {},
+          confidence: parsed.data.confidence || { grid: 0.8, regions: 0.8, constraints: 0.8 },
+          gridLocation: parsed.data.gridLocation,
+        };
+
         results.push({
-          data: {
-            rows: parsed.data.rows,
-            cols: parsed.data.cols,
-            shape: parsed.data.shape,
-            regions: parsed.data.regions,
-            constraints: parsed.data.constraints || {},
-            confidence: parsed.data.confidence || { grid: 0.8, regions: 0.8, constraints: 0.8 },
-            gridLocation: parsed.data.gridLocation,
-          },
+          data: boardData,
           confidence,
           model: resp.modelKey,
         });
+
+        // Store raw response for debug/comparison
+        if (saveDebugResponses) {
+          rawResponses.push({
+            model: resp.modelKey,
+            rawText: resp.result.text,
+            parsedData: boardData,
+            parseSuccess: true,
+            timing: {
+              responseMs: responseMs / responses.length, // Approximate per-model time
+              parseMs,
+            },
+            confidence,
+          });
+        }
       } else {
-        console.warn(`[Ensemble] ${resp.modelKey} parse failed:`, parsed.error);
+        // Store failed parse for debug
+        if (saveDebugResponses) {
+          rawResponses.push({
+            model: resp.modelKey,
+            rawText: resp.result.text,
+            parsedData: null,
+            parseSuccess: false,
+            parseError: parsed.error,
+            timing: {
+              responseMs: responseMs / responses.length,
+              parseMs: Date.now() - parseStartTime,
+            },
+          });
+        }
       }
     } else {
-      console.warn(`[Ensemble] ${resp.modelKey} call failed:`, resp.error);
+      // Store failed call for debug
+      if (saveDebugResponses) {
+        rawResponses.push({
+          model: resp.modelKey,
+          rawText: '',
+          parsedData: null,
+          parseSuccess: false,
+          parseError: resp.error || 'Model call failed',
+          timing: {
+            responseMs: responseMs / responses.length,
+            parseMs: 0,
+          },
+        });
+      }
     }
   }
 
   if (results.length === 0) {
-    return { success: false, error: 'All models failed to extract board', modelsUsed };
+    return {
+      success: false,
+      error: 'All models failed to extract board',
+      modelsUsed,
+      rawResponses: saveDebugResponses ? rawResponses : undefined,
+    };
   }
 
   // Select best result
@@ -574,7 +639,6 @@ async function extractBoardEnsemble(
       const verifyParsed = parseJSONSafely(verifyResponse.text, VerificationSchema);
 
       if (verifyParsed.success && !verifyParsed.data.verified && verifyParsed.data.corrections) {
-        console.log('[Ensemble] Verification found issues:', verifyParsed.data.issues);
         // Apply corrections
         const corrected = { ...best.data };
         if (verifyParsed.data.corrections.rows) corrected.rows = verifyParsed.data.corrections.rows;
@@ -586,14 +650,26 @@ async function extractBoardEnsemble(
         if (verifyParsed.data.corrections.constraints) {
           corrected.constraints = verifyParsed.data.corrections.constraints;
         }
-        return { success: true, data: corrected, modelsUsed };
+        return {
+          success: true,
+          data: corrected,
+          modelsUsed,
+          rawResponses: saveDebugResponses ? rawResponses : undefined,
+          selectedModel: best.model,
+        };
       }
     } catch (e) {
-      console.warn('[Ensemble] Verification failed:', e);
+      // Verification failed, continue with best result
     }
   }
 
-  return { success: true, data: best.data, modelsUsed };
+  return {
+    success: true,
+    data: best.data,
+    modelsUsed,
+    rawResponses: saveDebugResponses ? rawResponses : undefined,
+    selectedModel: best.model,
+  };
 }
 
 /**
@@ -604,16 +680,20 @@ async function extractDominoesEnsemble(
   keys: APIKeys,
   board: BoardExtractionResult,
   strategy: ExtractionStrategy,
-  onProgress?: (progress: ExtractionProgress) => void
+  onProgress?: (progress: ExtractionProgress) => void,
+  saveDebugResponses?: boolean
 ): Promise<{
   success: boolean;
   data?: DominoExtractionResult;
   error?: string;
   modelsUsed: string[];
+  rawResponses?: DominoModelResponse[];
+  selectedModel?: string;
 }> {
   const config = STRATEGIES[strategy];
   const modelsUsed: string[] = [];
   const results: DominoResult[] = [];
+  const rawResponses: DominoModelResponse[] = [];
 
   const normalized = normalizeBase64(base64Image);
   const mediaType = inferMediaType(base64Image);
@@ -635,6 +715,7 @@ async function extractDominoesEnsemble(
 
 ${DOMINO_EXTRACTION_PROMPT_V2}`;
 
+  const queryStartTime = Date.now();
   const responses = await callMultipleModels(
     keys,
     modelsToQuery as (keyof typeof MODELS)[],
@@ -653,34 +734,94 @@ ${DOMINO_EXTRACTION_PROMPT_V2}`;
     ],
     { temperature: 0.1, jsonMode: true, maxTokens: 8192 }
   );
+  const queryEndTime = Date.now();
+  const responseMs = queryEndTime - queryStartTime;
 
   for (const resp of responses) {
     modelsUsed.push(resp.modelKey);
+
     if (resp.result) {
+      const parseStartTime = Date.now();
       const parsed = parseJSONSafely(resp.result.text, DominoExtractionSchema);
+      const parseMs = Date.now() - parseStartTime;
+
       if (parsed.success) {
+        const dominoData: DominoExtractionResult = {
+          dominoes: parsed.data.dominoes as DominoPair[],
+          confidence: parsed.data.confidence || 0.8,
+        };
+
         results.push({
-          data: {
-            dominoes: parsed.data.dominoes as DominoPair[],
-            confidence: parsed.data.confidence || 0.8,
-          },
+          data: dominoData,
           confidence: parsed.data.confidence || 0.8,
           model: resp.modelKey,
         });
+
+        // Store raw response for debug/comparison
+        if (saveDebugResponses) {
+          rawResponses.push({
+            model: resp.modelKey,
+            rawText: resp.result.text,
+            parsedData: dominoData,
+            parseSuccess: true,
+            timing: {
+              responseMs: responseMs / responses.length, // Approximate per-model time
+              parseMs,
+            },
+            confidence: parsed.data.confidence || 0.8,
+          });
+        }
       } else {
-        console.warn(`[Ensemble] ${resp.modelKey} domino parse failed:`, parsed.error);
+        // Store failed parse for debug
+        if (saveDebugResponses) {
+          rawResponses.push({
+            model: resp.modelKey,
+            rawText: resp.result.text,
+            parsedData: null,
+            parseSuccess: false,
+            parseError: parsed.error,
+            timing: {
+              responseMs: responseMs / responses.length,
+              parseMs: Date.now() - parseStartTime,
+            },
+          });
+        }
       }
     } else {
-      console.warn(`[Ensemble] ${resp.modelKey} domino call failed:`, resp.error);
+      // Store failed call for debug
+      if (saveDebugResponses) {
+        rawResponses.push({
+          model: resp.modelKey,
+          rawText: '',
+          parsedData: null,
+          parseSuccess: false,
+          parseError: resp.error || 'Model call failed',
+          timing: {
+            responseMs: responseMs / responses.length,
+            parseMs: 0,
+          },
+        });
+      }
     }
   }
 
   if (results.length === 0) {
-    return { success: false, error: 'All models failed to extract dominoes', modelsUsed };
+    return {
+      success: false,
+      error: 'All models failed to extract dominoes',
+      modelsUsed,
+      rawResponses: saveDebugResponses ? rawResponses : undefined,
+    };
   }
 
   const best = selectBestDominoes(results);
-  return { success: true, data: best.data, modelsUsed };
+  return {
+    success: true,
+    data: best.data,
+    modelsUsed,
+    rawResponses: saveDebugResponses ? rawResponses : undefined,
+    selectedModel: best.model,
+  };
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -698,6 +839,8 @@ export interface EnsembleExtractionResult {
     dominoesMs: number;
     totalMs: number;
   };
+  /** Per-model raw responses when saveDebugResponses is enabled */
+  rawResponses?: RawResponses;
 }
 
 /**
@@ -714,7 +857,7 @@ export async function extractPuzzleEnsemble(
   options: EnsembleExtractionOptions,
   dominoImage?: string
 ): Promise<EnsembleExtractionResult> {
-  const { strategy, onProgress } = options;
+  const { strategy, onProgress, saveDebugResponses } = options;
   const startTime = Date.now();
   const allModelsUsed: string[] = [];
 
@@ -722,16 +865,34 @@ export async function extractPuzzleEnsemble(
 
   // Extract board (using potentially cropped image for better accuracy)
   const boardStart = Date.now();
-  const boardResult = await extractBoardEnsemble(base64Image, keys, strategy, onProgress);
+  const boardResult = await extractBoardEnsemble(
+    base64Image,
+    keys,
+    strategy,
+    onProgress,
+    saveDebugResponses
+  );
   const boardMs = Date.now() - boardStart;
   allModelsUsed.push(...boardResult.modelsUsed);
 
   if (!boardResult.success || !boardResult.data) {
+    // Build partial raw responses for failed extraction
+    const rawResponses: RawResponses | undefined = saveDebugResponses
+      ? {
+          board: boardResult.rawResponses || [],
+          dominoes: [],
+          selectedBoardModel: undefined,
+          selectedDominoModel: undefined,
+          timing: { boardMs, dominoesMs: 0, totalMs: Date.now() - startTime },
+        }
+      : undefined;
+
     return {
       success: false,
       error: boardResult.error || 'Board extraction failed',
       modelsUsed: allModelsUsed,
       timing: { boardMs, dominoesMs: 0, totalMs: Date.now() - startTime },
+      rawResponses,
     };
   }
 
@@ -743,7 +904,8 @@ export async function extractPuzzleEnsemble(
     keys,
     boardResult.data,
     strategy,
-    onProgress
+    onProgress,
+    saveDebugResponses
   );
   const dominoesMs = Date.now() - dominoStart;
   allModelsUsed.push(...dominoResult.modelsUsed);
@@ -756,6 +918,18 @@ export async function extractPuzzleEnsemble(
 
   onProgress?.({ step: 'complete', message: 'Extraction complete' });
 
+  // Build raw responses if debug mode enabled
+  const totalMs = Date.now() - startTime;
+  const rawResponses: RawResponses | undefined = saveDebugResponses
+    ? {
+        board: boardResult.rawResponses || [],
+        dominoes: dominoResult.rawResponses || [],
+        selectedBoardModel: boardResult.selectedModel,
+        selectedDominoModel: dominoResult.selectedModel,
+        timing: { boardMs, dominoesMs, totalMs },
+      }
+    : undefined;
+
   if (!dominoResult.success || !dominoResult.data) {
     // Partial success - board extracted, dominoes failed
     return {
@@ -765,10 +939,12 @@ export async function extractPuzzleEnsemble(
         board: boardResult.data,
         dominoes: { dominoes: [], confidence: 0 },
         reasoning: `Board extracted successfully. Dominoes: FAILED - ${dominoResult.error}`,
+        debug: rawResponses ? { rawResponses } : undefined,
       },
       error: dominoResult.error,
       modelsUsed: allModelsUsed,
-      timing: { boardMs, dominoesMs, totalMs: Date.now() - startTime },
+      timing: { boardMs, dominoesMs, totalMs },
+      rawResponses,
     };
   }
 
@@ -779,8 +955,10 @@ export async function extractPuzzleEnsemble(
       board: boardResult.data,
       dominoes: dominoResult.data,
       reasoning: `Ensemble extraction using ${[...new Set(allModelsUsed)].join(', ')}`,
+      debug: rawResponses ? { rawResponses } : undefined,
     },
     modelsUsed: allModelsUsed,
-    timing: { boardMs, dominoesMs, totalMs: Date.now() - startTime },
+    timing: { boardMs, dominoesMs, totalMs },
+    rawResponses,
   };
 }
