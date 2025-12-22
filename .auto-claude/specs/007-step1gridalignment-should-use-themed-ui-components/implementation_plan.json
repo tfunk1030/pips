@@ -164,7 +164,8 @@
           "subtask_id": "subtask-4-1",
           "title": "Wrap confidence section in Card component",
           "description": "Replace the confidenceSection View with a Card component for consistent styling with the rest of the app.",
-          "status": "pending",
+          "status": "completed",
+          "completion_notes": "Replaced confidenceSection View with Card component from UI library. Removed duplicate styling (paddingHorizontal, paddingVertical, backgroundColor, borderRadius) now handled by Card component. Only marginTop: 16 remains for layout spacing. Committed as 9e10958.",
           "files_to_modify": [
             "pips-solver/src/app/screens/builder/Step1GridAlignment.tsx"
           ],

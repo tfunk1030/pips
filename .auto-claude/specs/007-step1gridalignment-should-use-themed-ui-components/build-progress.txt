@@ -1,6 +1,6 @@
 # Build Progress: Step1GridAlignment Themed UI Components
 
-## Current Status: Phase 1 Complete
+## Current Status: Phase 4 In Progress (7/10 subtasks complete)
 
 ### Completed Subtasks
 
@@ -20,11 +20,31 @@
   - styled.ts: createStyles, styled utilities
 - **Import Path**: Components accessible via `../../components/ui` from screens/builder/
 
-### Next Steps
-- Phase 2: Replace Button Components (subtask-2-1 through subtask-2-4)
-- Phase 3: Replace Text Components (subtask-3-1)
-- Phase 4: Use Card and Theme Tokens (subtask-4-1, subtask-4-2)
-- Phase 5: Cleanup and Testing (subtask-5-1, subtask-5-2)
+#### subtask-2-1: Replace pickButton with themed Button [COMPLETED]
+- Committed as e03633d
+
+#### subtask-2-2: Replace AI extraction button with themed Button [COMPLETED]
+- Committed as b44f4ca
+
+#### subtask-2-3: Replace row/col control buttons with themed Buttons [COMPLETED]
+- Committed as 4915753
+
+#### subtask-2-4: Replace newImageButton with themed Button [COMPLETED]
+- Committed as 5351713
+
+#### subtask-3-1: Replace static text with themed Text components [COMPLETED]
+- Committed as 7a90b14
+
+#### subtask-4-1: Wrap confidence section in Card component [COMPLETED]
+- Replaced confidenceSection View with Card component from UI library
+- Removed duplicate styling (paddingHorizontal, paddingVertical, backgroundColor, borderRadius) now handled by Card
+- Only marginTop: 16 remains for layout spacing
+- Committed as 9e10958
+
+### Remaining Subtasks
+- subtask-4-2: Replace hardcoded colors with theme tokens
+- subtask-5-1: Remove unused StyleSheet styles
+- subtask-5-2: Verify component functionality and appearance
 
 ---
 Last Updated: 2025-12-22

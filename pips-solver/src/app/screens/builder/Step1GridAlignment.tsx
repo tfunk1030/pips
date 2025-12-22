@@ -18,6 +18,7 @@ import { BuilderAction, GridBounds, OverlayBuilderState } from '../../../model/o
 import { constrainBounds, hitTestCell } from '../../../utils/gridCalculations';
 import ConfidenceIndicator from '../../components/ConfidenceIndicator';
 import { Body, Button, Card, Label } from '../../components/ui';
+import { colors, radii, spacing } from '../../../theme';
 
 interface StageConfidence {
   board?: number;
@@ -334,7 +335,7 @@ function DraggableGridOverlay({
           y={`${bounds.top}%`}
           width={`${bounds.right - bounds.left}%`}
           height={`${bounds.bottom - bounds.top}%`}
-          stroke="white"
+          stroke={colors.text.primary}
           strokeWidth={3}
           fill="none"
         />
@@ -347,7 +348,7 @@ function DraggableGridOverlay({
             y1={`${bounds.top}%`}
             x2={`${bounds.left + c * cellWidth}%`}
             y2={`${bounds.bottom}%`}
-            stroke="rgba(255,255,255,0.6)"
+            stroke={`${colors.text.primary}99`}
             strokeWidth={1.5}
           />
         ))}
@@ -360,7 +361,7 @@ function DraggableGridOverlay({
             y1={`${bounds.top + r * cellHeight}%`}
             x2={`${bounds.right}%`}
             y2={`${bounds.top + r * cellHeight}%`}
-            stroke="rgba(255,255,255,0.6)"
+            stroke={`${colors.text.primary}99`}
             strokeWidth={1.5}
           />
         ))}
@@ -376,7 +377,7 @@ function DraggableGridOverlay({
                   y={`${bounds.top + r * cellHeight}%`}
                   width={`${cellWidth}%`}
                   height={`${cellHeight}%`}
-                  fill="rgba(0,0,0,0.7)"
+                  fill={`${colors.surface.obsidian}B3`}
                 />
               )
           )
@@ -387,32 +388,32 @@ function DraggableGridOverlay({
           cx={`${bounds.left}%`}
           cy={`${(bounds.top + bounds.bottom) / 2}%`}
           r={8}
-          fill="#007AFF"
-          stroke="white"
+          fill={colors.accent.brass}
+          stroke={colors.text.primary}
           strokeWidth={2}
         />
         <Circle
           cx={`${bounds.right}%`}
           cy={`${(bounds.top + bounds.bottom) / 2}%`}
           r={8}
-          fill="#007AFF"
-          stroke="white"
+          fill={colors.accent.brass}
+          stroke={colors.text.primary}
           strokeWidth={2}
         />
         <Circle
           cx={`${(bounds.left + bounds.right) / 2}%`}
           cy={`${bounds.top}%`}
           r={8}
-          fill="#007AFF"
-          stroke="white"
+          fill={colors.accent.brass}
+          stroke={colors.text.primary}
           strokeWidth={2}
         />
         <Circle
           cx={`${(bounds.left + bounds.right) / 2}%`}
           cy={`${bounds.bottom}%`}
           r={8}
-          fill="#007AFF"
-          stroke="white"
+          fill={colors.accent.brass}
+          stroke={colors.text.primary}
           strokeWidth={2}
         />
       </Svg>
@@ -506,8 +507,8 @@ const styles = StyleSheet.create({
   },
   imageContainer: {
     width: '100%',
-    backgroundColor: '#000',
-    borderRadius: 12,
+    backgroundColor: colors.surface.obsidian,
+    borderRadius: radii.lg,
     overflow: 'hidden',
   },
   image: {
@@ -540,7 +541,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   aiButton: {
-    backgroundColor: '#9C27B0',
+    backgroundColor: colors.accent.copper,
     minWidth: 200,
   },
   aiHint: {
@@ -554,13 +555,13 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   stageConfidenceContainer: {
-    marginTop: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: '#1a1a1a',
-    borderRadius: 8,
+    marginTop: spacing[3],
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[2] + 2,
+    backgroundColor: colors.surface.charcoal,
+    borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: colors.surface.ash,
   },
   stageConfidenceTitle: {
     marginBottom: 8,
