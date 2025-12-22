@@ -1694,6 +1694,207 @@ const constraintEditStyles = StyleSheet.create({
 });
 
 // ════════════════════════════════════════════════════════════════════════════
+// Grid Dimension Edit Panel Component
+// ════════════════════════════════════════════════════════════════════════════
+
+interface GridDimensionEditPanelProps {
+  rows: number;
+  cols: number;
+  onRowChange: (delta: number) => void;
+  onColChange: (delta: number) => void;
+  onClose: () => void;
+}
+
+function GridDimensionEditPanel({
+  rows,
+  cols,
+  onRowChange,
+  onColChange,
+  onClose,
+}: GridDimensionEditPanelProps) {
+  return (
+    <View style={dimensionEditStyles.container}>
+      <View style={dimensionEditStyles.header}>
+        <Text style={dimensionEditStyles.title}>Edit Dimensions</Text>
+        <TouchableOpacity onPress={onClose} style={dimensionEditStyles.closeButton}>
+          <Text style={dimensionEditStyles.closeText}>×</Text>
+        </TouchableOpacity>
+      </View>
+
+      <Text style={dimensionEditStyles.hint}>
+        Adjust grid size. Min: {MIN_DIMENSION}, Max: {MAX_DIMENSION}
+      </Text>
+
+      {/* Row controls */}
+      <View style={dimensionEditStyles.controlRow}>
+        <Text style={dimensionEditStyles.controlLabel}>Rows</Text>
+        <View style={dimensionEditStyles.controlButtons}>
+          <TouchableOpacity
+            style={[
+              dimensionEditStyles.controlButton,
+              rows <= MIN_DIMENSION && dimensionEditStyles.controlButtonDisabled,
+            ]}
+            onPress={() => onRowChange(-1)}
+            disabled={rows <= MIN_DIMENSION}
+          >
+            <Text
+              style={[
+                dimensionEditStyles.controlButtonText,
+                rows <= MIN_DIMENSION && dimensionEditStyles.controlButtonTextDisabled,
+              ]}
+            >
+              −
+            </Text>
+          </TouchableOpacity>
+          <Text style={dimensionEditStyles.controlValue}>{rows}</Text>
+          <TouchableOpacity
+            style={[
+              dimensionEditStyles.controlButton,
+              rows >= MAX_DIMENSION && dimensionEditStyles.controlButtonDisabled,
+            ]}
+            onPress={() => onRowChange(1)}
+            disabled={rows >= MAX_DIMENSION}
+          >
+            <Text
+              style={[
+                dimensionEditStyles.controlButtonText,
+                rows >= MAX_DIMENSION && dimensionEditStyles.controlButtonTextDisabled,
+              ]}
+            >
+              +
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Column controls */}
+      <View style={dimensionEditStyles.controlRow}>
+        <Text style={dimensionEditStyles.controlLabel}>Columns</Text>
+        <View style={dimensionEditStyles.controlButtons}>
+          <TouchableOpacity
+            style={[
+              dimensionEditStyles.controlButton,
+              cols <= MIN_DIMENSION && dimensionEditStyles.controlButtonDisabled,
+            ]}
+            onPress={() => onColChange(-1)}
+            disabled={cols <= MIN_DIMENSION}
+          >
+            <Text
+              style={[
+                dimensionEditStyles.controlButtonText,
+                cols <= MIN_DIMENSION && dimensionEditStyles.controlButtonTextDisabled,
+              ]}
+            >
+              −
+            </Text>
+          </TouchableOpacity>
+          <Text style={dimensionEditStyles.controlValue}>{cols}</Text>
+          <TouchableOpacity
+            style={[
+              dimensionEditStyles.controlButton,
+              cols >= MAX_DIMENSION && dimensionEditStyles.controlButtonDisabled,
+            ]}
+            onPress={() => onColChange(1)}
+            disabled={cols >= MAX_DIMENSION}
+          >
+            <Text
+              style={[
+                dimensionEditStyles.controlButtonText,
+                cols >= MAX_DIMENSION && dimensionEditStyles.controlButtonTextDisabled,
+              ]}
+            >
+              +
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+const dimensionEditStyles = StyleSheet.create({
+  container: {
+    backgroundColor: colors.surface.graphite,
+    borderRadius: radii.lg,
+    padding: spacing[4],
+    marginTop: spacing[3],
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing[3],
+  },
+  title: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text.primary,
+  },
+  closeButton: {
+    width: 28,
+    height: 28,
+    borderRadius: radii.full,
+    backgroundColor: colors.surface.ash,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeText: {
+    fontSize: 20,
+    color: colors.text.primary,
+    marginTop: -2,
+  },
+  hint: {
+    fontSize: 12,
+    color: colors.text.tertiary,
+    fontStyle: 'italic',
+    marginBottom: spacing[4],
+  },
+  controlRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing[3],
+  },
+  controlLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.text.secondary,
+  },
+  controlButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
+  controlButton: {
+    width: 40,
+    height: 40,
+    backgroundColor: colors.surface.slate,
+    borderRadius: radii.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  controlButtonDisabled: {
+    backgroundColor: colors.surface.ash,
+    opacity: 0.5,
+  },
+  controlButtonText: {
+    fontSize: 22,
+    fontWeight: '600',
+    color: colors.text.primary,
+  },
+  controlButtonTextDisabled: {
+    color: colors.text.tertiary,
+  },
+  controlValue: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text.primary,
+    width: 36,
+    textAlign: 'center',
+  },
+});
+
+// ════════════════════════════════════════════════════════════════════════════
 // Styles
 // ════════════════════════════════════════════════════════════════════════════
 
