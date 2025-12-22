@@ -97,11 +97,23 @@ export interface ConsensusResult<T = unknown> {
 // Stage-Specific Types
 // =============================================================================
 
+/** Grid location in pixel coordinates */
+export interface GridLocation {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+  imageWidth: number;
+  imageHeight: number;
+}
+
 /** Stage 1: Grid Geometry */
 export interface GridGeometryResult {
   rows: number;
   cols: number;
   confidence: number;
+  /** Grid location in pixel coordinates (for overlay alignment) */
+  gridLocation?: GridLocation;
 }
 
 /** Stage 2: Cell/Hole Detection */
@@ -160,6 +172,8 @@ export interface ExtractionResult {
     shape: string;
     /** Multiline string of region labels and '#' */
     regions: string;
+    /** Grid location in pixel coordinates (for overlay alignment) */
+    gridLocation?: GridLocation;
   };
 
   /** Region constraints */

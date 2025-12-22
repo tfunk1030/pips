@@ -930,6 +930,7 @@ export async function extractPuzzle(
       cols: gridResult.result.cols,
       shape: cellResult.result.shape,
       regions: regionResult.result.regions,
+      gridLocation: gridResult.result.gridLocation,
     },
     constraints: constraintResult.result.constraints,
     dominoes: dominoResult.result.dominoes,

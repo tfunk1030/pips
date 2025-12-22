@@ -137,10 +137,23 @@ function convertToLegacyResult(newResult: NewExtractionResult): AIExtractionResu
     }
   }
 
+  // Transfer gridLocation if available from the new pipeline
+  const gridLocation = newResult.grid.gridLocation
+    ? {
+        left: newResult.grid.gridLocation.left,
+        top: newResult.grid.gridLocation.top,
+        right: newResult.grid.gridLocation.right,
+        bottom: newResult.grid.gridLocation.bottom,
+        imageWidth: newResult.grid.gridLocation.imageWidth,
+        imageHeight: newResult.grid.gridLocation.imageHeight,
+      }
+    : undefined;
+
   return {
     board: {
       rows: newResult.grid.rows,
       cols: newResult.grid.cols,
+      gridLocation,
       shape: newResult.grid.shape,
       regions: newResult.grid.regions,
       constraints,

@@ -5,7 +5,7 @@
  * Uses 3-model ensemble with consensus voting.
  */
 
-import { ExtractionConfig, GridGeometryResult, ModelResponse } from '../types';
+import { ExtractionConfig, GridGeometryResult, GridLocation, ModelResponse } from '../types';
 import { callAllModels } from '../apiClient';
 import { NYT_VALIDATION } from '../config';
 
@@ -82,11 +82,38 @@ EXPECTED RANGES:
 - Common sizes: 5×5, 6×5, 5×6, 6×6, 7×5, 5×7
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+GRID LOCATION (IMPORTANT for overlay alignment):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Estimate the pixel boundaries of the puzzle grid in the image:
+- left: X coordinate of the LEFT edge of the leftmost column
+- top: Y coordinate of the TOP edge of the topmost row
+- right: X coordinate of the RIGHT edge of the rightmost column
+- bottom: Y coordinate of the BOTTOM edge of the bottommost row
+- imageWidth: Full width of the image in pixels
+- imageHeight: Full height of the image in pixels
+
+The puzzle grid typically occupies the upper 60-70% of a screenshot.
+Estimate based on visual proportions (e.g., if grid starts at ~5% from left and ends at ~95%, and image looks like 1200px wide, left=60, right=1140).
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 RESPONSE FORMAT:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Return ONLY this JSON (no markdown, no explanation, no code blocks):
-{"rows": N, "cols": M, "confidence": 0.XX}
+{
+  "rows": N,
+  "cols": M,
+  "confidence": 0.XX,
+  "gridLocation": {
+    "left": <pixels>,
+    "top": <pixels>,
+    "right": <pixels>,
+    "bottom": <pixels>,
+    "imageWidth": <pixels>,
+    "imageHeight": <pixels>
+  }
+}
 
 Confidence scoring:
 - 0.95-1.00: Grid boundaries crystal clear, 100% certain of count
@@ -169,6 +196,43 @@ Return ONLY this JSON (no markdown, no explanation):
 // Response Parser
 // =============================================================================
 
+function parseGridLocation(loc: any): GridLocation | undefined {
+  if (!loc || typeof loc !== 'object') {
+    return undefined;
+  }
+
+  // Validate all required fields are present and numeric
+  if (
+    typeof loc.left !== 'number' ||
+    typeof loc.top !== 'number' ||
+    typeof loc.right !== 'number' ||
+    typeof loc.bottom !== 'number' ||
+    typeof loc.imageWidth !== 'number' ||
+    typeof loc.imageHeight !== 'number'
+  ) {
+    return undefined;
+  }
+
+  // Validate reasonable values
+  if (
+    loc.left < 0 || loc.top < 0 ||
+    loc.right <= loc.left || loc.bottom <= loc.top ||
+    loc.imageWidth <= 0 || loc.imageHeight <= 0 ||
+    loc.right > loc.imageWidth || loc.bottom > loc.imageHeight
+  ) {
+    return undefined;
+  }
+
+  return {
+    left: Math.round(loc.left),
+    top: Math.round(loc.top),
+    right: Math.round(loc.right),
+    bottom: Math.round(loc.bottom),
+    imageWidth: Math.round(loc.imageWidth),
+    imageHeight: Math.round(loc.imageHeight),
+  };
+}
+
 function parseGridResponse(content: string): GridGeometryResult | null {
   try {
     // Extract JSON from response (handle markdown code blocks)
@@ -196,10 +260,14 @@ function parseGridResponse(content: string): GridGeometryResult | null {
       return null;
     }
 
+    // Parse optional gridLocation
+    const gridLocation = parseGridLocation(parsed.gridLocation);
+
     return {
       rows: Math.round(parsed.rows),
       cols: Math.round(parsed.cols),
       confidence: Math.min(1, Math.max(0, parsed.confidence)),
+      gridLocation,
     };
   } catch {
     return null;
