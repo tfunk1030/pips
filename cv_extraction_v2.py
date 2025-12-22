@@ -13,6 +13,7 @@ Key features:
 - Support for varying approximation accuracy based on contour perimeter
 - Convex hull analysis for concave region detection and characterization
 - Convexity defect analysis for identifying indentations and complex shapes
+- Watershed algorithm for separating merged/touching regions
 """
 
 import cv2
@@ -198,6 +199,72 @@ class ConvexHullAnalysis:
             "concavity_score": round(self.concavity_score, 4),
             "complexity_score": round(self.complexity_score, 4),
             "defects": [d.to_dict() for d in self.defects]
+        }
+
+
+@dataclass
+class WatershedSegment:
+    """
+    A single segment resulting from watershed segmentation.
+
+    Attributes:
+        label: Unique label for this segment (from watershed)
+        contour: Contour of the segment
+        area: Area of the segment
+        centroid: (cx, cy) centroid of the segment
+        bounding_rect: (x, y, w, h) bounding rectangle
+        mask: Binary mask for this segment only
+    """
+    label: int
+    contour: np.ndarray
+    area: float
+    centroid: Tuple[float, float]
+    bounding_rect: Tuple[int, int, int, int]
+    mask: Optional[np.ndarray] = None
+
+    def to_dict(self) -> Dict:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "label": self.label,
+            "area": round(self.area, 2),
+            "centroid": [round(c, 2) for c in self.centroid],
+            "bounding_rect": list(self.bounding_rect)
+        }
+
+
+@dataclass
+class WatershedResult:
+    """
+    Result of watershed segmentation for separating merged regions.
+
+    The watershed algorithm treats the image as a topographic surface
+    and floods from markers to find region boundaries. This is useful
+    for separating touching or overlapping regions that appear merged.
+
+    Attributes:
+        segments: List of WatershedSegment objects
+        markers: The marker image used for watershed
+        labels: The final labeled image from watershed
+        num_regions: Number of distinct regions found
+        original_contour: The original merged contour that was split
+        method: Method used for marker generation
+        confidence: Confidence in the segmentation (0.0 to 1.0)
+    """
+    segments: List[WatershedSegment] = field(default_factory=list)
+    markers: Optional[np.ndarray] = None
+    labels: Optional[np.ndarray] = None
+    num_regions: int = 0
+    original_contour: Optional[np.ndarray] = None
+    method: str = "distance_transform"
+    confidence: float = 1.0
+
+    def to_dict(self) -> Dict:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "num_regions": self.num_regions,
+            "method": self.method,
+            "confidence": round(self.confidence, 4),
+            "segments": [s.to_dict() for s in self.segments]
         }
 
 
@@ -729,6 +796,584 @@ def analyze_contours_batch_convexity(
         analysis = analyze_convex_hull(contour, min_defect_depth)
         classification, _ = classify_region_by_convexity(analysis)
         results.append((contour, analysis, classification))
+
+    return results
+
+
+# =============================================================================
+# Watershed Algorithm for Separating Merged Regions
+# =============================================================================
+
+
+def generate_watershed_markers_distance(
+    binary_mask: np.ndarray,
+    distance_threshold: float = 0.5,
+    min_marker_area: int = 50
+) -> Tuple[np.ndarray, int]:
+    """
+    Generate watershed markers using distance transform.
+
+    The distance transform calculates the distance from each foreground
+    pixel to the nearest background pixel. Local maxima in the distance
+    transform correspond to region centers, which become markers.
+
+    Args:
+        binary_mask: Binary mask of the region(s) to segment (255 = foreground)
+        distance_threshold: Threshold for distance transform (0.0-1.0, fraction of max)
+        min_marker_area: Minimum area for a marker to be considered valid
+
+    Returns:
+        Tuple of (markers, num_markers):
+        - markers: Labeled marker image (0 = background, 1+ = marker labels)
+        - num_markers: Number of distinct markers found
+    """
+    if binary_mask is None or binary_mask.size == 0:
+        return np.zeros((1, 1), dtype=np.int32), 0
+
+    # Ensure binary format
+    if binary_mask.max() > 1:
+        binary = (binary_mask > 127).astype(np.uint8) * 255
+    else:
+        binary = binary_mask.astype(np.uint8) * 255
+
+    # Apply morphological opening to remove noise
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+    opened = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel, iterations=2)
+
+    # Compute distance transform
+    dist_transform = cv2.distanceTransform(opened, cv2.DIST_L2, 5)
+
+    # Normalize distance transform
+    if dist_transform.max() > 0:
+        dist_normalized = dist_transform / dist_transform.max()
+    else:
+        return np.zeros_like(binary_mask, dtype=np.int32), 0
+
+    # Threshold to find sure foreground (markers)
+    sure_fg = (dist_normalized > distance_threshold).astype(np.uint8) * 255
+
+    # Find connected components in sure foreground
+    num_labels, markers = cv2.connectedComponents(sure_fg)
+
+    # Filter out small markers
+    if min_marker_area > 0:
+        for label in range(1, num_labels):
+            if np.sum(markers == label) < min_marker_area:
+                markers[markers == label] = 0
+
+        # Relabel to ensure consecutive labels
+        unique_labels = np.unique(markers)
+        unique_labels = unique_labels[unique_labels > 0]
+        new_markers = np.zeros_like(markers)
+        for new_label, old_label in enumerate(unique_labels, start=1):
+            new_markers[markers == old_label] = new_label
+        markers = new_markers
+        num_labels = len(unique_labels) + 1
+
+    # Add 1 to all labels (background becomes 1, markers become 2+)
+    markers = markers + 1
+
+    # Mark unknown region as 0 (for watershed)
+    # Unknown = areas in original mask but not in sure foreground
+    sure_bg = cv2.dilate(opened, kernel, iterations=3)
+    unknown = cv2.subtract(sure_bg, sure_fg)
+    markers[unknown == 255] = 0
+
+    return markers.astype(np.int32), num_labels - 1
+
+
+def generate_watershed_markers_peaks(
+    binary_mask: np.ndarray,
+    min_distance: int = 20,
+    min_marker_area: int = 50
+) -> Tuple[np.ndarray, int]:
+    """
+    Generate watershed markers using local maxima (peaks) in distance transform.
+
+    This method finds peaks in the distance transform using morphological
+    operations, which can handle regions with irregular shapes better
+    than simple thresholding.
+
+    Args:
+        binary_mask: Binary mask of the region(s) to segment
+        min_distance: Minimum distance between peaks (controls region separation)
+        min_marker_area: Minimum area for a marker
+
+    Returns:
+        Tuple of (markers, num_markers)
+    """
+    if binary_mask is None or binary_mask.size == 0:
+        return np.zeros((1, 1), dtype=np.int32), 0
+
+    # Ensure binary format
+    if binary_mask.max() > 1:
+        binary = (binary_mask > 127).astype(np.uint8) * 255
+    else:
+        binary = binary_mask.astype(np.uint8) * 255
+
+    # Morphological cleanup
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+    cleaned = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel, iterations=1)
+    cleaned = cv2.morphologyEx(cleaned, cv2.MORPH_CLOSE, kernel, iterations=1)
+
+    # Distance transform
+    dist = cv2.distanceTransform(cleaned, cv2.DIST_L2, 5)
+
+    # Find local maxima using dilated comparison
+    # A pixel is a local max if it equals the max in its neighborhood
+    kernel_size = max(3, min_distance)
+    if kernel_size % 2 == 0:
+        kernel_size += 1
+
+    dilated = cv2.dilate(dist, np.ones((kernel_size, kernel_size)))
+    local_max = (dist == dilated) & (dist > 0)
+
+    # Convert to markers
+    local_max_uint8 = local_max.astype(np.uint8) * 255
+
+    # Find connected components
+    num_labels, markers = cv2.connectedComponents(local_max_uint8)
+
+    # Filter small markers
+    if min_marker_area > 0:
+        for label in range(1, num_labels):
+            if np.sum(markers == label) < min_marker_area:
+                markers[markers == label] = 0
+
+        # Relabel
+        unique_labels = np.unique(markers)
+        unique_labels = unique_labels[unique_labels > 0]
+        new_markers = np.zeros_like(markers)
+        for new_label, old_label in enumerate(unique_labels, start=1):
+            new_markers[markers == old_label] = new_label
+        markers = new_markers
+        num_labels = len(unique_labels) + 1
+
+    # Adjust for watershed (background = 1, unknown = 0)
+    markers = markers + 1
+    sure_bg = cv2.dilate(cleaned, kernel, iterations=3)
+    unknown = cv2.subtract(sure_bg, cleaned)
+    markers[unknown == 255] = 0
+
+    return markers.astype(np.int32), num_labels - 1
+
+
+def apply_watershed_segmentation(
+    image: np.ndarray,
+    markers: np.ndarray
+) -> np.ndarray:
+    """
+    Apply watershed algorithm to segment regions.
+
+    The watershed algorithm treats the image as a topographic surface
+    and floods from the marker positions. Boundaries are formed where
+    different floods meet.
+
+    Args:
+        image: Input image (must be 3-channel BGR for cv2.watershed)
+        markers: Marker image from generate_watershed_markers_*
+
+    Returns:
+        Labels image where each pixel is labeled with its region number.
+        Boundary pixels are marked as -1.
+    """
+    if image is None or markers is None:
+        return np.zeros((1, 1), dtype=np.int32)
+
+    # Ensure image is 3-channel BGR
+    if len(image.shape) == 2:
+        image_bgr = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+    elif image.shape[2] == 4:
+        image_bgr = cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
+    else:
+        image_bgr = image.copy()
+
+    # Ensure markers is int32
+    markers_int32 = markers.astype(np.int32)
+
+    # Apply watershed
+    cv2.watershed(image_bgr, markers_int32)
+
+    return markers_int32
+
+
+def extract_segments_from_watershed(
+    labels: np.ndarray,
+    original_mask: np.ndarray,
+    min_area: float = 100.0
+) -> List[WatershedSegment]:
+    """
+    Extract individual segment information from watershed labels.
+
+    Args:
+        labels: Label image from watershed (1 = background, -1 = boundary, 2+ = segments)
+        original_mask: Original binary mask for reference
+        min_area: Minimum segment area to include
+
+    Returns:
+        List of WatershedSegment objects
+    """
+    segments = []
+
+    # Get unique labels (exclude background=1 and boundary=-1)
+    unique_labels = np.unique(labels)
+    region_labels = [l for l in unique_labels if l > 1]
+
+    for label in region_labels:
+        # Create mask for this segment
+        segment_mask = (labels == label).astype(np.uint8) * 255
+
+        # Calculate area
+        area = np.sum(segment_mask > 0)
+
+        if area < min_area:
+            continue
+
+        # Find contour for this segment
+        contours, _ = cv2.findContours(
+            segment_mask,
+            cv2.RETR_EXTERNAL,
+            cv2.CHAIN_APPROX_SIMPLE
+        )
+
+        if not contours:
+            continue
+
+        # Use largest contour
+        contour = max(contours, key=cv2.contourArea)
+
+        # Calculate centroid
+        moments = cv2.moments(contour)
+        if moments["m00"] != 0:
+            cx = moments["m10"] / moments["m00"]
+            cy = moments["m01"] / moments["m00"]
+        else:
+            x, y, w, h = cv2.boundingRect(contour)
+            cx, cy = x + w / 2, y + h / 2
+
+        # Bounding rectangle
+        bbox = cv2.boundingRect(contour)
+
+        segment = WatershedSegment(
+            label=int(label),
+            contour=contour,
+            area=float(area),
+            centroid=(cx, cy),
+            bounding_rect=bbox,
+            mask=segment_mask
+        )
+        segments.append(segment)
+
+    return segments
+
+
+def separate_merged_regions(
+    image: np.ndarray,
+    binary_mask: Optional[np.ndarray] = None,
+    contour: Optional[np.ndarray] = None,
+    method: str = "distance",
+    distance_threshold: float = 0.5,
+    min_distance: int = 20,
+    min_segment_area: float = 100.0,
+    min_marker_area: int = 50,
+    debug_dir: Optional[str] = None
+) -> WatershedResult:
+    """
+    Separate merged/touching regions using the watershed algorithm.
+
+    This is the main entry point for watershed-based region separation.
+    It can work with either a binary mask or a contour to define the
+    region to segment.
+
+    Use cases:
+    - Separating touching puzzle regions that appear as one contour
+    - Splitting regions with overlapping colors
+    - Handling merged cells in grid puzzles
+
+    Args:
+        image: Input image (BGR or grayscale)
+        binary_mask: Binary mask of region(s) to segment. If None, generated from contour.
+        contour: Contour to segment. Used if binary_mask is None.
+        method: Marker generation method:
+                - "distance": Distance transform with threshold (default)
+                - "peaks": Local maxima in distance transform
+        distance_threshold: Threshold for distance method (0.0-1.0)
+        min_distance: Minimum distance between peaks for peaks method
+        min_segment_area: Minimum area for resulting segments
+        min_marker_area: Minimum area for markers
+        debug_dir: Optional directory for debug images
+
+    Returns:
+        WatershedResult containing separated segments and metadata
+
+    Example:
+        >>> import cv2
+        >>> import numpy as np
+        >>> # Create image with two touching circles
+        >>> img = np.zeros((200, 200, 3), dtype=np.uint8)
+        >>> cv2.circle(img, (70, 100), 50, (255, 255, 255), -1)
+        >>> cv2.circle(img, (130, 100), 50, (255, 255, 255), -1)
+        >>> gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        >>> mask = (gray > 0).astype(np.uint8) * 255
+        >>> result = separate_merged_regions(img, binary_mask=mask)
+        >>> print(f"Found {result.num_regions} regions")
+    """
+    if image is None:
+        return WatershedResult(confidence=0.0)
+
+    # Ensure we have a 3-channel image for watershed
+    if len(image.shape) == 2:
+        image_bgr = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+    else:
+        image_bgr = image.copy()
+
+    h, w = image_bgr.shape[:2]
+
+    # Generate binary mask if not provided
+    if binary_mask is None:
+        if contour is not None:
+            # Draw contour to create mask
+            binary_mask = np.zeros((h, w), dtype=np.uint8)
+            cv2.drawContours(binary_mask, [contour], -1, 255, -1)
+        else:
+            # Convert image to binary
+            gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
+            _, binary_mask = cv2.threshold(
+                gray, 0, 255,
+                cv2.THRESH_BINARY + cv2.THRESH_OTSU
+            )
+
+    # Generate markers based on method
+    if method == "peaks":
+        markers, num_markers = generate_watershed_markers_peaks(
+            binary_mask,
+            min_distance=min_distance,
+            min_marker_area=min_marker_area
+        )
+    else:  # distance (default)
+        markers, num_markers = generate_watershed_markers_distance(
+            binary_mask,
+            distance_threshold=distance_threshold,
+            min_marker_area=min_marker_area
+        )
+
+    # If only one or no markers found, return original as single region
+    if num_markers <= 1:
+        # Find contour from mask
+        contours, _ = cv2.findContours(
+            binary_mask,
+            cv2.RETR_EXTERNAL,
+            cv2.CHAIN_APPROX_SIMPLE
+        )
+
+        if contours:
+            largest = max(contours, key=cv2.contourArea)
+            area = cv2.contourArea(largest)
+            moments = cv2.moments(largest)
+            if moments["m00"] != 0:
+                cx = moments["m10"] / moments["m00"]
+                cy = moments["m01"] / moments["m00"]
+            else:
+                x, y, bw, bh = cv2.boundingRect(largest)
+                cx, cy = x + bw / 2, y + bh / 2
+
+            segment = WatershedSegment(
+                label=1,
+                contour=largest,
+                area=area,
+                centroid=(cx, cy),
+                bounding_rect=cv2.boundingRect(largest),
+                mask=binary_mask
+            )
+
+            return WatershedResult(
+                segments=[segment],
+                markers=markers,
+                labels=None,
+                num_regions=1,
+                original_contour=contour,
+                method=method,
+                confidence=0.5  # Lower confidence since no separation occurred
+            )
+
+        return WatershedResult(
+            num_regions=0,
+            method=method,
+            confidence=0.0
+        )
+
+    # Apply watershed
+    labels = apply_watershed_segmentation(image_bgr, markers)
+
+    # Extract segments
+    segments = extract_segments_from_watershed(
+        labels,
+        binary_mask,
+        min_area=min_segment_area
+    )
+
+    # Calculate confidence based on segmentation quality
+    if len(segments) > 1:
+        # Higher confidence if we found multiple well-separated regions
+        total_area = sum(s.area for s in segments)
+        original_area = np.sum(binary_mask > 0)
+        area_coverage = total_area / max(original_area, 1)
+
+        # Check for reasonable segment sizes
+        areas = [s.area for s in segments]
+        avg_area = np.mean(areas) if areas else 0
+        size_variance = np.std(areas) / max(avg_area, 1) if areas else 1
+
+        confidence = min(1.0, (
+            0.4 * area_coverage +
+            0.3 * min(1.0, len(segments) / 5.0) +
+            0.3 * max(0.0, 1.0 - size_variance)
+        ))
+    else:
+        confidence = 0.3
+
+    # Save debug images
+    if debug_dir:
+        out_dir = Path(debug_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        # Save binary mask
+        cv2.imwrite(str(out_dir / "watershed_mask.png"), binary_mask)
+
+        # Save markers visualization
+        markers_vis = np.zeros((h, w, 3), dtype=np.uint8)
+        for i in range(2, markers.max() + 1):
+            color = (
+                int((i * 73) % 256),
+                int((i * 137) % 256),
+                int((i * 199) % 256)
+            )
+            markers_vis[markers == i] = color
+        cv2.imwrite(str(out_dir / "watershed_markers.png"), markers_vis)
+
+        # Save labels visualization
+        if labels is not None:
+            labels_vis = np.zeros((h, w, 3), dtype=np.uint8)
+            for i in range(2, labels.max() + 1):
+                color = (
+                    int((i * 73) % 256),
+                    int((i * 137) % 256),
+                    int((i * 199) % 256)
+                )
+                labels_vis[labels == i] = color
+            # Mark boundaries in white
+            labels_vis[labels == -1] = (255, 255, 255)
+            cv2.imwrite(str(out_dir / "watershed_labels.png"), labels_vis)
+
+        # Save segments with contours
+        segments_vis = image_bgr.copy()
+        for seg in segments:
+            color = (
+                int((seg.label * 73) % 256),
+                int((seg.label * 137) % 256),
+                int((seg.label * 199) % 256)
+            )
+            cv2.drawContours(segments_vis, [seg.contour], -1, color, 2)
+            cv2.circle(segments_vis, (int(seg.centroid[0]), int(seg.centroid[1])), 3, color, -1)
+        cv2.imwrite(str(out_dir / "watershed_segments.png"), segments_vis)
+
+    return WatershedResult(
+        segments=segments,
+        markers=markers,
+        labels=labels,
+        num_regions=len(segments),
+        original_contour=contour,
+        method=method,
+        confidence=confidence
+    )
+
+
+def separate_merged_regions_batch(
+    image: np.ndarray,
+    contours: List[np.ndarray],
+    method: str = "distance",
+    distance_threshold: float = 0.5,
+    min_distance: int = 20,
+    min_segment_area: float = 100.0,
+    solidity_threshold: float = 0.85,
+    debug_dir: Optional[str] = None
+) -> List[WatershedResult]:
+    """
+    Apply watershed segmentation to a batch of potentially merged contours.
+
+    Analyzes each contour and applies watershed only to those that
+    appear to be merged (based on solidity and shape analysis).
+
+    Args:
+        image: Input image
+        contours: List of contours to process
+        method: Marker generation method ("distance" or "peaks")
+        distance_threshold: Threshold for distance method
+        min_distance: Minimum distance between peaks
+        min_segment_area: Minimum area for resulting segments
+        solidity_threshold: Contours with solidity below this are considered merged
+        debug_dir: Optional directory for debug images
+
+    Returns:
+        List of WatershedResult objects (one per input contour)
+    """
+    results = []
+
+    for i, contour in enumerate(contours):
+        # Analyze contour to determine if it might be merged
+        analysis = analyze_convex_hull(contour)
+
+        # Only apply watershed if contour appears to be merged
+        # (low solidity or multiple significant defects)
+        should_watershed = (
+            analysis.solidity < solidity_threshold or
+            analysis.defect_count >= 2 or
+            analysis.concavity_score > 0.3
+        )
+
+        if should_watershed:
+            # Create debug subdirectory for this contour
+            contour_debug_dir = None
+            if debug_dir:
+                contour_debug_dir = str(Path(debug_dir) / f"contour_{i}")
+
+            result = separate_merged_regions(
+                image,
+                contour=contour,
+                method=method,
+                distance_threshold=distance_threshold,
+                min_distance=min_distance,
+                min_segment_area=min_segment_area,
+                debug_dir=contour_debug_dir
+            )
+        else:
+            # Return contour as single segment
+            area = cv2.contourArea(contour)
+            moments = cv2.moments(contour)
+            if moments["m00"] != 0:
+                cx = moments["m10"] / moments["m00"]
+                cy = moments["m01"] / moments["m00"]
+            else:
+                x, y, w, h = cv2.boundingRect(contour)
+                cx, cy = x + w / 2, y + h / 2
+
+            segment = WatershedSegment(
+                label=1,
+                contour=contour,
+                area=area,
+                centroid=(cx, cy),
+                bounding_rect=cv2.boundingRect(contour)
+            )
+
+            result = WatershedResult(
+                segments=[segment],
+                num_regions=1,
+                original_contour=contour,
+                method="none",
+                confidence=0.9  # High confidence since it's a simple convex shape
+            )
+
+        results.append(result)
 
     return results
 
@@ -1282,13 +1927,84 @@ if __name__ == "__main__":
         default=5.0,
         help="Minimum defect depth for convexity analysis (pixels)"
     )
+    parser.add_argument(
+        "--watershed",
+        action="store_true",
+        help="Apply watershed algorithm to separate merged regions"
+    )
+    parser.add_argument(
+        "--watershed-method",
+        choices=["distance", "peaks"],
+        default="distance",
+        help="Watershed marker generation method"
+    )
+    parser.add_argument(
+        "--distance-threshold",
+        type=float,
+        default=0.5,
+        help="Distance threshold for watershed (0.0-1.0)"
+    )
+    parser.add_argument(
+        "--min-distance",
+        type=int,
+        default=20,
+        help="Minimum distance between peaks for watershed"
+    )
     args = parser.parse_args()
 
     img = cv2.imread(args.image)
     if img is None:
         raise FileNotFoundError(f"Could not read image: {args.image}")
 
-    if args.quads_only:
+    if args.watershed:
+        # Watershed mode - separate merged regions
+        # First extract contours, then apply watershed to concave ones
+        result = extract_contours_with_approximation(
+            img,
+            epsilon_ratio=args.epsilon_ratio,
+            min_area=args.min_area,
+            analyze_convexity=True,  # Need convexity analysis for watershed
+            min_defect_depth=args.min_defect_depth,
+            debug_dir=args.debug_dir
+        )
+
+        print(f"Extracted {len(result.contours)} contours")
+
+        # Get original contours for watershed
+        original_contours = [c.original_contour for c in result.contours]
+
+        # Apply watershed to separate merged regions
+        watershed_results = separate_merged_regions_batch(
+            img,
+            original_contours,
+            method=args.watershed_method,
+            distance_threshold=args.distance_threshold,
+            min_distance=args.min_distance,
+            min_segment_area=args.min_area,
+            debug_dir=args.debug_dir
+        )
+
+        # Report results
+        total_segments = sum(r.num_regions for r in watershed_results)
+        print(f"Watershed segmentation: {len(original_contours)} contours -> {total_segments} segments")
+
+        for i, ws_result in enumerate(watershed_results):
+            if ws_result.num_regions > 1:
+                print(f"  Contour {i+1}: Split into {ws_result.num_regions} segments "
+                      f"(method={ws_result.method}, confidence={ws_result.confidence:.2f})")
+                for j, seg in enumerate(ws_result.segments):
+                    print(f"    Segment {j+1}: area={seg.area:.0f}, centroid={seg.centroid}")
+            else:
+                print(f"  Contour {i+1}: Single region (not split)")
+
+        # Output JSON
+        output_file = Path(args.debug_dir) / "watershed_results.json"
+        Path(args.debug_dir).mkdir(parents=True, exist_ok=True)
+        with open(output_file, "w") as f:
+            json.dump([r.to_dict() for r in watershed_results], f, indent=2)
+        print(f"Wrote {output_file}")
+
+    elif args.quads_only:
         quads = extract_quadrilaterals(
             img,
             min_area=args.min_area,
