@@ -1,0 +1,45 @@
+{
+  "task_description": "# Accurate Confidence Scoring\n\nCalibrate confidence scores to accurately reflect detection reliability. Currently scores are conservative (40% when actual accuracy may be higher), confusing users.\n\n## Rationale\nConservative confidence scores undermine user trust. Accurate scores help users know when to trust automated detection vs when to verify manually, improving overall experience.\n\n## User Stories\n- As a user, I want confidence scores to accurately reflect detection quality so that I know when to review the extraction\n- As a power user, I want to trust high-confidence detections without manual verification\n\n## Acceptance Criteria\n- [ ] Confidence scores correlate with actual detection accuracy within 10%\n- [ ] Different confidence thresholds for different detection components\n- [ ] Visual indicators clearly communicate confidence levels to users\n- [ ] High-confidence detections proven reliable in testing\n",
+  "scoped_services": ["cv-service", "pips-agent", "pips-solver"],
+  "files_to_modify": [
+    "cv-service/main.py",
+    "cv-service/hybrid_extraction.py",
+    "pips-agent/tools/ocr_constraints.py",
+    "pips-solver/src/app/components/ConfidenceIndicator.tsx",
+    "pips-solver/src/app/components/ui/ConfidenceIndicator.tsx"
+  ],
+  "files_to_reference": [
+    "cv-service/main.py",
+    "cv-service/hybrid_extraction.py",
+    "cv-service/test_e2e_extraction.py",
+    "pips-agent/tools/ocr_constraints.py",
+    "pips-agent/utils/ocr_helper.py",
+    "pips-agent/test_agent.py",
+    "pips-solver/src/app/components/ConfidenceIndicator.tsx"
+  ],
+  "patterns": {
+    "confidence_calculation": "cv-service/hybrid_extraction.py lines 194-227: _calculate_grid_confidence() calculates confidence based on grid regularity (spacing standard deviation)",
+    "confidence_thresholds_cv": "cv-service/main.py lines 276-285: _get_confidence_level() converts numeric confidence to categorical (0.7=high, 0.4=medium)",
+    "confidence_thresholds_ocr": "pips-agent/tools/ocr_constraints.py lines 97-102: OCR thresholds (0.8=high, 0.6=medium)",
+    "ui_thresholds": "pips-solver ConfidenceIndicator components use 0.9=high, 0.8=medium",
+    "api_response_pattern": "cv-service returns CropPuzzleResponse with grid_confidence float and confidence_level string"
+  },
+  "existing_implementations": {
+    "description": "Confidence scoring already exists but with inconsistent thresholds across services and no component-specific calibration",
+    "relevant_files": [
+      "cv-service/main.py",
+      "cv-service/hybrid_extraction.py",
+      "pips-agent/tools/ocr_constraints.py",
+      "pips-agent/utils/ocr_helper.py",
+      "pips-solver/src/app/components/ConfidenceIndicator.tsx",
+      "pips-solver/src/app/components/ui/ConfidenceIndicator.tsx"
+    ],
+    "current_thresholds": {
+      "cv_service": "0.7 high, 0.4 medium",
+      "ocr": "0.8 high, 0.6 medium",
+      "ui": "0.9 high, 0.8 medium"
+    }
+  },
+  "created_at": "2025-12-22T03:13:09.346993",
+  "updated_at": "2025-12-22T08:30:00.000000"
+}

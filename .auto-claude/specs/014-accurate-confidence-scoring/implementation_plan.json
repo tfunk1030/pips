@@ -1,0 +1,357 @@
+{
+  "feature": "Accurate Confidence Scoring",
+  "workflow_type": "feature",
+  "workflow_rationale": "This is a feature implementation that adds accurate confidence calibration across detection components. It requires backend scoring changes, frontend UI updates, and validation infrastructure - characteristics of a multi-service feature rather than a bug fix or refactor.",
+  "phases": [
+    {
+      "id": "phase-1-backend-calibration",
+      "name": "Backend Confidence Calibration",
+      "type": "implementation",
+      "description": "Calibrate confidence scoring algorithms in cv-service and pips-agent to accurately reflect detection reliability",
+      "depends_on": [],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-1-1",
+          "description": "Create centralized confidence configuration module with component-specific thresholds",
+          "service": "cv-service",
+          "files_to_modify": [],
+          "files_to_create": ["cv-service/confidence_config.py"],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "cd cv-service && python -c \"from confidence_config import CONFIDENCE_THRESHOLDS; assert 'geometry_extraction' in CONFIDENCE_THRESHOLDS; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending",
+          "notes": "Define thresholds per spec: geometry (0.85/0.70), OCR (0.90/0.75), puzzle (0.80/0.65)"
+        },
+        {
+          "id": "subtask-1-2",
+          "description": "Update grid confidence calculation algorithm in hybrid_extraction.py",
+          "service": "cv-service",
+          "files_to_modify": ["cv-service/hybrid_extraction.py"],
+          "files_to_create": [],
+          "patterns_from": ["cv-service/hybrid_extraction.py"],
+          "verification": {
+            "type": "command",
+            "command": "cd cv-service && python -m pytest test_confidence_calibration.py::test_grid_confidence_range -v",
+            "expected": "PASSED"
+          },
+          "status": "pending",
+          "notes": "Enhance _calculate_grid_confidence() to include image quality factors, not just spacing regularity"
+        },
+        {
+          "id": "subtask-1-3",
+          "description": "Update confidence level classification in main.py to use component-specific thresholds",
+          "service": "cv-service",
+          "files_to_modify": ["cv-service/main.py"],
+          "files_to_create": [],
+          "patterns_from": ["cv-service/main.py"],
+          "verification": {
+            "type": "api",
+            "method": "POST",
+            "url": "http://localhost:8080/crop-puzzle",
+            "expected_status": 200,
+            "checks": ["response includes confidence field", "response includes threshold field"]
+          },
+          "status": "pending",
+          "notes": "Replace _get_confidence_level() to accept component type parameter and use CONFIDENCE_THRESHOLDS"
+        },
+        {
+          "id": "subtask-1-4",
+          "description": "Add confidence_breakdown field to API responses",
+          "service": "cv-service",
+          "files_to_modify": ["cv-service/main.py"],
+          "files_to_create": [],
+          "patterns_from": ["cv-service/main.py"],
+          "verification": {
+            "type": "api",
+            "method": "POST",
+            "url": "http://localhost:8080/crop-puzzle",
+            "expected_status": 200,
+            "checks": ["response includes confidence_breakdown dict"]
+          },
+          "status": "pending",
+          "notes": "Add confidence_breakdown to CropPuzzleResponse and ExtractResponse models"
+        },
+        {
+          "id": "subtask-1-5",
+          "description": "Update OCR confidence thresholds in pips-agent",
+          "service": "pips-agent",
+          "files_to_modify": ["pips-agent/tools/ocr_constraints.py"],
+          "files_to_create": [],
+          "patterns_from": ["pips-agent/tools/ocr_constraints.py"],
+          "verification": {
+            "type": "command",
+            "command": "cd pips-agent && python -m pytest test_ocr_confidence.py::test_ocr_thresholds -v",
+            "expected": "PASSED"
+          },
+          "status": "pending",
+          "notes": "Update threshold checks from 0.8/0.6 to 0.90/0.75 per spec"
+        }
+      ]
+    },
+    {
+      "id": "phase-2-frontend-indicators",
+      "name": "Frontend Confidence Indicators",
+      "type": "implementation",
+      "description": "Update pips-solver UI to display calibrated confidence scores with visual indicators",
+      "depends_on": ["phase-1-backend-calibration"],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-2-1",
+          "description": "Update ConfidenceIndicator component with new color thresholds",
+          "service": "pips-solver",
+          "files_to_modify": ["pips-solver/src/app/components/ConfidenceIndicator.tsx"],
+          "files_to_create": [],
+          "patterns_from": ["pips-solver/src/app/components/ConfidenceIndicator.tsx"],
+          "verification": {
+            "type": "browser",
+            "url": "http://localhost:3000",
+            "checks": ["ConfidenceIndicator renders", "Color thresholds match spec (0.85/0.70)"]
+          },
+          "status": "pending",
+          "notes": "Update getConfidenceColor() to align with backend thresholds"
+        },
+        {
+          "id": "subtask-2-2",
+          "description": "Update themed ConfidenceIndicator UI component",
+          "service": "pips-solver",
+          "files_to_modify": ["pips-solver/src/app/components/ui/ConfidenceIndicator.tsx"],
+          "files_to_create": [],
+          "patterns_from": ["pips-solver/src/app/components/ui/ConfidenceIndicator.tsx"],
+          "verification": {
+            "type": "browser",
+            "url": "http://localhost:3000",
+            "checks": ["Themed indicator displays correctly", "Colors match spec (jade/brass/coral)"]
+          },
+          "status": "pending",
+          "notes": "Update getConfidenceColor() helper function thresholds"
+        },
+        {
+          "id": "subtask-2-3",
+          "description": "Add confidence breakdown display component",
+          "service": "pips-solver",
+          "files_to_modify": [],
+          "files_to_create": ["pips-solver/src/app/components/ConfidenceBreakdown.tsx"],
+          "patterns_from": ["pips-solver/src/app/components/ConfidenceIndicator.tsx"],
+          "verification": {
+            "type": "browser",
+            "url": "http://localhost:3000",
+            "checks": ["Component displays per-component confidence scores"]
+          },
+          "status": "pending",
+          "notes": "Show breakdown: geometry, OCR, puzzle detection separately"
+        }
+      ]
+    },
+    {
+      "id": "phase-3-validation",
+      "name": "Validation Infrastructure",
+      "type": "implementation",
+      "description": "Create testing infrastructure to validate confidence-accuracy correlation",
+      "depends_on": ["phase-1-backend-calibration"],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-3-1",
+          "description": "Create confidence calibration test suite",
+          "service": "cv-service",
+          "files_to_modify": [],
+          "files_to_create": ["cv-service/test_confidence_calibration.py"],
+          "patterns_from": ["cv-service/test_e2e_extraction.py"],
+          "verification": {
+            "type": "command",
+            "command": "cd cv-service && python -m pytest test_confidence_calibration.py -v",
+            "expected": "All tests pass"
+          },
+          "status": "pending",
+          "notes": "Test confidence ranges, threshold classification, component-specific scoring"
+        },
+        {
+          "id": "subtask-3-2",
+          "description": "Create OCR confidence test suite",
+          "service": "pips-agent",
+          "files_to_modify": [],
+          "files_to_create": ["pips-agent/test_ocr_confidence.py"],
+          "patterns_from": ["pips-agent/test_agent.py"],
+          "verification": {
+            "type": "command",
+            "command": "cd pips-agent && python -m pytest test_ocr_confidence.py -v",
+            "expected": "All tests pass"
+          },
+          "status": "pending",
+          "notes": "Validate OCR confidence extraction and threshold classification"
+        },
+        {
+          "id": "subtask-3-3",
+          "description": "Create validation script to measure confidence-accuracy correlation",
+          "service": "cv-service",
+          "files_to_modify": [],
+          "files_to_create": ["cv-service/validate_confidence.py"],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "cd cv-service && python validate_confidence.py --test-images test_images/ --ground-truth ground_truth.json",
+            "expected": "Correlation > 0.9, MAE < 10%"
+          },
+          "status": "pending",
+          "notes": "Statistical validation: Pearson correlation, MAE, calibration curve"
+        }
+      ]
+    },
+    {
+      "id": "phase-4-integration",
+      "name": "Integration & E2E Testing",
+      "type": "integration",
+      "description": "Verify confidence scores flow correctly from backend to frontend and display properly",
+      "depends_on": ["phase-2-frontend-indicators", "phase-3-validation"],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-4-1",
+          "description": "End-to-end confidence flow verification",
+          "all_services": true,
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "e2e",
+            "steps": [
+              "Start cv-service on port 8080",
+              "Start pips-solver on port 3000",
+              "Upload test image via UI",
+              "Verify confidence displayed in UI matches backend response",
+              "Verify color coding matches confidence level"
+            ]
+          },
+          "status": "pending",
+          "notes": "Full integration test across all services"
+        },
+        {
+          "id": "subtask-4-2",
+          "description": "High and low confidence scenario testing",
+          "all_services": true,
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "manual",
+            "instructions": "Test with clear image (expect high confidence, green) and blurry image (expect low confidence, red/amber). Verify UI messages match confidence level."
+          },
+          "status": "pending",
+          "notes": "Validate visual indicators and user messaging"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_phases": 4,
+    "total_subtasks": 12,
+    "services_involved": ["cv-service", "pips-agent", "pips-solver"],
+    "parallelism": {
+      "max_parallel_phases": 2,
+      "parallel_groups": [
+        {
+          "phases": ["phase-2-frontend-indicators", "phase-3-validation"],
+          "reason": "Both depend only on phase-1, work on different services"
+        }
+      ],
+      "recommended_workers": 2,
+      "speedup_estimate": "1.3x faster than sequential"
+    },
+    "startup_command": "source auto-claude/.venv/bin/activate && python auto-claude/run.py --spec 014 --parallel 2"
+  },
+  "verification_strategy": {
+    "risk_level": "standard",
+    "skip_validation": false,
+    "test_creation_phase": "post_implementation",
+    "test_types_required": ["unit", "integration", "statistical"],
+    "security_scanning_required": false,
+    "staging_deployment_required": false,
+    "acceptance_criteria": [
+      "All existing tests pass",
+      "Confidence-accuracy correlation > 0.9",
+      "Mean absolute error < 10%",
+      "High-confidence detections have >90% actual accuracy",
+      "Visual indicators display correctly in UI"
+    ],
+    "verification_steps": [
+      {
+        "name": "Unit Tests - CV Service",
+        "command": "cd cv-service && python -m pytest test_confidence_calibration.py -v",
+        "expected_outcome": "All tests pass",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Unit Tests - Pips Agent",
+        "command": "cd pips-agent && python -m pytest test_ocr_confidence.py -v",
+        "expected_outcome": "All tests pass",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Statistical Validation",
+        "command": "cd cv-service && python validate_confidence.py --test-images test_images/ --ground-truth ground_truth.json",
+        "expected_outcome": "Correlation > 0.9, MAE < 10%",
+        "type": "validation",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "API Verification",
+        "command": "curl -X POST http://localhost:8080/crop-puzzle -F 'image=@test.jpg' | jq '.confidence, .confidence_breakdown, .threshold'",
+        "expected_outcome": "Response includes confidence, confidence_breakdown, threshold fields",
+        "type": "integration",
+        "required": true,
+        "blocking": true
+      }
+    ],
+    "reasoning": "Standard risk requires unit and integration tests. Statistical validation critical for accuracy claims."
+  },
+  "qa_acceptance": {
+    "unit_tests": {
+      "required": true,
+      "commands": [
+        "cd cv-service && python -m pytest test_confidence_calibration.py",
+        "cd pips-agent && python -m pytest test_ocr_confidence.py"
+      ],
+      "minimum_coverage": null
+    },
+    "integration_tests": {
+      "required": true,
+      "commands": [
+        "cd cv-service && python -m pytest test_e2e_extraction.py"
+      ],
+      "services_to_test": ["cv-service", "pips-agent", "pips-solver"]
+    },
+    "e2e_tests": {
+      "required": true,
+      "commands": [],
+      "flows": ["upload-image", "view-confidence", "validate-visual-indicators"]
+    },
+    "browser_verification": {
+      "required": true,
+      "pages": [
+        {
+          "url": "http://localhost:3000/",
+          "checks": ["confidence indicators visible", "color coding correct", "breakdown displayed"]
+        }
+      ]
+    },
+    "validation_tests": {
+      "required": true,
+      "statistical_validation": {
+        "correlation_threshold": 0.9,
+        "mae_threshold": 10,
+        "high_confidence_accuracy_threshold": 90
+      }
+    }
+  },
+  "qa_signoff": null
+}
