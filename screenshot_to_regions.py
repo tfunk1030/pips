@@ -2,7 +2,7 @@ import json
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Tuple, List, Dict
+from typing import Tuple, List, Dict, Optional
 
 import cv2
 import numpy as np
@@ -14,6 +14,37 @@ class Config:
     rows: int
     cols: int
     samples_per_cell: int = 9  # 3x3 samples
+
+
+def apply_meanshift_filtering(
+    img_bgr: np.ndarray,
+    spatial_radius: int = 10,
+    color_radius: int = 20
+) -> np.ndarray:
+    """
+    Apply pyrMeanShiftFiltering for edge-preserving color smoothing.
+
+    This preprocessing step makes colors more uniform within regions while
+    preserving edges between regions, improving subsequent clustering accuracy.
+
+    Args:
+        img_bgr: Input image in BGR format (OpenCV default)
+        spatial_radius: Spatial window radius - controls how far spatially to consider
+        color_radius: Color window radius - controls color difference tolerance
+
+    Returns:
+        Filtered image with smoothed colors and preserved edges
+    """
+    # pyrMeanShiftFiltering requires 8-bit, 3-channel image
+    if img_bgr.dtype != np.uint8:
+        img_bgr = img_bgr.astype(np.uint8)
+
+    filtered = cv2.pyrMeanShiftFiltering(
+        img_bgr,
+        sp=spatial_radius,
+        sr=color_radius
+    )
+    return filtered
 
 def sample_cell_color(img_bgr: np.ndarray, r: int, c: int, rows: int, cols: int, samples: int) -> np.ndarray:
     h, w = img_bgr.shape[:2]
@@ -77,6 +108,12 @@ def main():
     ap.add_argument("--config", default="shot_config.json", help="Config JSON with crop + rows/cols")
     ap.add_argument("--k", type=int, default=None, help="Number of color regions; if omitted, guesses")
     ap.add_argument("--out", default="regions_extracted.json", help="Output json")
+    ap.add_argument("--spatial-radius", type=int, default=10,
+                    help="Spatial window radius for meanshift filtering (default: 10)")
+    ap.add_argument("--color-radius", type=int, default=20,
+                    help="Color window radius for meanshift filtering (default: 20)")
+    ap.add_argument("--no-preprocess", action="store_true",
+                    help="Disable pyrMeanShiftFiltering preprocessing")
     args = ap.parse_args()
 
     cfg = json.loads(Path(args.config).read_text(encoding="utf-8"))
@@ -88,6 +125,16 @@ def main():
 
     x, y, w, h = cfg.board_crop
     board = img[y:y+h, x:x+w].copy()
+
+    # Apply pyrMeanShiftFiltering for edge-preserving color smoothing
+    # This makes colors more uniform within regions while preserving edges,
+    # improving clustering accuracy for complex layouts
+    if not args.no_preprocess:
+        board = apply_meanshift_filtering(
+            board,
+            spatial_radius=args.spatial_radius,
+            color_radius=args.color_radius
+        )
 
     # Collect one representative color per cell
     colors = []
