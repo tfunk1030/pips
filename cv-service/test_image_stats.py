@@ -485,27 +485,45 @@ def test_unit_white_image(calc_stats):
 
 
 # ============================================================================
-# Integration tests using FastAPI TestClient (when available)
+# Integration tests using httpx with ASGITransport (for newer httpx versions)
 # ============================================================================
-# These tests use the TestClient to test the full endpoint.
-# They will be skipped if TestClient import fails due to version issues.
+# These tests use httpx ASGITransport to test the full endpoint.
+# This approach works with httpx 0.28+ where TestClient API changed.
 
-# Try to import TestClient and app
-_client = None
+import httpx
+
+# Try to import the app
+_app = None
 try:
-    from starlette.testclient import TestClient
-    from main import app
-    _client = TestClient(app)
+    from main import app as _app
 except Exception:
     pass
 
 
 @pytest.fixture
 def client():
-    """Pytest fixture for TestClient."""
-    if _client is None:
-        pytest.skip("TestClient not available (import error or version mismatch)")
-    return _client
+    """Pytest fixture that provides an async httpx client."""
+    if _app is None:
+        pytest.skip("Could not import app from main")
+
+    class AsyncClientWrapper:
+        """Wrapper that runs async requests synchronously for tests."""
+
+        def __init__(self, app):
+            self.app = app
+
+        def post(self, url: str, json: dict = None):
+            """Make a POST request using async httpx."""
+            import asyncio
+
+            async def _request():
+                transport = httpx.ASGITransport(app=self.app)
+                async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+                    return await client.post(url, json=json)
+
+            return asyncio.run(_request())
+
+    return AsyncClientWrapper(_app)
 
 
 def test_valid_image_returns_metrics(client):
