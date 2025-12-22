@@ -581,6 +581,23 @@ def detect_pips_contours(
     return pip_count, valid_contours, detection_info
 
 
+def validate_pip_count(pip_count: int) -> bool:
+    """
+    Validate that a pip count is within valid domino range.
+
+    Standard dominoes have pips ranging from 0 (blank) to 6 on each half.
+    This function validates that a detected pip count is within this range.
+
+    Args:
+        pip_count: The detected number of pips to validate.
+
+    Returns:
+        True if pip_count is in range 0-6 (inclusive), False otherwise.
+        Blank dominoes (0 pips) are considered valid.
+    """
+    return 0 <= pip_count <= 6
+
+
 def detect_pips_hough_adaptive(
     image: np.ndarray,
     param2_range: Tuple[int, int, int] = (20, 40, 5),
