@@ -1288,6 +1288,9 @@ function ConstraintEditPanel({
               value={constraintValue}
               onChangeText={setConstraintValue}
               keyboardType="number-pad"
+              returnKeyType="done"
+              blurOnSubmit={true}
+              onSubmitEditing={handleSave}
               placeholder="0"
               placeholderTextColor={colors.text.tertiary}
               inputAccessoryViewID={Platform.OS === 'ios' ? CONSTRAINT_INPUT_ACCESSORY_ID : undefined}
