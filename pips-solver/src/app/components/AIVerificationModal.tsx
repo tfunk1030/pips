@@ -8,8 +8,10 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   Image,
+  InputAccessoryView,
   Keyboard,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -56,6 +58,9 @@ interface Props {
   /** Optional source image to show overlay comparison */
   sourceImage?: ImageInfo | null;
 }
+
+// Input accessory view ID for iOS number-pad keyboard "Done" button
+const CONSTRAINT_INPUT_ACCESSORY_ID = 'constraint-value-input-accessory';
 
 // Region color palette for visual diff (matches theme/tokens.ts)
 const REGION_COLORS = [
@@ -1285,9 +1290,25 @@ function ConstraintEditPanel({
               keyboardType="number-pad"
               placeholder="0"
               placeholderTextColor={colors.text.tertiary}
+              inputAccessoryViewID={Platform.OS === 'ios' ? CONSTRAINT_INPUT_ACCESSORY_ID : undefined}
             />
           </View>
         </View>
+      )}
+
+      {/* iOS keyboard accessory view with "Done" button */}
+      {Platform.OS === 'ios' && (
+        <InputAccessoryView nativeID={CONSTRAINT_INPUT_ACCESSORY_ID}>
+          <View style={constraintEditStyles.keyboardAccessory}>
+            <View style={constraintEditStyles.keyboardAccessoryFlex} />
+            <TouchableOpacity
+              style={constraintEditStyles.keyboardDoneButton}
+              onPress={() => Keyboard.dismiss()}
+            >
+              <Text style={constraintEditStyles.keyboardDoneText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </InputAccessoryView>
       )}
 
       {/* Action buttons */}
@@ -1449,6 +1470,28 @@ const constraintEditStyles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: colors.text.inverse,
+  },
+  // iOS keyboard accessory styles
+  keyboardAccessory: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface.graphite,
+    borderTopWidth: 1,
+    borderTopColor: colors.surface.ash,
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[2],
+  },
+  keyboardAccessoryFlex: {
+    flex: 1,
+  },
+  keyboardDoneButton: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+  },
+  keyboardDoneText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.accent.brass,
   },
 });
 
