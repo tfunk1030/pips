@@ -23,44 +23,112 @@ function getDominoPrompt(cells: CellDetectionResult): string {
   const cellCount = (cells.shape.match(/\./g) || []).length;
   const expectedDominoes = cellCount / 2;
 
-  return `Count the dominoes in the tray/reference area of this NYT Pips screenshot.
+  return `Analyze this NYT Pips puzzle screenshot and count the EXACT pips on each domino in the tray.
 
-EXPECTED DOMINO COUNT: ${expectedDominoes} (based on ${cellCount} grid cells)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EXPECTED DOMINO COUNT: ${expectedDominoes} dominoes (based on ${cellCount} grid cells)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-INSTRUCTIONS:
-1. Find the domino tray (usually at bottom or side of puzzle)
-2. Each domino has TWO halves with 0-6 pips (dots) each
-3. Count the pips on EACH half carefully
-4. List all dominoes as [left_pips, right_pips] pairs
+STEP-BY-STEP COUNTING METHOD:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-PIP COUNTING:
-- 0 pips = blank/empty half
-- 1-6 pips = count the dots carefully
-- Standard domino pip patterns:
-  - 1: center dot
-  - 2: diagonal corners
-  - 3: diagonal line
-  - 4: four corners
-  - 5: four corners + center
-  - 6: two columns of 3
+1. LOCATE THE DOMINO TRAY:
+   - Find the reference area showing available dominoes (usually at BOTTOM of screen)
+   - Dominoes are rectangular tiles split into two halves
+   - Each half contains 0-6 pips (dots)
 
-CRITICAL RULES:
-- You MUST find exactly ${expectedDominoes} dominoes
-- Each pip value must be 0-6
-- NYT uses UNIQUE dominoes (no duplicates like [3,3] and [3,3])
-- Order within domino doesn't matter ([2,5] = [5,2])
+2. COUNT DOMINOES LEFT-TO-RIGHT:
+   - Start from the LEFT-MOST domino
+   - Move RIGHT through each domino in sequence
+   - Make sure you count ALL ${expectedDominoes} dominoes
 
-Return ONLY valid JSON (no markdown, no explanation):
-{
-  "dominoes": [[0, 1], [2, 3], [4, 5], ...],
-  "confidence": 0.XX
-}
+3. FOR EACH DOMINO, COUNT BOTH HALVES:
+   - Look at the LEFT half first, count pips
+   - Look at the RIGHT half, count pips
+   - Record as [left_pips, right_pips]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PIP PATTERN VISUAL REFERENCE (memorize these patterns!):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+0 PIPS (blank):     1 PIP (center):     2 PIPS (diagonal):
+┌─────────┐         ┌─────────┐         ┌─────────┐
+│         │         │         │         │ ●       │
+│         │         │    ●    │         │         │
+│         │         │         │         │       ● │
+└─────────┘         └─────────┘         └─────────┘
+
+3 PIPS (diagonal):  4 PIPS (corners):   5 PIPS (corners+center):
+┌─────────┐         ┌─────────┐         ┌─────────┐
+│ ●       │         │ ●     ● │         │ ●     ● │
+│    ●    │         │         │         │    ●    │
+│       ● │         │ ●     ● │         │ ●     ● │
+└─────────┘         └─────────┘         └─────────┘
+
+6 PIPS (two columns of 3):
+┌─────────┐
+│ ●     ● │
+│ ●     ● │
+│ ●     ● │
+└─────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CRITICAL DISTINGUISHING FEATURES:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚠️ 5 vs 6 (MOST COMMON MISTAKE):
+   - 5: Has CENTER pip + 4 corners (forms an X pattern)
+   - 6: NO center pip, just 2 vertical columns of 3 (forms || pattern)
+
+⚠️ 3 vs 5:
+   - 3: Only 3 pips in a diagonal line (top-left to bottom-right)
+   - 5: 5 pips - 4 corners PLUS center dot
+
+⚠️ 2 vs 4:
+   - 2: Only 2 pips on opposite corners (diagonal)
+   - 4: 4 pips in ALL four corners
+
+⚠️ 0 vs hard-to-see:
+   - 0 (blank): Completely empty half, no dots at all
+   - If you see ANY dot, it's not zero
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+COMMON MISTAKES TO AVOID:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✗ DON'T confuse 5 and 6 - check for the CENTER dot!
+✗ DON'T miss blank (0) halves - they look completely empty
+✗ DON'T skip dominoes at the edges of the tray
+✗ DON'T count dominoes from the puzzle grid (only the tray!)
+✗ DON'T report duplicate dominoes (each domino is unique in NYT Pips)
+
+✓ DO count pips by looking for the CENTER first (odd numbers have center dots)
+✓ DO verify your total matches ${expectedDominoes} dominoes
+✓ DO check corners first for even-numbered pip counts (2, 4, 6)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+VERIFICATION CHECKLIST:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Before responding, verify:
+□ Found exactly ${expectedDominoes} dominoes
+□ Each domino has two values between 0-6
+□ No duplicate dominoes in your list
+□ Double-checked any 5s and 6s (center dot test)
+□ Double-checked any 0s (truly blank, not obscured)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RESPONSE FORMAT:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Return ONLY this JSON (no markdown, no explanation, no code blocks):
+{"dominoes": [[left1, right1], [left2, right2], ...], "confidence": 0.XX}
 
 Confidence scoring:
-- 0.95-1.00: All dominoes clearly visible, pips easy to count
-- 0.85-0.94: Most dominoes clear, 1-2 slightly blurry
-- 0.70-0.84: Some pip counts uncertain
-- Below 0.70: Multiple dominoes hard to read`;
+- 0.95-1.00: All pips crystal clear, 100% certain of all counts
+- 0.85-0.94: Very confident, maybe 1 domino slightly unclear
+- 0.70-0.84: Moderately confident, some pips hard to distinguish
+- Below 0.70: Low confidence, multiple unclear pip counts`;
 }
 
 // =============================================================================
@@ -75,41 +143,85 @@ function getRetryPrompt(
   const expectedDominoes = cellCount / 2;
 
   const attemptsStr = previousAttempts
-    .map((a, i) => `Attempt ${i + 1}: ${JSON.stringify(a.dominoes)} (${a.dominoes.length} dominoes)`)
+    .map((a, i) => `Model ${i + 1}: ${JSON.stringify(a.dominoes)} (${a.dominoes.length} dominoes)`)
     .join('\n');
 
-  return `Count dominoes in the tray area of this NYT Pips screenshot.
+  // Find disagreements between attempts for targeted guidance
+  const allDominoes = previousAttempts.flatMap(a => a.dominoes);
+  const has5or6 = allDominoes.some(([p1, p2]) => p1 >= 5 || p2 >= 5);
+  const has0 = allDominoes.some(([p1, p2]) => p1 === 0 || p2 === 0);
 
+  return `⚠️ RE-EXAMINE: Previous extractions disagreed on domino pip counts.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 EXPECTED: ${expectedDominoes} dominoes (for ${cellCount} cells)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-PREVIOUS ATTEMPTS DISAGREED:
+PREVIOUS RESULTS THAT DISAGREED:
 ${attemptsStr}
 
-Please look again MORE CAREFULLY:
-1. Focus on the DOMINO TRAY area (not the main grid)
-2. Count pips on EACH HALF of each domino
-3. Double-check counts: 5 and 6 are often confused
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PRECISE COUNTING TECHNIQUE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-COMMON MISTAKES:
-- Missing a domino in the corner
-- Confusing 5 pips with 6 pips
-- Counting the same domino twice
-- Missing blank (0) halves
+1. LOCATE THE DOMINO TRAY (bottom of screenshot, NOT the puzzle grid)
 
-PIP PATTERNS:
-- 0: empty
-- 1: single center dot
-- 2: two diagonal dots
-- 3: three diagonal dots
-- 4: four corner dots
-- 5: four corners + center
-- 6: six dots (2 columns of 3)
+2. COUNT EACH DOMINO ONE-BY-ONE:
+   For each domino, say to yourself:
+   "Domino 1: left half has ___ pips, right half has ___ pips"
+   "Domino 2: left half has ___ pips, right half has ___ pips"
+   ... and so on
 
-Return ONLY valid JSON:
-{
-  "dominoes": [[pip1, pip2], ...],
-  "confidence": 0.XX
-}`;
+3. USE THE CENTER DOT TEST:
+   - Look at the CENTER of the half first
+   - If there's a center dot: could be 1, 3, or 5
+   - If NO center dot: could be 0, 2, 4, or 6
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PIP PATTERN QUICK REFERENCE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+WITH CENTER DOT (odd):        WITHOUT CENTER DOT (even):
+• 1 = center only             • 0 = blank/empty
+• 3 = diagonal line           • 2 = two diagonal corners
+• 5 = X pattern (4+center)    • 4 = four corners
+                              • 6 = two columns (|| pattern)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${has5or6 ? `⚠️ SPECIAL ATTENTION - 5 vs 6 DETECTED IN PREVIOUS ATTEMPTS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+5 PIPS:                    6 PIPS:
+┌─────────┐                ┌─────────┐
+│ ●     ● │                │ ●     ● │
+│    ●    │  ← HAS CENTER  │ ●     ● │  ← NO CENTER
+│ ●     ● │                │ ●     ● │
+└─────────┘                └─────────┘
+
+KEY TEST: Is there a dot in the EXACT CENTER?
+  YES → It's 5 (X pattern)
+  NO  → It's 6 (|| pattern)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+` : ''}${has0 ? `⚠️ SPECIAL ATTENTION - BLANK (0) DETECTED IN PREVIOUS ATTEMPTS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+0 PIPS (blank) means COMPLETELY EMPTY - no dots at all.
+If you see even ONE dot, it's not zero!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+` : ''}CRITICAL REMINDERS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+• ONLY look at the domino tray (NOT the puzzle grid)
+• You must find EXACTLY ${expectedDominoes} dominoes
+• Each domino in NYT Pips is UNIQUE (no duplicate pairs)
+• Check EVERY domino, including ones at the edges
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Return ONLY this JSON (no markdown, no explanation):
+{"dominoes": [[left1, right1], [left2, right2], ...], "confidence": 0.XX}`;
 }
 
 // =============================================================================

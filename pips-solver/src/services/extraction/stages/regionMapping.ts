@@ -19,48 +19,124 @@ import { callAllModels } from '../apiClient';
 // =============================================================================
 
 function getRegionMappingPrompt(grid: GridGeometryResult, cells: CellDetectionResult): string {
-  return `Given this NYT Pips puzzle grid, identify the distinct colored regions.
+  return `Analyze this NYT Pips puzzle screenshot and identify ALL distinct colored regions.
 
-GRID SHAPE (${grid.rows}x${grid.cols}):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+GRID SHAPE (${grid.rows}×${grid.cols}):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 ${cells.shape}
 (where '.' = cell, '#' = hole)
 
-INSTRUCTIONS:
-1. Each distinct background COLOR is a separate region
-2. Assign labels A, B, C, D... to each region (in reading order, top-left to bottom-right)
-3. Build a regions string matching the shape dimensions exactly
-4. Use '#' for holes (same positions as the shape above)
-5. Use A-Z letters for cell positions based on their color
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP-BY-STEP REGION IDENTIFICATION:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-COMMON NYT COLORS:
-- Pink, Coral, Orange, Peach/Tan
-- Teal, Cyan, Light Blue
-- Gray, Olive, Green, Purple
+1. SCAN FOR DISTINCT COLORS:
+   - Look at each cell's BACKGROUND color (ignore grid lines, numbers, diamonds)
+   - Mentally note each unique color you see
+   - NYT Pips typically uses 4-8 distinct colors per puzzle
 
-EXAMPLE:
-Shape:      Regions:
-##....      ##AABB
-......      CCAABB
-......      CCDDEE
-......      FFDDEE
-....##      FFGG##
+2. IDENTIFY REGION BOUNDARIES:
+   - Regions are groups of adjacent cells sharing the SAME color
+   - Regions can be any shape (L-shaped, rectangular, irregular)
+   - Regions are typically 2-6 cells in size
+   - Look for color TRANSITIONS at cell borders
+
+3. ASSIGN LABELS IN READING ORDER:
+   - Start at TOP-LEFT corner
+   - First new color encountered = Region A
+   - Second new color = Region B, etc.
+   - Continue left-to-right, top-to-bottom
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+NYT PIPS COLOR PALETTE - LEARN TO DISTINGUISH:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+WARM COLORS (often confused with each other):
+┌──────────────────────────────────────────────────────────────────────┐
+│ PINK/CORAL    - Vibrant red-pink, saturated, warm tone              │
+│ PEACH/SALMON  - Lighter, more orange-pink, pastel-ish               │
+│ ORANGE        - True orange, clearly more yellow than pink          │
+│ TAN/BEIGE     - Muted, brownish-yellow, desaturated                 │
+└──────────────────────────────────────────────────────────────────────┘
+
+COOL COLORS (often confused with each other):
+┌──────────────────────────────────────────────────────────────────────┐
+│ TEAL          - Blue-green, darker, more saturated                  │
+│ CYAN/AQUA     - Bright blue-green, lighter than teal                │
+│ LIGHT BLUE    - Pure blue, no green tint                            │
+│ MINT GREEN    - Very pale green with blue undertone                 │
+└──────────────────────────────────────────────────────────────────────┘
+
+NEUTRAL & OTHER COLORS:
+┌──────────────────────────────────────────────────────────────────────┐
+│ GRAY          - Neutral, no color tint                              │
+│ OLIVE         - Muddy yellow-green, brownish                        │
+│ GREEN         - True green, clearly not olive or teal               │
+│ PURPLE/MAUVE  - Pink-purple, clearly different from pink            │
+│ YELLOW        - Bright, warm, clearly not tan/beige                 │
+└──────────────────────────────────────────────────────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+VISUAL EXAMPLES:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Example 1 - Standard 5x5 puzzle with 6 regions:
+Shape:        Colors seen:          Regions:
+.....         🟠🟠🔵🔵🟢            AABBC
+.....         🟠🟠🔵🔵🟢            AABBC
+.....         🟣🟣🟡🟡🟢     →      DDEEC
+.....         🟣🟣🟡🟡🟢            DDEEC
+.....         🔴🔴🔴🟢🟢            FFFCC
+
+Example 2 - Puzzle with holes (corners cut):
+Shape:        Regions:
+##...         ##ABB
+.....         CCABB
+.....    →    CCDDD
+.....         EEDDD
+...##         EEF##
+
+Example 3 - Similar colors MUST be distinguished:
+If you see pink AND coral in same puzzle → They are DIFFERENT regions!
+If you see teal AND cyan in same puzzle → They are DIFFERENT regions!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+COMMON MISTAKES TO AVOID:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✗ DON'T merge similar colors (pink ≠ coral, teal ≠ cyan, tan ≠ yellow)
+✗ DON'T confuse grid lines or shadows with region boundaries
+✗ DON'T ignore subtle color differences at boundaries
+✗ DON'T assume regions are rectangular - they can be L-shaped or irregular
+✗ DON'T count diamonds, numbers, or symbols as separate colors
+
+✓ DO look at the FILL/BACKGROUND color of each cell
+✓ DO trace region boundaries by following color changes
+✓ DO compare adjacent cells directly to see color differences
+✓ DO maintain consistent labeling (same color = same letter everywhere)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OUTPUT REQUIREMENTS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 CRITICAL RULES:
-- Output EXACTLY ${grid.rows} lines with ${grid.cols} characters each
-- '#' positions MUST match the shape above exactly
-- Every '.' in shape becomes a letter (A-Z) in regions
-- Adjacent cells with SAME color get SAME letter
-- Adjacent cells with DIFFERENT colors get DIFFERENT letters
-- Each region should have at least 2 cells
+• Output EXACTLY ${grid.rows} lines with ${grid.cols} characters each
+• '#' positions MUST match the shape above exactly
+• Every '.' in shape becomes a letter (A-Z) in regions
+• Same color = Same letter (no matter where on the grid)
+• Different colors = Different letters (even if similar shades)
+• Each region typically has 2-6 cells (single-cell regions are rare)
 
-Return ONLY valid JSON (no markdown, no explanation):
+Return ONLY this JSON (no markdown, no explanation, no code blocks):
 {"regions": "line1\\nline2\\n...", "confidence": 0.XX}
 
 Confidence scoring:
-- 0.95-1.00: All region boundaries perfectly clear
-- 0.85-0.94: Very confident, colors distinct
-- 0.70-0.84: Some color boundaries ambiguous
-- Below 0.70: Multiple regions unclear`;
+- 0.95-1.00: All region boundaries crystal clear, colors very distinct
+- 0.85-0.94: Very confident, only minor ambiguity at 1-2 boundaries
+- 0.70-0.84: Some color boundaries ambiguous, similar colors present
+- Below 0.70: Multiple similar colors, several boundaries unclear`;
 }
 
 // =============================================================================
@@ -76,27 +152,83 @@ function getRetryPrompt(
     .map((a, i) => `Attempt ${i + 1}:\n${a.regions}`)
     .join('\n\n');
 
-  return `Given this NYT Pips puzzle grid, identify the colored regions.
+  // Analyze previous attempts to detect potential issues
+  const allRegions = previousAttempts.map(a => a.regions);
+  const regionCounts = allRegions.map(r => new Set(r.replace(/[#\n]/g, '')).size);
+  const avgRegions = regionCounts.length > 0
+    ? Math.round(regionCounts.reduce((a, b) => a + b, 0) / regionCounts.length)
+    : 0;
 
-GRID SHAPE (${grid.rows}x${grid.cols}):
+  // Check if models are finding different numbers of regions
+  const regionCountsVary = regionCounts.length > 1 &&
+    Math.max(...regionCounts) - Math.min(...regionCounts) > 0;
+
+  const colorHint = regionCountsVary
+    ? `\n⚠️ Models found different numbers of regions (${Math.min(...regionCounts)}-${Math.max(...regionCounts)}).
+   This often happens when SIMILAR COLORS are being merged or split incorrectly!`
+    : '';
+
+  return `⚠️ RE-EXAMINE: Previous extractions disagreed on region boundaries.
+
+GRID SHAPE (${grid.rows}×${grid.cols}):
 ${cells.shape}
 
-PREVIOUS ATTEMPTS DISAGREED:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PREVIOUS ATTEMPTS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${attemptsStr}
+${colorHint}
 
-Please look again MORE CAREFULLY:
-1. Focus on BACKGROUND COLORS, not the grid lines
-2. Similar but different colors (coral vs pink, teal vs cyan) ARE different regions
-3. Each letter = one continuous region of the SAME color
-4. Regions do NOT need to be rectangular
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PRECISE COLOR COMPARISON TECHNIQUE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+For EACH pair of adjacent cells, ask yourself:
+
+1. SATURATION TEST: Is one cell more "washed out" or more "vibrant"?
+   → Different saturation = DIFFERENT regions
+
+2. HUE TEST: Are the colors in different "families"?
+   → Pink vs Orange vs Yellow = DIFFERENT regions
+   → Teal vs Blue vs Green = DIFFERENT regions
+
+3. BRIGHTNESS TEST: Is one clearly lighter or darker?
+   → Light blue vs Dark blue = SAME region (usually)
+   → Light pink vs Coral = DIFFERENT regions (check hue too!)
+
+COMMONLY CONFUSED COLOR PAIRS - PAY CLOSE ATTENTION:
+┌────────────────────────────────────────────────────────────────────────────┐
+│ PINK vs CORAL      - Both warm, but coral has MORE ORANGE                 │
+│ PINK vs PEACH      - Peach is LIGHTER and more PASTEL                     │
+│ TEAL vs CYAN       - Teal is DARKER and more GREEN-shifted                │
+│ TEAL vs BLUE       - Teal has GREEN, blue does not                        │
+│ OLIVE vs GREEN     - Olive is MUDDY/BROWN, green is BRIGHT                │
+│ TAN vs YELLOW      - Tan is MUTED/BROWN, yellow is BRIGHT                 │
+│ GRAY vs BLUE-GRAY  - Blue-gray has slight blue tint                       │
+└────────────────────────────────────────────────────────────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SYSTEMATIC RE-CHECK:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Count total distinct colors: "I see __ different colors"
+2. For each row, identify colors: "Row 1 has: [color], [color], [color]..."
+3. Cross-check adjacent cells: "Does cell (2,3) match cell (2,4)? YES/NO"
+4. Build region map one row at a time
+
+NYT puzzles typically have ${avgRegions > 0 ? `around ${avgRegions}` : '4-8'} distinct regions.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 VALIDATION RULES:
-- Exactly ${grid.rows} lines, ${grid.cols} characters each
-- '#' must match shape positions exactly
-- Only A-Z letters for cells (no numbers, no '.')
-- Each region needs at least 2 cells
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Return ONLY valid JSON:
+• Exactly ${grid.rows} lines, ${grid.cols} characters each
+• '#' must match shape positions exactly
+• Only A-Z letters for cells (no numbers, no '.')
+• Each region needs at least 2 cells (single-cell regions are very rare)
+• Same color ANYWHERE = Same letter (consistency is key!)
+
+Return ONLY this JSON (no markdown, no explanation):
 {"regions": "line1\\nline2\\n...", "confidence": 0.XX}`;
 }
 

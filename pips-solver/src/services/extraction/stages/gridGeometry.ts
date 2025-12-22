@@ -5,7 +5,7 @@
  * Uses 3-model ensemble with consensus voting.
  */
 
-import { ExtractionConfig, GridGeometryResult, ModelResponse } from '../types';
+import { ExtractionConfig, GridGeometryResult, GridLocation, ModelResponse } from '../types';
 import { callAllModels } from '../apiClient';
 import { NYT_VALIDATION } from '../config';
 
@@ -13,30 +13,113 @@ import { NYT_VALIDATION } from '../config';
 // Prompt Template
 // =============================================================================
 
-const GRID_GEOMETRY_PROMPT = `Count the puzzle grid dimensions in this NYT Pips screenshot.
+const GRID_GEOMETRY_PROMPT = `Analyze this NYT Pips puzzle screenshot and count the EXACT grid dimensions.
 
-INSTRUCTIONS:
-1. Look at the main puzzle grid (colored cells arranged in rows and columns)
-2. Count ROWS: horizontal lines of cells from top to bottom
-3. Count COLS: vertical columns from left to right
-4. Include holes (empty/dark positions within the grid bounds) in your count
-5. Do NOT count the domino tray area - only the main puzzle grid
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP-BY-STEP COUNTING METHOD:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-NYT Pips grids are typically 4-8 rows and 4-8 columns.
+1. LOCATE THE PUZZLE GRID:
+   - Find the main rectangular area with colored cells (NOT the domino tray at bottom)
+   - The puzzle grid has cells in various colors (green, pink, yellow, blue, etc.)
+   - Each cell may contain a small diamond with a number or symbol
 
-IMPORTANT:
-- Count grid LINES, not just visible colored cells
-- A 6x5 grid has 6 rows and 5 columns
-- Holes count as grid positions
+2. COUNT ROWS (horizontal lines, top to bottom):
+   - Start at the TOP of the grid
+   - Count each horizontal level of cells going DOWN
+   - Include rows even if they have holes/gaps (dark empty squares)
 
-Return ONLY valid JSON (no markdown, no explanation):
-{"rows": N, "cols": M, "confidence": 0.XX}
+   Example of a 5-row grid:
+   ┌─┬─┬─┬─┐  ← Row 1
+   ├─┼─┼─┼─┤  ← Row 2
+   ├─┼─┼─┼─┤  ← Row 3
+   ├─┼─┼─┼─┤  ← Row 4
+   └─┴─┴─┴─┘  ← Row 5
+
+3. COUNT COLUMNS (vertical lines, left to right):
+   - Start at the LEFT of the grid
+   - Count each vertical column going RIGHT
+   - Include columns even if they have holes/gaps
+
+   Example of a 4-column grid:
+   ↓ ↓ ↓ ↓
+   1 2 3 4 (columns)
+   ┌─┬─┬─┬─┐
+   │ │ │ │ │
+   └─┴─┴─┴─┘
+
+4. HANDLE HOLES/IRREGULAR SHAPES:
+   - Holes are dark/black empty squares WITHIN the grid boundary
+   - Holes still count as grid positions!
+
+   Example - This is still a 4×5 grid (4 rows, 5 cols):
+   ┌─┬─┬─┬─┬─┐
+   │▓│ │ │ │▓│  ← Row 1 (has 2 holes at corners)
+   │ │ │ │ │ │  ← Row 2
+   │ │ │ │ │ │  ← Row 3
+   │▓│ │ │ │▓│  ← Row 4 (has 2 holes at corners)
+   └─┴─┴─┴─┴─┘
+   (▓ = hole, counts as grid position)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+COMMON MISTAKES TO AVOID:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✗ DON'T count only visible/colored cells (holes are positions too!)
+✗ DON'T include the domino tray (row of dominoes shown below the puzzle)
+✗ DON'T confuse grid lines with cell content
+✗ DON'T count constraint symbols or numbers as additional cells
+
+✓ DO count from the outermost boundaries of the puzzle grid
+✓ DO include corner holes in your dimension count
+✓ DO verify by multiplying: rows × cols should roughly match visible cells + holes
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EXPECTED RANGES:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+- NYT Pips puzzles typically have 4-8 rows and 4-8 columns
+- Common sizes: 5×5, 6×5, 5×6, 6×6, 7×5, 5×7
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+GRID LOCATION (IMPORTANT for overlay alignment):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Estimate the pixel boundaries of the puzzle grid in the image:
+- left: X coordinate of the LEFT edge of the leftmost column
+- top: Y coordinate of the TOP edge of the topmost row
+- right: X coordinate of the RIGHT edge of the rightmost column
+- bottom: Y coordinate of the BOTTOM edge of the bottommost row
+- imageWidth: Full width of the image in pixels
+- imageHeight: Full height of the image in pixels
+
+The puzzle grid typically occupies the upper 60-70% of a screenshot.
+Estimate based on visual proportions (e.g., if grid starts at ~5% from left and ends at ~95%, and image looks like 1200px wide, left=60, right=1140).
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RESPONSE FORMAT:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Return ONLY this JSON (no markdown, no explanation, no code blocks):
+{
+  "rows": N,
+  "cols": M,
+  "confidence": 0.XX,
+  "gridLocation": {
+    "left": <pixels>,
+    "top": <pixels>,
+    "right": <pixels>,
+    "bottom": <pixels>,
+    "imageWidth": <pixels>,
+    "imageHeight": <pixels>
+  }
+}
 
 Confidence scoring:
-- 0.95-1.00: Grid lines perfectly clear, certain of count
-- 0.85-0.94: Very confident, minor ambiguity
-- 0.70-0.84: Moderately confident, some cells unclear
-- Below 0.70: Low confidence, grid partially obscured`;
+- 0.95-1.00: Grid boundaries crystal clear, 100% certain of count
+- 0.85-0.94: Very confident, only minor visual ambiguity
+- 0.70-0.84: Moderately confident, some edges unclear
+- Below 0.70: Low confidence, significant uncertainty`;
 
 // =============================================================================
 // Retry Prompt (with clarification)
@@ -44,31 +127,111 @@ Confidence scoring:
 
 function getRetryPrompt(previousAttempts: GridGeometryResult[]): string {
   const attemptsStr = previousAttempts
-    .map((a, i) => `Attempt ${i + 1}: ${a.rows}x${a.cols}`)
+    .map((a, i) => `Model ${i + 1}: ${a.rows}×${a.cols}`)
     .join(', ');
 
-  return `Count the puzzle grid dimensions in this NYT Pips screenshot.
+  // Calculate if there's a close disagreement (off by 1)
+  const rows = previousAttempts.map(a => a.rows);
+  const cols = previousAttempts.map(a => a.cols);
+  const rowRange = rows.length > 0 ? Math.max(...rows) - Math.min(...rows) : 0;
+  const colRange = cols.length > 0 ? Math.max(...cols) - Math.min(...cols) : 0;
 
-PREVIOUS ATTEMPTS DISAGREED: ${attemptsStr}
+  const offByOneHint = (rowRange === 1 || colRange === 1)
+    ? `\n⚠️ Models differ by just 1 - VERY carefully verify the boundary edges!`
+    : '';
 
-Please look again MORE CAREFULLY:
-1. Count grid LINES/POSITIONS, not just colored cells
-2. Include any dark/empty holes within the grid bounds
-3. The grid boundary is where colored cells stop
-4. Do NOT count the domino reference tray
+  return `⚠️ RE-EXAMINE: Previous extractions disagreed on grid dimensions.
 
-Tips:
-- If you see 5 rows of cells but one row has a gap, it's still 5 rows
-- Count the MAXIMUM width/height of the grid area
-- NYT grids are typically 4-8 in each dimension
+PREVIOUS RESULTS: ${attemptsStr}${offByOneHint}
 
-Return ONLY valid JSON:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PRECISE COUNTING TECHNIQUE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. IDENTIFY GRID BOUNDARIES:
+   - Find the TOP-MOST row of cells (may have holes at corners)
+   - Find the BOTTOM-MOST row of cells
+   - Find the LEFT-MOST column of cells
+   - Find the RIGHT-MOST column of cells
+
+2. COUNT SYSTEMATICALLY:
+   ROWS: Point to each horizontal row from top to bottom, count aloud:
+         "Row 1... Row 2... Row 3..." etc.
+
+   COLS: Point to each vertical column from left to right, count aloud:
+         "Col 1... Col 2... Col 3..." etc.
+
+3. VERIFY YOUR COUNT:
+   - A ${Math.min(...rows)}×${Math.min(...cols)} grid has ${Math.min(...rows) * Math.min(...cols)} total positions
+   - A ${Math.max(...rows)}×${Math.max(...cols)} grid has ${Math.max(...rows) * Math.max(...cols)} total positions
+   - Which matches the actual grid better when counting cells + holes?
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CRITICAL REMINDERS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+• Holes (black/dark squares) ARE grid positions - count them!
+• The domino tray below the puzzle is NOT part of the grid
+• Corner holes still define the grid boundary
+
+Example - Both outer edges have holes, but it's still 6×5:
+  ┌─┬─┬─┬─┬─┐
+  │▓│ │ │ │▓│  ← Still Row 1
+  │ │ │ │ │ │
+  │ │ │ │ │ │
+  │ │ │ │ │ │
+  │ │ │ │ │ │
+  │▓│ │ │ │▓│  ← Still Row 6
+  └─┴─┴─┴─┴─┘
+   ↑         ↑
+  Col 1    Col 5
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Return ONLY this JSON (no markdown, no explanation):
 {"rows": N, "cols": M, "confidence": 0.XX}`;
 }
 
 // =============================================================================
 // Response Parser
 // =============================================================================
+
+function parseGridLocation(loc: any): GridLocation | undefined {
+  if (!loc || typeof loc !== 'object') {
+    return undefined;
+  }
+
+  // Validate all required fields are present and numeric
+  if (
+    typeof loc.left !== 'number' ||
+    typeof loc.top !== 'number' ||
+    typeof loc.right !== 'number' ||
+    typeof loc.bottom !== 'number' ||
+    typeof loc.imageWidth !== 'number' ||
+    typeof loc.imageHeight !== 'number'
+  ) {
+    return undefined;
+  }
+
+  // Validate reasonable values
+  if (
+    loc.left < 0 || loc.top < 0 ||
+    loc.right <= loc.left || loc.bottom <= loc.top ||
+    loc.imageWidth <= 0 || loc.imageHeight <= 0 ||
+    loc.right > loc.imageWidth || loc.bottom > loc.imageHeight
+  ) {
+    return undefined;
+  }
+
+  return {
+    left: Math.round(loc.left),
+    top: Math.round(loc.top),
+    right: Math.round(loc.right),
+    bottom: Math.round(loc.bottom),
+    imageWidth: Math.round(loc.imageWidth),
+    imageHeight: Math.round(loc.imageHeight),
+  };
+}
 
 function parseGridResponse(content: string): GridGeometryResult | null {
   try {
@@ -97,10 +260,14 @@ function parseGridResponse(content: string): GridGeometryResult | null {
       return null;
     }
 
+    // Parse optional gridLocation
+    const gridLocation = parseGridLocation(parsed.gridLocation);
+
     return {
       rows: Math.round(parsed.rows),
       cols: Math.round(parsed.cols),
       confidence: Math.min(1, Math.max(0, parsed.confidence)),
+      gridLocation,
     };
   } catch {
     return null;

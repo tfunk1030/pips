@@ -8,6 +8,9 @@ export {
   validateGridGeometry,
   validateCellDetection,
   checkRotationMismatch,
+  crossValidateGridAndCells,
+  compareCellDetections,
+  validateGridConsensus,
 } from './gridValidator';
 
 export {

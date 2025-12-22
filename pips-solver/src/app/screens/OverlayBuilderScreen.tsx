@@ -12,8 +12,10 @@ import Animated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated'
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   AIExtractionResult,
+  BoardExtractionResult,
   BuilderStep,
   createInitialBuilderState,
+  DominoExtractionResult,
 } from '../../model/overlayTypes';
 import {
   convertAIResultToBuilderState,
@@ -37,6 +39,100 @@ import Step3Constraints from './builder/Step3Constraints';
 import Step4Dominoes from './builder/Step4Dominoes';
 
 // ════════════════════════════════════════════════════════════════════════════
+// Confidence Thresholds
+// ════════════════════════════════════════════════════════════════════════════
+
+/** Overall confidence threshold below which user verification is strongly recommended */
+const LOW_CONFIDENCE_THRESHOLD = 0.70;
+
+/** Per-stage confidence threshold below which warnings are shown */
+const STAGE_CONFIDENCE_THRESHOLD = 0.60;
+
+/** Critical threshold below which extraction should be flagged as potentially unreliable */
+const CRITICAL_CONFIDENCE_THRESHOLD = 0.45;
+
+// ════════════════════════════════════════════════════════════════════════════
+// Confidence Analysis Helpers
+// ════════════════════════════════════════════════════════════════════════════
+
+interface ConfidenceAnalysis {
+  overallConfidence: number;
+  isLowConfidence: boolean;
+  isCriticalConfidence: boolean;
+  warnings: string[];
+  lowConfidenceStages: string[];
+}
+
+/**
+ * Analyze extraction confidence and generate user-friendly warnings
+ */
+function analyzeExtractionConfidence(result: AIExtractionResult): ConfidenceAnalysis {
+  const boardConf = result.board.confidence;
+  const dominoConf = result.dominoes.confidence;
+
+  const warnings: string[] = [];
+  const lowConfidenceStages: string[] = [];
+
+  // Calculate overall confidence (weighted average)
+  const confidenceValues: number[] = [];
+
+  if (boardConf?.grid !== undefined) {
+    confidenceValues.push(boardConf.grid);
+    if (boardConf.grid < STAGE_CONFIDENCE_THRESHOLD) {
+      lowConfidenceStages.push('Grid dimensions');
+      warnings.push(`Grid detection is uncertain (${Math.round(boardConf.grid * 100)}%)`);
+    }
+  }
+
+  if (boardConf?.regions !== undefined) {
+    confidenceValues.push(boardConf.regions);
+    if (boardConf.regions < STAGE_CONFIDENCE_THRESHOLD) {
+      lowConfidenceStages.push('Region mapping');
+      warnings.push(`Region colors may be incorrect (${Math.round(boardConf.regions * 100)}%)`);
+    }
+  }
+
+  if (boardConf?.constraints !== undefined) {
+    confidenceValues.push(boardConf.constraints);
+    if (boardConf.constraints < STAGE_CONFIDENCE_THRESHOLD) {
+      lowConfidenceStages.push('Constraint values');
+      warnings.push(`Constraint values may need verification (${Math.round(boardConf.constraints * 100)}%)`);
+    }
+  }
+
+  if (dominoConf !== undefined) {
+    confidenceValues.push(dominoConf);
+    if (dominoConf < STAGE_CONFIDENCE_THRESHOLD) {
+      lowConfidenceStages.push('Domino pips');
+      warnings.push(`Domino pip counts may be inaccurate (${Math.round(dominoConf * 100)}%)`);
+    }
+  }
+
+  // Calculate overall confidence
+  const overallConfidence = confidenceValues.length > 0
+    ? confidenceValues.reduce((sum, val) => sum + val, 0) / confidenceValues.length
+    : 0;
+
+  const isLowConfidence = overallConfidence < LOW_CONFIDENCE_THRESHOLD;
+  const isCriticalConfidence = overallConfidence < CRITICAL_CONFIDENCE_THRESHOLD;
+
+  // Add overall warning if low confidence
+  if (isCriticalConfidence) {
+    warnings.unshift('⚠️ Extraction quality is very low - manual review strongly recommended');
+  } else if (isLowConfidence) {
+    warnings.unshift('Some elements may need correction');
+  }
+
+  return {
+    overallConfidence,
+    isLowConfidence,
+    isCriticalConfidence,
+    warnings,
+    lowConfidenceStages,
+  };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // Component
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -57,6 +153,17 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
   const [puzzleName, setPuzzleName] = useState('');
   const [aiProgress, setAIProgress] = useState<string | null>(null);
   const [pendingAIResult, setPendingAIResult] = useState<AIExtractionResult | null>(null);
+
+  // Per-stage confidence tracking during extraction
+  const [stageConfidence, setStageConfidence] = useState<{
+    board?: number;
+    dominoes?: number;
+    currentStage?: string;
+  }>({});
+
+  // Low confidence warning state
+  const [confidenceAnalysis, setConfidenceAnalysis] = useState<ConfidenceAnalysis | null>(null);
+  const [showLowConfidenceWarning, setShowLowConfidenceWarning] = useState(false);
 
   // Load draft if provided
   useEffect(() => {
@@ -256,6 +363,8 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
       ensemble: 'Maximum Accuracy',
     };
     setAIProgress(`Starting ${strategyNames[strategy]} extraction...`);
+    // Reset stage confidence for new extraction
+    setStageConfidence({});
 
     const hasCVService = !!settings.cvServiceUrl?.trim();
     const result = await extractPuzzleMultiModel(state.image.base64, {
@@ -271,6 +380,22 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
       onProgress: (progress: EnsembleProgress) => {
         const modelInfo = progress.modelsUsed?.length ? ` (${progress.modelsUsed.join(', ')})` : '';
         setAIProgress(`${progress.message}${modelInfo}`);
+
+        // Update per-stage confidence as extraction progresses
+        setStageConfidence(prev => {
+          const updated = { ...prev, currentStage: progress.step };
+
+          // Track confidence when stages complete
+          if (progress.confidence !== undefined) {
+            if (progress.step === 'board_verification' || progress.step === 'board_secondary') {
+              updated.board = progress.confidence;
+            } else if (progress.step === 'dominoes_secondary' || progress.step === 'cross_validation') {
+              updated.dominoes = progress.confidence;
+            }
+          }
+
+          return updated;
+        });
       },
     });
 
@@ -304,11 +429,57 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
         );
       }
 
+      // Analyze confidence and determine if warnings are needed
+      const analysis = analyzeExtractionConfidence(result.result);
+      setConfidenceAnalysis(analysis);
+
+      console.log('[DEBUG] Confidence analysis:', {
+        overallConfidence: Math.round(analysis.overallConfidence * 100),
+        isLowConfidence: analysis.isLowConfidence,
+        isCriticalConfidence: analysis.isCriticalConfidence,
+        lowConfidenceStages: analysis.lowConfidenceStages,
+        warningCount: analysis.warnings.length,
+      });
+
       setAIProgress(null);
+      setStageConfidence({});
       setPendingAIResult(result.result);
+
+      // Show low confidence warning alert if needed
+      if (analysis.isCriticalConfidence) {
+        // Critical confidence: show warning alert before verification modal
+        Alert.alert(
+          '⚠️ Low Confidence Extraction',
+          `The AI extraction quality is low (${Math.round(analysis.overallConfidence * 100)}%).\n\n` +
+          `Issues detected:\n${analysis.warnings.slice(0, 3).map(w => `• ${w}`).join('\n')}\n\n` +
+          'Please carefully review and correct the results in the verification screen.',
+          [
+            {
+              text: 'Review Results',
+              style: 'default',
+            },
+          ]
+        );
+      } else if (analysis.isLowConfidence) {
+        // Low confidence: show notice that review is recommended
+        Alert.alert(
+          'Review Recommended',
+          `Extraction confidence: ${Math.round(analysis.overallConfidence * 100)}%\n\n` +
+          (analysis.lowConfidenceStages.length > 0
+            ? `Please verify: ${analysis.lowConfidenceStages.join(', ')}`
+            : 'Some elements may need correction.'),
+          [
+            {
+              text: 'Review Now',
+              style: 'default',
+            },
+          ]
+        );
+      }
     } else {
       dispatch({ type: 'AI_ERROR', error: result.error || 'Unknown error' });
       setAIProgress(null);
+      setStageConfidence({});
 
       let errorMsg = result.error || 'Failed to extract puzzle data';
       let helpText = '';
@@ -331,12 +502,28 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
     }
   }, [state.image, navigation]);
 
-  const handleAcceptAIResult = useCallback(() => {
+  const handleAcceptAIResult = useCallback((
+    editedBoard?: BoardExtractionResult,
+    editedDominoes?: DominoExtractionResult
+  ) => {
     if (!pendingAIResult) return;
 
-    const converted = convertAIResultToBuilderState(pendingAIResult);
-    const boardConf = pendingAIResult.board.confidence;
-    const dominoConf = pendingAIResult.dominoes.confidence;
+    // Use edited versions if provided, otherwise use original
+    const boardToUse = editedBoard || pendingAIResult.board;
+    const dominoesToUse = editedDominoes || pendingAIResult.dominoes;
+
+    // Create a merged result for conversion
+    const resultToConvert: AIExtractionResult = {
+      board: boardToUse,
+      dominoes: dominoesToUse,
+      reasoning: pendingAIResult.reasoning,
+    };
+
+    const converted = convertAIResultToBuilderState(resultToConvert);
+    const boardConf = boardToUse.confidence;
+    const dominoConf = dominoesToUse.confidence;
+
+    const hasEdits = editedBoard !== undefined || editedDominoes !== undefined;
 
     dispatch({
       type: 'AI_SUCCESS',
@@ -344,7 +531,7 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
       regions: converted.regions,
       constraints: converted.constraints,
       dominoes: converted.dominoes,
-      reasoning: pendingAIResult.reasoning,
+      reasoning: pendingAIResult.reasoning + (hasEdits ? ' [User corrections applied]' : ''),
       confidence: {
         grid: boardConf?.grid,
         regions: boardConf?.regions,
@@ -353,14 +540,22 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
       },
     });
 
-    console.log('[DEBUG] Accepted and applied AI result');
+    console.log('[DEBUG] Accepted and applied AI result', {
+      hasEdits,
+      editedBoard: !!editedBoard,
+      editedDominoes: !!editedDominoes,
+    });
+
+    // Clear all pending state
     setPendingAIResult(null);
+    setConfidenceAnalysis(null);
     dispatch({ type: 'SET_STEP', step: 2 });
   }, [pendingAIResult]);
 
   const handleRejectAIResult = useCallback(() => {
     console.log('[DEBUG] User rejected AI result');
     setPendingAIResult(null);
+    setConfidenceAnalysis(null);
     Alert.alert(
       'Extraction Rejected',
       'You can manually build the puzzle using the step-by-step wizard.'
@@ -464,6 +659,7 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
             onPickNewImage={pickImage}
             onAIExtract={handleAIExtract}
             aiProgress={aiProgress}
+            stageConfidence={stageConfidence}
           />
         );
       case 2:
@@ -598,6 +794,7 @@ export default function OverlayBuilderScreen({ navigation, route }: Props) {
           dominoResult={pendingAIResult.dominoes}
           onAccept={handleAcceptAIResult}
           onReject={handleRejectAIResult}
+          sourceImage={state.image}
         />
       )}
     </SafeAreaView>

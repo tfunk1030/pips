@@ -29,33 +29,125 @@ function getConstraintPrompt(regions: RegionMappingResult): string {
   }
   const regionLabels = Array.from(labels).sort().join(', ');
 
-  return `Given this NYT Pips puzzle, extract the constraints for each region.
+  return `Analyze this NYT Pips puzzle and extract the constraints for each colored region.
 
-REGIONS FOUND: ${regionLabels}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REGIONS TO FIND CONSTRAINTS FOR: ${regionLabels}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-REGIONS MAP:
+REGIONS MAP (for reference):
 ${regions.regions}
 
-CONSTRAINT TYPES IN NYT PIPS:
-1. SUM constraints - diamond shape with a number (e.g., ◇12)
-   - "==" means sum must equal the value
-   - "<" means sum must be less than the value
-   - ">" means sum must be greater than the value
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DIAMOND LABEL IDENTIFICATION GUIDE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-2. ALL_EQUAL constraints - often shown as "=" or "E"
-   - All pip values in the region must be the same
+NYT Pips displays constraints as SMALL WHITE DIAMOND SHAPES (◇) within cells:
 
-WHERE TO FIND CONSTRAINTS:
-- Look for diamond shapes (◇) near or inside each colored region
-- Numbers inside diamonds indicate sum constraints
-- The "=" symbol or "E" indicates all_equal
+DIAMOND APPEARANCE:
+  ┌─────────────────┐
+  │   ╱╲            │  ← The diamond is a small
+  │  ╱12╲           │     rotated square shape
+  │  ╲  ╱           │     containing a number
+  │   ╲╱            │     or symbol inside
+  └─────────────────┘
 
-INSTRUCTIONS:
-1. For each region (${regionLabels}), find its constraint
-2. Extract the type, operator (for sum), and value (for sum)
-3. Not all regions may have visible constraints - only include what you see
+WHERE TO LOOK:
+- Diamonds appear INSIDE one cell of each colored region
+- Usually positioned in the CENTER of the cell
+- The diamond is WHITE/light-colored against the cell's background
+- Look carefully - they can be small (about 1/3 of cell size)
 
-Return ONLY valid JSON (no markdown, no explanation):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CONSTRAINT TYPES:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. SUM CONSTRAINTS (most common):
+   ┌──────────┐
+   │  ◇ 12    │  → Sum of all domino pips in region = 12
+   └──────────┘
+   - A NUMBER inside the diamond (e.g., 5, 8, 12, 15, 21)
+   - Default operator is "==" (sum equals the value)
+   - Possible operators: "==" (equals), "<" (less than), ">" (greater than)
+
+   VISUAL EXAMPLES OF SUM VALUES:
+   ◇5   ◇8   ◇10  ◇12  ◇15  ◇18  ◇21
+
+2. ALL_EQUAL CONSTRAINTS:
+   ┌──────────┐
+   │  ◇ =     │  → All domino pips in region must be same value
+   └──────────┘
+   - Shows "=" symbol OR letter "E" inside diamond
+   - No number value needed
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP-BY-STEP READING PROCESS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+For EACH colored region (${regionLabels}):
+
+1. LOCATE THE REGION in the puzzle by its color
+2. SCAN ALL CELLS in that region for a white diamond shape (◇)
+3. ZOOM IN mentally on the diamond to read its contents
+4. IDENTIFY what's inside:
+   - If it's a NUMBER → SUM constraint with op "=="
+   - If it's "=" or "E" → ALL_EQUAL constraint
+   - If there's "<" before number → SUM with op "<"
+   - If there's ">" before number → SUM with op ">"
+5. RECORD the constraint for this region
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+COMMONLY CONFUSED CHARACTERS - READ CAREFULLY:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+NUMBER PAIRS TO DISTINGUISH:
+  • 6 vs 8  → 6 has one loop (top), 8 has two stacked loops
+  • 3 vs 8  → 3 is open on the left, 8 is fully closed
+  • 1 vs 7  → 1 is straight vertical, 7 has a horizontal top
+  • 5 vs 6  → 5 has flat top, 6 has curved top
+  • 9 vs 6  → 9 has loop at top, 6 has loop at bottom
+  • 10 vs 16 → Count digits: 10 is "1" + "0", 16 is "1" + "6"
+  • 11 vs 17 → 11 is two "1"s, 17 has "7" on right
+  • 12 vs 18 → Check second digit carefully: 2 vs 8
+
+OPERATOR SYMBOLS:
+  • "=" → Equals sign, two horizontal lines (ALL_EQUAL)
+  • "<" → Less than, pointing LEFT (open side on right)
+  • ">" → Greater than, pointing RIGHT (open side on left)
+  • "E" → Letter E for Equal (same as =)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+COMMON MISTAKES TO AVOID:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✗ DON'T confuse domino pips (dots) with constraint diamonds
+✗ DON'T assume constraints are always in center cell - check ALL cells in region
+✗ DON'T misread 6 as 8 or 8 as 6 (very common error!)
+✗ DON'T skip regions - every region should have exactly one constraint
+✗ DON'T add operators where there are none (default is "==")
+✗ DON'T invent constraints you can't clearly see
+
+✓ DO check each colored region systematically
+✓ DO read each digit individually for multi-digit numbers (1-2 vs 12)
+✓ DO distinguish between "=" symbol (all_equal) and a number
+✓ DO verify your reading by asking "does this value make sense?"
+   (Typical sum values: 5-25, rarely above 30)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EXPECTED VALUE RANGES:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+- Sum values typically range from 0 to 42
+- Small regions (2-3 cells): expect sums 2-18
+- Medium regions (4-5 cells): expect sums 4-30
+- Large regions (6+ cells): expect sums 6-42
+- All_equal constraints have no value (just type)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RESPONSE FORMAT:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Return ONLY this JSON (no markdown, no explanation, no code blocks):
 {
   "constraints": {
     "A": {"type": "sum", "op": "==", "value": 12},
@@ -67,14 +159,14 @@ Return ONLY valid JSON (no markdown, no explanation):
 
 VALID VALUES:
 - type: "sum" or "all_equal"
-- op (for sum only): "==", "<", ">"
-- value (for sum only): 0-42 (max possible sum is 7 cells × 6 pips)
+- op (for sum only): "==" (default), "<", ">"
+- value (for sum only): 0-42
 
 Confidence scoring:
-- 0.95-1.00: All constraint symbols clearly visible
-- 0.85-0.94: Most constraints clear, minor ambiguity
-- 0.70-0.84: Some constraints hard to read
-- Below 0.70: Multiple constraints unclear`;
+- 0.95-1.00: All diamonds clearly visible, numbers easy to read
+- 0.85-0.94: Most constraints clear, one or two slightly ambiguous
+- 0.70-0.84: Some diamonds hard to read, uncertain about digits
+- Below 0.70: Multiple constraints unclear or potentially misread`;
 }
 
 // =============================================================================
@@ -86,31 +178,124 @@ function getRetryPrompt(
   previousAttempts: ConstraintExtractionResult[]
 ): string {
   const attemptsStr = previousAttempts
-    .map((a, i) => `Attempt ${i + 1}: ${JSON.stringify(a.constraints)}`)
+    .map((a, i) => `Model ${i + 1}: ${JSON.stringify(a.constraints)}`)
     .join('\n');
 
-  return `Extract constraints for each region in this NYT Pips puzzle.
+  // Analyze disagreements to provide targeted hints
+  const allConstraints: Record<string, Set<string>> = {};
+  for (const attempt of previousAttempts) {
+    for (const [region, constraint] of Object.entries(attempt.constraints)) {
+      if (!allConstraints[region]) {
+        allConstraints[region] = new Set();
+      }
+      const key = constraint.type === 'sum'
+        ? `sum(${constraint.op || '=='},${constraint.value})`
+        : 'all_equal';
+      allConstraints[region].add(key);
+    }
+  }
 
+  // Find regions with disagreements
+  const disagreedRegions: string[] = [];
+  const valueDisagreements: string[] = [];
+  for (const [region, values] of Object.entries(allConstraints)) {
+    if (values.size > 1) {
+      disagreedRegions.push(region);
+      const valuesArr = Array.from(values);
+      // Check for common confusion patterns (6 vs 8, etc.)
+      const nums = valuesArr
+        .map(v => {
+          const match = v.match(/sum\([^,]+,(\d+)\)/);
+          return match ? parseInt(match[1]) : null;
+        })
+        .filter(n => n !== null) as number[];
+
+      if (nums.length >= 2) {
+        const diff = Math.abs(nums[0] - nums[1]);
+        if (diff === 2 && (nums.includes(6) || nums.includes(8))) {
+          valueDisagreements.push(`⚠️ Region ${region}: Disagreement between 6 and 8 - VERY common confusion!`);
+        } else if (diff === 6 && (nums.includes(10) || nums.includes(16))) {
+          valueDisagreements.push(`⚠️ Region ${region}: Disagreement between 10 and 16 - check second digit carefully`);
+        } else if (diff === 6 && (nums.includes(12) || nums.includes(18))) {
+          valueDisagreements.push(`⚠️ Region ${region}: Disagreement between 12 and 18 - check second digit (2 vs 8)`);
+        }
+      }
+    }
+  }
+
+  const disagreementHints = valueDisagreements.length > 0
+    ? `\n${valueDisagreements.join('\n')}`
+    : '';
+
+  const focusRegions = disagreedRegions.length > 0
+    ? `\n🎯 FOCUS ON REGIONS: ${disagreedRegions.join(', ')} (these had disagreements)`
+    : '';
+
+  return `⚠️ RE-EXAMINE: Previous constraint extractions disagreed.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PREVIOUS RESULTS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${attemptsStr}${focusRegions}${disagreementHints}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 REGIONS MAP:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${regions.regions}
 
-PREVIOUS ATTEMPTS DISAGREED:
-${attemptsStr}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PRECISE DIAMOND READING TECHNIQUE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Please look again MORE CAREFULLY:
-1. Diamond symbols (◇) contain constraint numbers
-2. Look INSIDE each colored region for its constraint marker
-3. "=" or "E" means all_equal (all pips same value)
-4. Numbers like 12, 8, 15 are sum target values
+For each region, follow this EXACT process:
 
-COMMON MISTAKES TO AVOID:
-- Confusing similar numbers (6 vs 8, 3 vs 8)
-- Missing small constraint markers
-- Misreading operator (< vs > vs =)
+1. FIND THE DIAMOND:
+   - Scan every cell in the colored region
+   - Look for a small WHITE rotated square (◇) shape
+   - It will be in the CENTER of one cell
 
-Return ONLY valid JSON:
+2. READ THE CONTENT CAREFULLY:
+
+   For NUMBERS:
+   ┌────────────────────────────────────────────────────────────┐
+   │ DIGIT VERIFICATION CHECKLIST:                              │
+   │                                                            │
+   │ • Does it have TWO loops stacked? → 8                      │
+   │ • Does it have ONE loop with open bottom? → 6              │
+   │ • Does it have ONE loop with open top? → 9                 │
+   │ • Is it a curved 'S' shape open on left? → 3               │
+   │ • Is it two vertical lines? → 11                           │
+   │ • First digit "1" + round "0"? → 10                        │
+   │ • First digit "1" + curved "2"? → 12                       │
+   │ • First digit "1" + two-loop "8"? → 18                     │
+   └────────────────────────────────────────────────────────────┘
+
+   For SYMBOLS:
+   • Two horizontal lines (=) → all_equal
+   • Letter "E" → all_equal
+   • Left-pointing angle (<) → sum with op "<"
+   • Right-pointing angle (>) → sum with op ">"
+
+3. VERIFY YOUR READING:
+   - Re-examine the digit shape one more time
+   - Ask: "Am I 100% certain this is a 6 and not an 8?"
+   - Ask: "Is this a two-digit number or single digit?"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CRITICAL REMINDERS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+• 6 vs 8 is the MOST COMMON misread - 8 has two loops, 6 has one
+• Multi-digit numbers: read each digit separately (1+2=12, not just "12")
+• "=" symbol means all_equal, NOT a sum of 0
+• Every region typically has exactly one constraint
+• The default operator for sum is "==" (not "<" or ">")
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Return ONLY this JSON (no markdown, no explanation):
 {
-  "constraints": {"A": {...}, "B": {...}},
+  "constraints": {"A": {"type": "sum", "op": "==", "value": N}, ...},
   "confidence": 0.XX
 }`;
 }

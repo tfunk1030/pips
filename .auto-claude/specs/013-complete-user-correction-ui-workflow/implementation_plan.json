@@ -1,0 +1,242 @@
+{
+  "feature": "Complete User Correction UI - Add Grid Dimension Editing",
+  "workflow_type": "simple",
+  "workflow_rationale": "This is a single-component enhancement to add missing grid dimension editing. The correction UI workflow is ~95% complete - only grid dimension controls are missing. All other features (cell editing, region assignment, constraint editing, domino adjustment, real-time preview) are fully implemented. This is a straightforward feature addition, not a multi-phase feature build.",
+
+  "discovery_findings": {
+    "existing_correction_ui": "AIVerificationModal.tsx already implements comprehensive correction UI with cell editing, region correction, constraint editing, domino pip adjustment, and real-time preview",
+    "what_exists": [
+      "Cell editing: toggle holes, change region assignments (CellEditPanel, lines 1031-1166)",
+      "Constraint editing: type, value, operator (ConstraintEditPanel, lines 1181-1442)",
+      "Domino pip editing: cycle 0-6 with tap/long-press (lines 230-259, 514-542)",
+      "Real-time visual preview: merges original + edits (lines 331-511)",
+      "Edit state management: tracks changes with reset (lines 113-129, 304-309)"
+    ],
+    "what_is_missing": [
+      "Grid dimension editor: no controls to adjust detected rows/columns"
+    ],
+    "scope_clarification": "The spec suggested building a complete correction workflow from scratch, but investigation revealed only grid dimension editing is missing. This significantly reduces task complexity from 'standard' to 'simple'."
+  },
+
+  "phases": [
+    {
+      "id": "phase-1-implementation",
+      "name": "Add Grid Dimension Editor",
+      "type": "implementation",
+      "description": "Add dimension editing controls to AIVerificationModal, following existing patterns from Step1GridAlignment",
+      "depends_on": [],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-1-1",
+          "description": "Add dimension change handler functions",
+          "service": "pips-solver",
+          "files_to_modify": [
+            "src/app/components/AIVerificationModal.tsx"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "src/app/screens/builder/Step1GridAlignment.tsx"
+          ],
+          "details": [
+            "Add handleDimensionChange callback (similar to handleCellPress pattern at line 154)",
+            "Implement dimension validation: min 3, max 20 rows/cols",
+            "Handle shape/regions string resize when dimensions change",
+            "Set hasEdits=true when dimensions modified",
+            "Handle orphaned cells if dimensions shrink (show confirmation)"
+          ],
+          "verification": {
+            "type": "manual",
+            "instructions": "Code added: 1) handleRowChange callback 2) handleColChange callback 3) resizeShapeString helper 4) resizeRegionsString helper 5) validation logic"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-1-2",
+          "description": "Add dimension editor UI component",
+          "service": "pips-solver",
+          "files_to_modify": [
+            "src/app/components/AIVerificationModal.tsx"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "src/app/screens/builder/Step1GridAlignment.tsx"
+          ],
+          "details": [
+            "Create GridDimensionEditor component (similar to CellEditPanel/ConstraintEditPanel pattern)",
+            "Add row controls: - button, value display, + button (match Step1GridAlignment lines 121-128)",
+            "Add col controls: - button, value display, + button (match Step1GridAlignment lines 132-139)",
+            "Include close button and save confirmation",
+            "Follow existing modal styling pattern (cellEditStyles/constraintEditStyles)"
+          ],
+          "verification": {
+            "type": "manual",
+            "instructions": "UI component renders with: 1) Row -/+ buttons 2) Col -/+ buttons 3) Current values displayed 4) Close button 5) Consistent styling with other edit panels"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-1-3",
+          "description": "Integrate dimension editor into modal",
+          "service": "pips-solver",
+          "files_to_modify": [
+            "src/app/components/AIVerificationModal.tsx"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "src/app/components/AIVerificationModal.tsx"
+          ],
+          "details": [
+            "Add 'dimensions' option to EditTarget type (line 36)",
+            "Add trigger button in Grid section header to open dimension editor",
+            "Render GridDimensionEditor conditionally when editTarget.type === 'dimensions'",
+            "Follow existing pattern: edit panels shown after grid/constraints sections (lines 654-738)",
+            "Update grid layout useMemo (line 138) to recalculate when dimensions change"
+          ],
+          "verification": {
+            "type": "manual",
+            "instructions": "1) Edit button appears in Grid section 2) Tapping opens dimension editor 3) Editor shows current rows/cols 4) Changes update preview immediately 5) Modified badge appears in header"
+          },
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "phase-2-validation",
+      "name": "Testing and Validation",
+      "type": "implementation",
+      "description": "Test dimension editing with real detection results and edge cases",
+      "depends_on": ["phase-1-implementation"],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-2-1",
+          "description": "Test dimension editing workflow",
+          "service": "pips-solver",
+          "all_services": false,
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "details": [
+            "Test: Increase rows - verify shape/regions strings expand with new rows",
+            "Test: Decrease rows - verify orphaned cells handled (confirmation shown)",
+            "Test: Increase cols - verify each row expands",
+            "Test: Decrease cols - verify trailing cells removed",
+            "Test: Change both dimensions - verify grid layout updates correctly",
+            "Test: Invalid dimensions (0, negative, >20) - verify validation errors",
+            "Test: hasEdits flag and modified badge appear",
+            "Test: Reset button reverts dimensions to original",
+            "Test: Accept with dimension edits passes to OverlayBuilderScreen correctly"
+          ],
+          "verification": {
+            "type": "e2e",
+            "steps": [
+              "Load AIVerificationModal with detection result",
+              "Open dimension editor",
+              "Change rows from 5 to 6",
+              "Verify preview updates with 6 rows",
+              "Change cols from 5 to 4",
+              "Verify preview updates with 4 cols",
+              "Accept edits",
+              "Verify builder state receives editedBoard with rows=6, cols=4"
+            ]
+          },
+          "status": "pending"
+        }
+      ]
+    }
+  ],
+
+  "summary": {
+    "total_phases": 2,
+    "total_subtasks": 4,
+    "services_involved": ["pips-solver"],
+    "parallelism": {
+      "max_parallel_phases": 1,
+      "parallel_groups": [],
+      "recommended_workers": 1,
+      "speedup_estimate": "Sequential only - simple single-component task"
+    },
+    "startup_command": "source auto-claude/.venv/bin/activate && python auto-claude/run.py --spec 013 --parallel 1"
+  },
+
+  "verification_strategy": {
+    "risk_level": "low",
+    "skip_validation": false,
+    "test_creation_phase": "post_implementation",
+    "test_types_required": ["unit"],
+    "security_scanning_required": false,
+    "staging_deployment_required": false,
+    "acceptance_criteria": [
+      "Dimension editor UI matches existing edit panel styling",
+      "Rows and columns can be adjusted with +/- buttons",
+      "Preview updates immediately when dimensions change",
+      "Validation prevents invalid dimensions (< 3 or > 20)",
+      "Orphaned cells are handled when dimensions shrink",
+      "hasEdits flag and modified badge work for dimension changes",
+      "Accept button passes editedBoard with updated dimensions to parent"
+    ],
+    "verification_steps": [
+      {
+        "name": "Manual UI Testing",
+        "command": "cd pips-solver && npm run start",
+        "expected_outcome": "Dimension editor appears, controls work, preview updates",
+        "type": "manual",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Unit Tests (if test suite exists)",
+        "command": "cd pips-solver && npm test",
+        "expected_outcome": "All tests pass",
+        "type": "test",
+        "required": false,
+        "blocking": false
+      }
+    ],
+    "reasoning": "Low risk change - single component enhancement following existing patterns. Manual testing sufficient given the visual/interactive nature. Unit tests optional since no test suite for AIVerificationModal currently exists."
+  },
+
+  "qa_acceptance": {
+    "unit_tests": {
+      "required": false,
+      "commands": [],
+      "minimum_coverage": null
+    },
+    "integration_tests": {
+      "required": false,
+      "commands": [],
+      "services_to_test": []
+    },
+    "e2e_tests": {
+      "required": false,
+      "commands": [],
+      "flows": []
+    },
+    "browser_verification": {
+      "required": true,
+      "pages": [
+        {
+          "url": "expo://localhost:8081",
+          "checks": [
+            "AIVerificationModal opens after AI extraction",
+            "Dimension editor button appears in Grid section",
+            "Tapping opens dimension editor panel",
+            "Row +/- buttons adjust rows",
+            "Col +/- buttons adjust columns",
+            "Preview grid updates immediately",
+            "Modified badge appears when dimensions changed",
+            "Reset button reverts to original dimensions",
+            "Accept button applies dimension changes"
+          ]
+        }
+      ]
+    },
+    "database_verification": {
+      "required": false,
+      "checks": []
+    }
+  },
+
+  "qa_signoff": null
+}

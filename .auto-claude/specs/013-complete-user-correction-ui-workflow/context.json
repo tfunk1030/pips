@@ -1,0 +1,61 @@
+{
+  "files_to_modify": {
+    "pips-solver": [
+      "src/app/components/AIVerificationModal.tsx"
+    ]
+  },
+  "files_to_reference": {
+    "pips-solver": [
+      "src/app/screens/builder/Step1GridAlignment.tsx",
+      "src/model/overlayTypes.ts",
+      "src/app/screens/OverlayBuilderScreen.tsx"
+    ]
+  },
+  "patterns": {
+    "dimension_controls": "Step1GridAlignment.tsx lines 50-56, 119-141 show the pattern for row/col increment/decrement controls using TouchableOpacity buttons with +/- text",
+    "edit_panel_pattern": "AIVerificationModal.tsx lines 1031-1166 (CellEditPanel) and lines 1181-1442 (ConstraintEditPanel) show the modal edit panel pattern: container with header, action buttons, close button, and save logic",
+    "state_management": "AIVerificationModal.tsx lines 113-129 show the pattern: useState for editedBoard/editedDominoes tracking changes, hasEdits flag, useEffect to reset when props change",
+    "tap_to_edit": "AIVerificationModal.tsx lines 154-156, 693-696 show pattern: cells/items are TouchableOpacity that set editTarget state, then render conditional edit panel based on editTarget"
+  },
+  "existing_implementations": {
+    "description": "AIVerificationModal already implements comprehensive correction UI with cell editing, region assignment, constraint editing, and domino pip adjustment. Only missing grid dimension editing.",
+    "relevant_files": [
+      "pips-solver/src/app/components/AIVerificationModal.tsx",
+      "pips-solver/src/app/screens/builder/Step1GridAlignment.tsx"
+    ],
+    "capabilities": {
+      "cell_editing": "Lines 154-225: toggle hole, change region via CellEditPanel",
+      "constraint_editing": "Lines 264-288: change type, value, operator via ConstraintEditPanel",
+      "domino_editing": "Lines 230-259: cycle pip values with tap/long-press",
+      "preview": "Lines 331-511: real-time visual rendering with edited values",
+      "state_management": "Lines 113-129: tracks editedBoard, editedDominoes, hasEdits flag"
+    },
+    "missing": {
+      "grid_dimension_editing": "No controls to adjust detected rows/columns in AIVerificationModal. Must add dimension editor component similar to Step1GridAlignment controls."
+    }
+  },
+  "detection_output_format": {
+    "board_result": {
+      "type": "BoardExtractionResult",
+      "location": "src/model/overlayTypes.ts lines 184-203",
+      "fields": {
+        "rows": "number",
+        "cols": "number",
+        "shape": "string (newline-separated grid with # for holes)",
+        "regions": "string (newline-separated grid with letters A-J)",
+        "constraints": "Record<string, {type, op?, value?}>",
+        "confidence": "{grid, regions, constraints}"
+      }
+    },
+    "domino_result": {
+      "type": "DominoExtractionResult",
+      "location": "src/model/overlayTypes.ts lines 205-208",
+      "fields": {
+        "dominoes": "DominoPair[] where DominoPair = [number, number]",
+        "confidence": "number"
+      }
+    }
+  },
+  "investigation_date": "2025-12-22T03:30:00Z",
+  "investigation_summary": "Comprehensive correction UI already exists in AIVerificationModal. Task scope is narrower than spec suggested: only grid dimension editing is missing. All other features (region correction, constraint editing, domino adjustment, real-time preview) are fully implemented."
+}
