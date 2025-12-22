@@ -10,7 +10,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -198,9 +197,11 @@ export default function Step1GridAlignment({
 
       <Text style={styles.hint}>Drag edges to align grid. Tap cells to mark holes.</Text>
 
-      <TouchableOpacity style={styles.newImageButton} onPress={onPickNewImage}>
-        <Text style={styles.newImageButtonText}>Choose Different Image</Text>
-      </TouchableOpacity>
+      <Button
+        title="Choose Different Image"
+        variant="ghost"
+        onPress={onPickNewImage}
+      />
     </ScrollView>
   );
 }
@@ -544,15 +545,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: 'center',
     marginTop: 12,
-  },
-  newImageButton: {
-    alignSelf: 'center',
-    marginTop: 16,
-    padding: 8,
-  },
-  newImageButtonText: {
-    color: '#007AFF',
-    fontSize: 14,
   },
   aiSection: {
     marginTop: 16,
