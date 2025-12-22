@@ -1,0 +1,6 @@
+{
+  "task_id": "009",
+  "task_name": "ai-verification-modal-lacks-keyboard-accessibility",
+  "created_at": "2024-12-22T00:00:00Z",
+  "service": "pips-solver"
+}

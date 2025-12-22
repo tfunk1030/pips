@@ -1,0 +1,90 @@
+{
+  "task_id": "009",
+  "task_name": "ai-verification-modal-lacks-keyboard-accessibility",
+  "phases": [
+    {
+      "id": "1",
+      "name": "Setup and Codebase Preparation",
+      "subtasks": [
+        {
+          "id": "1.1",
+          "description": "Merge auto-claude/001-enhance-ai-visual-pips-board-extraction-accuracy branch to get the AIVerificationModal and related files into this worktree",
+          "status": "completed",
+          "files": [],
+          "service": "all",
+          "verification": {
+            "manual": "Manual verification required"
+          },
+          "notes": "Merged successfully via fast-forward"
+        }
+      ]
+    },
+    {
+      "id": "2",
+      "name": "Implementation",
+      "subtasks": [
+        {
+          "id": "2.1",
+          "description": "Analyze AIVerificationModal TextInput usage and identify keyboard accessibility issues",
+          "status": "pending",
+          "files": ["pips-solver/src/app/components/AIVerificationModal.tsx"],
+          "service": "pips-solver",
+          "verification": {
+            "manual": "Review analysis of keyboard issues"
+          }
+        },
+        {
+          "id": "2.2",
+          "description": "Add keyboard dismissal on background tap using TouchableWithoutFeedback or Pressable",
+          "status": "pending",
+          "files": ["pips-solver/src/app/components/AIVerificationModal.tsx"],
+          "service": "pips-solver",
+          "verification": {
+            "manual": "Test keyboard dismissal on iOS and Android"
+          }
+        },
+        {
+          "id": "2.3",
+          "description": "Add 'Done' toolbar accessory for iOS number-pad keyboard",
+          "status": "pending",
+          "files": ["pips-solver/src/app/components/AIVerificationModal.tsx"],
+          "service": "pips-solver",
+          "verification": {
+            "manual": "Verify Done button appears on iOS number-pad"
+          }
+        },
+        {
+          "id": "2.4",
+          "description": "Implement keyboard navigation between inputs (returnKeyType, ref management)",
+          "status": "pending",
+          "files": ["pips-solver/src/app/components/AIVerificationModal.tsx"],
+          "service": "pips-solver",
+          "verification": {
+            "manual": "Test keyboard navigation flow between inputs"
+          }
+        }
+      ]
+    },
+    {
+      "id": "3",
+      "name": "Testing and QA",
+      "subtasks": [
+        {
+          "id": "3.1",
+          "description": "End-to-end testing of keyboard accessibility improvements",
+          "status": "pending",
+          "files": [],
+          "service": "pips-solver",
+          "verification": {
+            "manual": "Full keyboard accessibility testing on iOS and Android"
+          }
+        }
+      ]
+    }
+  ],
+  "qa_signoff": {
+    "status": "pending",
+    "tests_passed": "",
+    "issues": ""
+  }
+}
