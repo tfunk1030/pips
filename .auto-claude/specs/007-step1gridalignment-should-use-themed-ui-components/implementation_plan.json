@@ -158,7 +158,7 @@
       "phase_id": "phase-4",
       "name": "Use Card and Theme Tokens",
       "description": "Wrap sections in Card components and replace hardcoded colors with theme tokens",
-      "status": "pending",
+      "status": "completed",
       "subtasks": [
         {
           "subtask_id": "subtask-4-1",
@@ -182,7 +182,8 @@
           "subtask_id": "subtask-4-2",
           "title": "Replace hardcoded colors with theme tokens",
           "description": "Replace any remaining hardcoded colors (#007AFF, #9C27B0, #888, #333, #222, #000, #fff) with theme color tokens.",
-          "status": "pending",
+          "status": "completed",
+          "completion_notes": "Replaced all hardcoded hex colors with theme tokens: #007AFF → colors.accent.brass (edge handles), #9C27B0 → colors.accent.copper (AI button), #000 → colors.surface.obsidian (imageContainer), #1a1a1a → colors.surface.charcoal (stageConfidenceContainer), #333 → colors.surface.ash (borders), 'white' → colors.text.primary (SVG strokes), rgba colors → theme color + alpha suffix. Also replaced hardcoded borderRadius values with radii.lg and radii.md tokens, and some numeric margins with spacing tokens. Committed as 3a9af28.",
           "files_to_modify": [
             "pips-solver/src/app/screens/builder/Step1GridAlignment.tsx"
           ],
