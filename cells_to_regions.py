@@ -4,14 +4,203 @@ Cell-to-region clustering module.
 This module provides color-based clustering for puzzle cells, using DBSCAN
 as the primary method (automatic cluster count detection), MeanShift as
 secondary fallback, and KMeans as final fallback.
+
+Includes confidence scoring for clustering results to enable intelligent
+fallback decisions and quality assessment.
 """
 
 import cv2
 import numpy as np
 from sklearn.cluster import KMeans, DBSCAN, MeanShift, estimate_bandwidth
+from sklearn.metrics import silhouette_score
 from collections import defaultdict
+from dataclasses import dataclass, field
 import json
 from typing import Tuple, List, Dict, Optional
+
+
+@dataclass
+class ClusterConfidence:
+    """
+    Confidence metrics for clustering results.
+
+    Attributes:
+        overall: Overall confidence score (0.0 to 1.0)
+        intra_cluster_variance: Average variance within clusters (lower is better)
+        inter_cluster_separation: Average distance between cluster centers (higher is better)
+        silhouette: Silhouette score (-1.0 to 1.0, higher is better)
+        noise_ratio: Ratio of noise points (DBSCAN only, lower is better)
+        cluster_balance: Measure of cluster size balance (0.0 to 1.0, higher is better)
+        method_confidence: Confidence based on clustering method used
+    """
+    overall: float = 0.0
+    intra_cluster_variance: float = 0.0
+    inter_cluster_separation: float = 0.0
+    silhouette: float = 0.0
+    noise_ratio: float = 0.0
+    cluster_balance: float = 0.0
+    method_confidence: float = 0.0
+
+    def to_dict(self) -> Dict:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "overall": round(self.overall, 4),
+            "intra_cluster_variance": round(self.intra_cluster_variance, 4),
+            "inter_cluster_separation": round(self.inter_cluster_separation, 4),
+            "silhouette": round(self.silhouette, 4),
+            "noise_ratio": round(self.noise_ratio, 4),
+            "cluster_balance": round(self.cluster_balance, 4),
+            "method_confidence": round(self.method_confidence, 4)
+        }
+
+
+@dataclass
+class ClusteringResult:
+    """
+    Complete clustering result with labels, centers, method info, and confidence.
+
+    Attributes:
+        labels: Cluster label for each input point
+        centers: Cluster center coordinates
+        method: Clustering method used ("dbscan", "meanshift", or "kmeans")
+        n_clusters: Number of clusters found
+        confidence: Confidence metrics for the clustering
+    """
+    labels: np.ndarray
+    centers: np.ndarray
+    method: str
+    n_clusters: int
+    confidence: ClusterConfidence = field(default_factory=ClusterConfidence)
+
+
+def compute_cluster_confidence(
+    colors: np.ndarray,
+    labels: np.ndarray,
+    centers: np.ndarray,
+    method: str,
+    original_labels: Optional[np.ndarray] = None
+) -> ClusterConfidence:
+    """
+    Compute confidence metrics for clustering results.
+
+    Calculates multiple metrics to assess clustering quality:
+    - Intra-cluster variance: How tight are the clusters?
+    - Inter-cluster separation: How well separated are cluster centers?
+    - Silhouette score: Combined measure of cluster cohesion and separation
+    - Noise ratio: Percentage of points marked as noise (DBSCAN)
+    - Cluster balance: How balanced are cluster sizes?
+    - Method confidence: Baseline confidence based on method used
+
+    Args:
+        colors: Original color values (N, 3)
+        labels: Cluster label for each point (after noise remapping)
+        centers: Cluster center coordinates (K, 3)
+        method: Clustering method used ("dbscan", "meanshift", "kmeans")
+        original_labels: Labels before noise remapping (for DBSCAN noise ratio)
+
+    Returns:
+        ClusterConfidence with all computed metrics
+    """
+    confidence = ClusterConfidence()
+    n_samples = len(labels)
+    n_clusters = len(centers)
+
+    # Handle edge cases
+    if n_samples < 2 or n_clusters < 2:
+        confidence.overall = 0.1 if n_clusters >= 1 else 0.0
+        return confidence
+
+    colors_float = colors.astype(np.float32)
+
+    # 1. Intra-cluster variance (lower is better)
+    # Average within-cluster sum of squared distances
+    total_variance = 0.0
+    cluster_sizes = []
+    for i in range(n_clusters):
+        mask = labels == i
+        if np.sum(mask) > 0:
+            cluster_points = colors_float[mask]
+            cluster_center = centers[i]
+            distances = np.linalg.norm(cluster_points - cluster_center, axis=1)
+            total_variance += np.mean(distances ** 2)
+            cluster_sizes.append(np.sum(mask))
+    avg_variance = total_variance / n_clusters if n_clusters > 0 else 0.0
+    # Normalize: variance of 0 = 1.0, variance of 100+ = ~0.1
+    confidence.intra_cluster_variance = avg_variance
+    variance_score = max(0.0, 1.0 - avg_variance / 100.0)
+
+    # 2. Inter-cluster separation (higher is better)
+    # Average pairwise distance between cluster centers
+    if n_clusters >= 2:
+        center_distances = []
+        for i in range(n_clusters):
+            for j in range(i + 1, n_clusters):
+                dist = np.linalg.norm(centers[i] - centers[j])
+                center_distances.append(dist)
+        avg_separation = np.mean(center_distances) if center_distances else 0.0
+        confidence.inter_cluster_separation = avg_separation
+        # Normalize: separation of 50+ LAB units = 1.0
+        separation_score = min(1.0, avg_separation / 50.0)
+    else:
+        confidence.inter_cluster_separation = 0.0
+        separation_score = 0.0
+
+    # 3. Silhouette score (-1 to 1, higher is better)
+    try:
+        sil_score = silhouette_score(colors_float, labels)
+        confidence.silhouette = sil_score
+        # Normalize to 0-1 range
+        silhouette_normalized = (sil_score + 1.0) / 2.0
+    except Exception:
+        confidence.silhouette = 0.0
+        silhouette_normalized = 0.5
+
+    # 4. Noise ratio (DBSCAN only)
+    if original_labels is not None:
+        noise_count = np.sum(original_labels == -1)
+        confidence.noise_ratio = noise_count / n_samples
+        noise_score = 1.0 - confidence.noise_ratio
+    else:
+        confidence.noise_ratio = 0.0
+        noise_score = 1.0
+
+    # 5. Cluster balance (how evenly distributed are cluster sizes)
+    if cluster_sizes and len(cluster_sizes) > 1:
+        sizes = np.array(cluster_sizes)
+        # Coefficient of variation: std/mean (lower = more balanced)
+        cv = np.std(sizes) / np.mean(sizes) if np.mean(sizes) > 0 else 1.0
+        # Transform: cv of 0 = 1.0, cv of 2+ = ~0.3
+        confidence.cluster_balance = max(0.0, 1.0 - cv / 2.0)
+    else:
+        confidence.cluster_balance = 1.0
+
+    # 6. Method confidence (baseline based on method preference)
+    method_scores = {
+        "dbscan": 1.0,      # Preferred: automatic cluster count
+        "meanshift": 0.85,  # Secondary: automatic but slower
+        "kmeans": 0.7       # Fallback: requires known cluster count
+    }
+    confidence.method_confidence = method_scores.get(method, 0.5)
+
+    # 7. Compute overall confidence as weighted combination
+    weights = {
+        "variance": 0.20,
+        "separation": 0.20,
+        "silhouette": 0.30,
+        "noise": 0.10,
+        "balance": 0.10,
+        "method": 0.10
+    }
+    confidence.overall = (
+        weights["variance"] * variance_score +
+        weights["separation"] * separation_score +
+        weights["silhouette"] * silhouette_normalized +
+        weights["noise"] * noise_score +
+        weights["balance"] * confidence.cluster_balance +
+        weights["method"] * confidence.method_confidence
+    )
+
+    return confidence
 
 
 def dbscan_cluster(
@@ -195,6 +384,86 @@ def cluster_colors_adaptive(
     return labels, centers, "kmeans"
 
 
+def cluster_colors_with_confidence(
+    colors: np.ndarray,
+    eps: float = 15.0,
+    min_samples: int = 2,
+    meanshift_quantile: float = 0.3,
+    fallback_k: int = 6
+) -> ClusteringResult:
+    """
+    Cluster colors with confidence scoring using adaptive method selection.
+
+    Tries DBSCAN first (automatic cluster detection), then MeanShift as
+    secondary fallback, and finally KMeans as the last resort. Computes
+    comprehensive confidence metrics for the clustering result.
+
+    Args:
+        colors: Array of colors (N, 3)
+        eps: DBSCAN epsilon parameter
+        min_samples: DBSCAN min_samples parameter
+        meanshift_quantile: Quantile for MeanShift bandwidth estimation
+        fallback_k: Number of clusters for KMeans fallback
+
+    Returns:
+        ClusteringResult with labels, centers, method, and confidence metrics
+    """
+    # Try DBSCAN first
+    labels, centers, n_clusters = dbscan_cluster(colors, eps=eps, min_samples=min_samples)
+    original_labels = labels.copy()  # Keep for noise ratio calculation
+
+    # Check if DBSCAN produced reasonable results
+    noise_ratio = np.sum(labels == -1) / len(labels) if len(labels) > 0 else 1.0
+
+    if n_clusters >= 2 and noise_ratio < 0.3:
+        # DBSCAN succeeded - remap noise points to nearest cluster
+        if noise_ratio > 0:
+            noise_mask = labels == -1
+            for i in np.where(noise_mask)[0]:
+                distances = np.linalg.norm(centers - colors[i], axis=1)
+                labels[i] = np.argmin(distances)
+
+        confidence = compute_cluster_confidence(
+            colors, labels, centers, "dbscan", original_labels
+        )
+        return ClusteringResult(
+            labels=labels,
+            centers=centers,
+            method="dbscan",
+            n_clusters=n_clusters,
+            confidence=confidence
+        )
+
+    # Try MeanShift as secondary fallback
+    labels, centers, n_clusters = meanshift_cluster(colors, quantile=meanshift_quantile)
+
+    if n_clusters >= 2:
+        # MeanShift succeeded
+        confidence = compute_cluster_confidence(
+            colors, labels, centers, "meanshift"
+        )
+        return ClusteringResult(
+            labels=labels,
+            centers=centers,
+            method="meanshift",
+            n_clusters=n_clusters,
+            confidence=confidence
+        )
+
+    # Fall back to KMeans as last resort
+    labels, centers = kmeans_cluster(colors, k=fallback_k)
+    confidence = compute_cluster_confidence(
+        colors, labels, centers, "kmeans"
+    )
+    return ClusteringResult(
+        labels=labels,
+        centers=centers,
+        method="kmeans",
+        n_clusters=fallback_k,
+        confidence=confidence
+    )
+
+
 def extract_cells(img: np.ndarray) -> List[Tuple[int, int, int, int, int, int]]:
     """
     Extract cell bounding boxes from puzzle image.
@@ -308,7 +577,7 @@ def main(
         use_lab: Use LAB color space for clustering
 
     Returns:
-        Dictionary with clustering results
+        Dictionary with clustering results including confidence metrics
     """
     img = cv2.imread(img_path)
     if img is None:
@@ -322,8 +591,8 @@ def main(
     # Sample colors
     colors, coords = sample_cell_colors(img, cells, use_lab=use_lab)
 
-    # Cluster using adaptive method
-    labels, centers, method = cluster_colors_adaptive(
+    # Cluster using adaptive method with confidence scoring
+    result = cluster_colors_with_confidence(
         colors,
         eps=eps,
         min_samples=min_samples,
@@ -331,19 +600,21 @@ def main(
     )
 
     # Build regions
-    regions = build_regions(coords, labels)
+    regions = build_regions(coords, result.labels)
 
     # Convert LAB centers back to BGR for output
+    centers = result.centers
     if use_lab and len(centers) > 0:
         centers_uint8 = np.clip(centers, 0, 255).astype(np.uint8)
         centers_reshaped = centers_uint8.reshape(-1, 1, 3)
         centers_bgr = cv2.cvtColor(centers_reshaped, cv2.COLOR_LAB2BGR)
         centers = centers_bgr.reshape(-1, 3).astype(np.float32)
 
-    # Prepare output
+    # Prepare output with confidence metrics
     out = {
-        "method": method,
+        "method": result.method,
         "n_clusters": len(regions),
+        "confidence": result.confidence.to_dict(),
         "regions": [
             {
                 "id": i,
@@ -357,7 +628,7 @@ def main(
     with open(output_path, "w") as f:
         json.dump(out, f, indent=2)
 
-    print(f"Wrote {output_path} (method={method}, regions={len(regions)})")
+    confidence_str = f"confidence={result.confidence.overall:.2f}"
     return out
 
 
