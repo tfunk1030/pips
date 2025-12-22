@@ -1,15 +1,15 @@
 {
   "discovered_files": {
-    "pips-solver/src/services/ensembleExtraction.ts": {
-      "description": "Multi-model ensemble extraction service that queries Gemini, Claude, and GPT-4o in parallel. Currently does NOT store per-model raw responses - this needs to be added for the comparison feature. Uses consensus voting to select best result.",
-      "category": "architecture",
-      "discovered_at": "2025-12-22T07:08:37.133631+00:00"
+    "pips-solver/src/services/extraction/validation/gridValidator.ts": {
+      "description": "Severity classification system with DISAGREEMENT_SEVERITY_MAP, classifyDisagreementSeverity(), and utility functions for filtering/sorting. Critical = affects solvability (grid_dimensions, hole_position, domino_count). Warning = may affect solution (region_assignment, constraints, domino_value). Info = cosmetic.",
+      "category": "patterns",
+      "discovered_at": "2025-12-22T08:26:08.163337+00:00"
     },
-    "pips-solver/src/app/components/AIVerificationModal.tsx": {
-      "description": "Existing verification modal that shows extraction results before applying. This is where the 'Compare Models' button will be added to open the new ExtractionComparisonModal.",
-      "category": "ui_component",
-      "discovered_at": "2025-12-22T07:08:37.462023+00:00"
+    "pips-solver/src/app/components/ExtractionComparisonModal.tsx": {
+      "description": "Edge case handling pattern: LoadingState, ErrorState, NoDisagreementsState components for graceful degradation. Uses useEffect with setTimeout(fn, 0) for computation to allow loading UI to render. validateRawResponses() validates data structure before processing. Error recovery via retryKey state pattern.",
+      "category": "pattern",
+      "discovered_at": "2025-12-22T09:19:12.532444+00:00"
     }
   },
-  "last_updated": "2025-12-22T07:08:37.462023+00:00"
+  "last_updated": "2025-12-22T09:19:12.532444+00:00"
 }

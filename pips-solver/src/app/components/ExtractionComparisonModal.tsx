@@ -5,7 +5,17 @@
  */
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, Pressable, ActivityIndicator } from 'react-native';
+import {
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  Pressable,
+  ActivityIndicator,
+  useWindowDimensions,
+} from 'react-native';
 import type {
   RawResponses,
   BoardModelResponse,
@@ -32,12 +42,25 @@ import {
 // Constants
 // ════════════════════════════════════════════════════════════════════════════
 
-/** Severity colors for disagreement highlighting */
+/**
+ * Severity colors for disagreement highlighting
+ * Updated for WCAG AA contrast compliance:
+ * - Text colors have 4.5:1+ contrast ratio against dark backgrounds
+ * - Border colors are bright enough for visibility
+ */
 const SEVERITY_COLORS: Record<DisagreementSeverity, { border: string; bg: string; text: string }> = {
-  critical: { border: '#d32f2f', bg: 'rgba(211, 47, 47, 0.3)', text: '#ff6b6b' },
-  warning: { border: '#f9a825', bg: 'rgba(249, 168, 37, 0.3)', text: '#ffd54f' },
-  info: { border: '#1976d2', bg: 'rgba(25, 118, 210, 0.3)', text: '#64b5f6' },
+  critical: { border: '#ef5350', bg: 'rgba(239, 83, 80, 0.25)', text: '#ff8a80' },  // 4.5:1+ on #1a1a1a
+  warning: { border: '#ffb300', bg: 'rgba(255, 179, 0, 0.25)', text: '#ffe082' },   // 4.5:1+ on #1a1a1a
+  info: { border: '#42a5f5', bg: 'rgba(66, 165, 245, 0.25)', text: '#90caf9' },     // 4.5:1+ on #1a1a1a
 };
+
+/** Minimum touch target size for accessibility (44x44 points recommended by WCAG) */
+const MIN_TOUCH_TARGET = 44;
+
+/** Grid cell sizing constraints */
+const GRID_CELL_MIN_SIZE = 24;
+const GRID_CELL_MAX_SIZE = 32;
+const GRID_CELL_DEFAULT_SIZE = 28;
 
 /** Get the highest severity from a list of cell disagreements */
 function getHighestCellSeverity(disagreements: CellDisagreement[]): DisagreementSeverity | null {
@@ -141,27 +164,44 @@ function TabBar({
   modelSummaries: Record<string, { success: boolean; hasIssues: boolean }>;
 }) {
   return (
-    <View style={styles.tabBar}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        {tabs.map((tab) => {
+    <View
+      style={styles.tabBar}
+      accessibilityRole="tablist"
+      accessibilityLabel="Comparison view tabs"
+    >
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.tabBarContent}
+      >
+        {tabs.map((tab, index) => {
           const isSelected = tab === selectedTab;
           const isSummaryTab = tab === 'summary';
           const modelInfo = !isSummaryTab ? modelSummaries[tab] : null;
+          const displayName = isSummaryTab ? 'Summary' : formatModelName(tab);
+          const hasError = modelInfo && !modelInfo.success;
 
           return (
             <TouchableOpacity
               key={tab}
               style={[styles.tab, isSelected && styles.tabSelected]}
               onPress={() => onSelectTab(tab)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isSelected }}
+              accessibilityLabel={`${displayName}${hasError ? ', extraction failed' : ''}`}
+              accessibilityHint={`Switch to ${displayName} view`}
             >
               <Text
                 style={[styles.tabText, isSelected && styles.tabTextSelected]}
                 numberOfLines={1}
               >
-                {isSummaryTab ? 'Summary' : formatModelName(tab)}
+                {displayName}
               </Text>
-              {modelInfo && !modelInfo.success && (
-                <View style={styles.errorDot} />
+              {hasError && (
+                <View
+                  style={styles.errorDot}
+                  accessibilityLabel="Error indicator"
+                />
               )}
             </TouchableOpacity>
           );
@@ -185,32 +225,71 @@ function CellDetailPopup({
 }) {
   const severity = getHighestCellSeverity(disagreements);
   const severityColor = severity ? SEVERITY_COLORS[severity] : SEVERITY_COLORS.info;
+  const severityLabel = severity ? `${severity} severity` : 'disagreement';
 
   return (
-    <Modal visible={true} transparent animationType="fade">
-      <Pressable style={styles.popupOverlay} onPress={onClose}>
-        <Pressable style={styles.popupContainer} onPress={e => e.stopPropagation()}>
+    <Modal
+      visible={true}
+      transparent
+      animationType="fade"
+      accessibilityViewIsModal={true}
+      accessibilityLabel={`Cell disagreement details for row ${coordinate.row}, column ${coordinate.col}`}
+    >
+      <Pressable
+        style={styles.popupOverlay}
+        onPress={onClose}
+        accessibilityRole="button"
+        accessibilityLabel="Close popup"
+        accessibilityHint="Tap to dismiss the cell details popup"
+      >
+        <Pressable
+          style={styles.popupContainer}
+          onPress={e => e.stopPropagation()}
+          accessibilityRole="none"
+        >
           {/* Header */}
           <View style={[styles.popupHeader, { borderBottomColor: severityColor.border }]}>
             <View style={styles.popupHeaderContent}>
-              <Text style={styles.popupTitle}>Cell ({coordinate.row}, {coordinate.col})</Text>
+              <Text
+                style={styles.popupTitle}
+                accessibilityRole="header"
+              >
+                Cell ({coordinate.row}, {coordinate.col})
+              </Text>
               {severity && (
-                <View style={[styles.popupSeverityBadge, { backgroundColor: severityColor.bg }]}>
+                <View
+                  style={[styles.popupSeverityBadge, { backgroundColor: severityColor.bg }]}
+                  accessibilityLabel={severityLabel}
+                >
                   <Text style={[styles.popupSeverityText, { color: severityColor.text }]}>
                     {severity.toUpperCase()}
                   </Text>
                 </View>
               )}
             </View>
-            <TouchableOpacity style={styles.popupCloseButton} onPress={onClose}>
+            <TouchableOpacity
+              style={styles.popupCloseButton}
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              accessibilityHint="Dismiss this popup"
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
               <Text style={styles.popupCloseText}>×</Text>
             </TouchableOpacity>
           </View>
 
           {/* Content: List disagreements */}
-          <ScrollView style={styles.popupContent}>
+          <ScrollView
+            style={styles.popupContent}
+            accessibilityLabel={`${disagreements.length} disagreement${disagreements.length !== 1 ? 's' : ''} at this cell`}
+          >
             {disagreements.map((disagreement, idx) => (
-              <View key={disagreement.id || idx} style={styles.popupDisagreementItem}>
+              <View
+                key={disagreement.id || idx}
+                style={styles.popupDisagreementItem}
+                accessibilityLabel={`${formatDisagreementType(disagreement.type)}, ${disagreement.severity} severity`}
+              >
                 <View style={[
                   styles.popupDisagreementHeader,
                   { borderLeftColor: SEVERITY_COLORS[disagreement.severity].border }
@@ -222,16 +301,25 @@ function CellDetailPopup({
 
                 {/* Per-model values */}
                 <View style={styles.popupModelValues}>
-                  {Object.entries(disagreement.detections).map(([model, detection]) => (
-                    <View key={model} style={styles.popupModelRow}>
-                      <Text style={styles.popupModelName}>{formatModelName(model)}</Text>
-                      <Text style={styles.popupModelValue}>
-                        {disagreement.type === 'hole_position'
-                          ? (detection.isHole ? '# (hole)' : '· (cell)')
-                          : (detection.region || 'null')}
-                      </Text>
-                    </View>
-                  ))}
+                  {Object.entries(disagreement.detections).map(([model, detection]) => {
+                    const value = disagreement.type === 'hole_position'
+                      ? (detection.isHole ? 'hole' : 'cell')
+                      : (detection.region || 'null');
+                    return (
+                      <View
+                        key={model}
+                        style={styles.popupModelRow}
+                        accessibilityLabel={`${formatModelName(model)} reported ${value}`}
+                      >
+                        <Text style={styles.popupModelName}>{formatModelName(model)}</Text>
+                        <Text style={styles.popupModelValue}>
+                          {disagreement.type === 'hole_position'
+                            ? (detection.isHole ? '# (hole)' : '· (cell)')
+                            : (detection.region || 'null')}
+                        </Text>
+                      </View>
+                    );
+                  })}
                 </View>
               </View>
             ))}
@@ -247,8 +335,13 @@ function CellDetailPopup({
  */
 function LoadingState({ message }: { message?: string }) {
   return (
-    <View style={styles.loadingContainer}>
-      <ActivityIndicator size="large" color="#4CAF50" />
+    <View
+      style={styles.loadingContainer}
+      accessibilityRole="progressbar"
+      accessibilityLabel={message || 'Computing comparison'}
+      accessibilityLiveRegion="polite"
+    >
+      <ActivityIndicator size="large" color="#4CAF50" accessibilityLabel="Loading" />
       <Text style={styles.loadingText}>{message || 'Computing comparison...'}</Text>
       <Text style={styles.loadingHint}>Analyzing model responses</Text>
     </View>
@@ -268,17 +361,35 @@ function ErrorState({
   onClose: () => void;
 }) {
   return (
-    <View style={styles.errorStateContainer}>
-      <View style={styles.errorStateIcon}>
+    <View
+      style={styles.errorStateContainer}
+      accessibilityRole="alert"
+      accessibilityLiveRegion="assertive"
+    >
+      <View style={styles.errorStateIcon} accessibilityLabel="Error icon">
         <Text style={styles.errorStateIconText}>⚠️</Text>
       </View>
-      <Text style={styles.errorStateTitle}>Comparison Failed</Text>
+      <Text style={styles.errorStateTitle} accessibilityRole="header">
+        Comparison Failed
+      </Text>
       <Text style={styles.errorStateMessage}>{error}</Text>
       <View style={styles.errorStateButtons}>
-        <TouchableOpacity style={styles.errorStateRetryButton} onPress={onRetry}>
+        <TouchableOpacity
+          style={styles.errorStateRetryButton}
+          onPress={onRetry}
+          accessibilityRole="button"
+          accessibilityLabel="Try again"
+          accessibilityHint="Retry computing the comparison"
+        >
           <Text style={styles.errorStateButtonText}>Try Again</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.errorStateCloseButton} onPress={onClose}>
+        <TouchableOpacity
+          style={styles.errorStateCloseButton}
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="Close"
+          accessibilityHint="Close the comparison modal"
+        >
           <Text style={styles.errorStateButtonText}>Close</Text>
         </TouchableOpacity>
       </View>
@@ -291,11 +402,17 @@ function ErrorState({
  */
 function NoDisagreementsState({ modelCount }: { modelCount: number }) {
   return (
-    <View style={styles.noDisagreementsContainer}>
-      <View style={styles.noDisagreementsIcon}>
+    <View
+      style={styles.noDisagreementsContainer}
+      accessibilityRole="alert"
+      accessibilityLabel={`All ${modelCount} models agree on the extraction results`}
+    >
+      <View style={styles.noDisagreementsIcon} accessibilityLabel="Success checkmark">
         <Text style={styles.noDisagreementsIconText}>✓</Text>
       </View>
-      <Text style={styles.noDisagreementsTitle}>All Models Agree</Text>
+      <Text style={styles.noDisagreementsTitle} accessibilityRole="header">
+        All Models Agree
+      </Text>
       <Text style={styles.noDisagreementsMessage}>
         All {modelCount} models produced identical extraction results.
       </Text>
@@ -377,12 +494,17 @@ function SeverityFilterBar({
   const severities: DisagreementSeverity[] = ['critical', 'warning', 'info'];
 
   return (
-    <View style={styles.filterBar}>
-      <Text style={styles.filterLabel}>Show:</Text>
+    <View
+      style={styles.filterBar}
+      accessibilityRole="toolbar"
+      accessibilityLabel="Severity filter options"
+    >
+      <Text style={styles.filterLabel} accessibilityRole="text">Show:</Text>
       {severities.map((severity) => {
         const count = summary[severity];
         const isActive = filters[severity];
         const colors = SEVERITY_COLORS[severity];
+        const label = severity.charAt(0).toUpperCase() + severity.slice(1);
 
         return (
           <Pressable
@@ -393,14 +515,21 @@ function SeverityFilterBar({
               !isActive && styles.filterChipInactive,
             ]}
             onPress={() => onToggle(severity)}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: isActive }}
+            accessibilityLabel={`${label} severity filter, ${count} items`}
+            accessibilityHint={`${isActive ? 'Disable' : 'Enable'} ${severity} severity filter`}
           >
-            <View style={[styles.filterDot, { backgroundColor: colors.border }]} />
+            <View
+              style={[styles.filterDot, { backgroundColor: colors.border }]}
+              accessibilityLabel={`${severity} indicator`}
+            />
             <Text style={[
               styles.filterChipText,
               isActive && { color: colors.text },
               !isActive && styles.filterChipTextInactive,
             ]}>
-              {severity.charAt(0).toUpperCase() + severity.slice(1)} ({count})
+              {label} ({count})
             </Text>
           </Pressable>
         );
@@ -491,6 +620,14 @@ function DisagreementListItem({
   const location = getDisagreementLocation(disagreement);
   const values = formatDisagreementValues(disagreement);
   const isNavigable = 'coordinate' in disagreement;
+  const typeLabel = formatDisagreementType(disagreement.type);
+
+  // Build accessibility label from values
+  const modelValuesDescription = Object.entries(values)
+    .map(([model, value]) => `${formatModelName(model)}: ${value}`)
+    .join(', ');
+
+  const accessibilityLabel = `${typeLabel}, ${disagreement.severity} severity${location ? `, at ${location}` : ''}. ${modelValuesDescription}`;
 
   const content = (
     <View style={[styles.disagreementItem, { borderLeftColor: severityColor.border }]}>
@@ -498,13 +635,16 @@ function DisagreementListItem({
       <View style={styles.disagreementItemHeader}>
         <View style={styles.disagreementItemHeaderLeft}>
           <Text style={styles.disagreementItemType}>
-            {formatDisagreementType(disagreement.type)}
+            {typeLabel}
           </Text>
           {location && (
             <Text style={styles.disagreementItemLocation}>{location}</Text>
           )}
         </View>
-        <View style={[styles.disagreementItemSeverityBadge, { backgroundColor: severityColor.bg }]}>
+        <View
+          style={[styles.disagreementItemSeverityBadge, { backgroundColor: severityColor.bg }]}
+          accessibilityLabel={`${disagreement.severity} severity`}
+        >
           <Text style={[styles.disagreementItemSeverityText, { color: severityColor.text }]}>
             {disagreement.severity.toUpperCase()}
           </Text>
@@ -514,7 +654,11 @@ function DisagreementListItem({
       {/* Model values */}
       <View style={styles.disagreementItemValues}>
         {Object.entries(values).map(([model, value]) => (
-          <View key={model} style={styles.disagreementItemValueRow}>
+          <View
+            key={model}
+            style={styles.disagreementItemValueRow}
+            accessibilityLabel={`${formatModelName(model)} reported ${value}`}
+          >
             <Text style={styles.disagreementItemModelName}>{formatModelName(model)}</Text>
             <Text style={styles.disagreementItemModelValue}>{value}</Text>
           </View>
@@ -532,13 +676,22 @@ function DisagreementListItem({
 
   if (isNavigable && onPress) {
     return (
-      <Pressable onPress={onPress}>
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+        accessibilityHint="Tap to navigate to this cell in the grid view"
+      >
         {content}
       </Pressable>
     );
   }
 
-  return content;
+  return (
+    <View accessibilityLabel={accessibilityLabel}>
+      {content}
+    </View>
+  );
 }
 
 /**
@@ -781,7 +934,8 @@ function SeveritySummaryItem({
 }
 
 /**
- * Grid visualization component showing holes and cells with disagreement highlighting
+ * Grid visualization component showing holes and cells with disagreement highlighting.
+ * Includes responsive sizing and accessibility support.
  */
 function GridVisualization({
   holes,
@@ -789,67 +943,105 @@ function GridVisualization({
   cols,
   cellDisagreementMap,
   onCellPress,
+  cellSize = GRID_CELL_DEFAULT_SIZE,
 }: {
   holes: boolean[][];
   rows: number;
   cols: number;
   cellDisagreementMap?: Map<string, CellDisagreement[]>;
   onCellPress?: (coordinate: CellCoordinate, disagreements: CellDisagreement[]) => void;
+  cellSize?: number;
 }) {
+  // Count holes for accessibility summary
+  const holeCount = holes.flat().filter(Boolean).length;
+  const cellCount = rows * cols - holeCount;
+
   return (
-    <View style={styles.gridVisualization}>
-      {holes.map((row, rowIndex) => (
-        <View key={rowIndex} style={styles.gridRow}>
-          {row.map((isHole, colIndex) => {
-            const key = cellKey(rowIndex, colIndex);
-            const disagreements = cellDisagreementMap?.get(key) || [];
-            const severity = getHighestCellSeverity(disagreements);
-            const hasDisagreement = disagreements.length > 0;
-            const severityStyle = severity ? {
-              borderColor: SEVERITY_COLORS[severity].border,
-              borderWidth: 2,
-              backgroundColor: SEVERITY_COLORS[severity].bg,
-            } : {};
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={true}
+      style={styles.gridScrollContainer}
+      contentContainerStyle={styles.gridScrollContent}
+      accessibilityLabel={`Grid with ${rows} rows and ${cols} columns. ${holeCount} holes and ${cellCount} cells.`}
+    >
+      <View
+        style={styles.gridVisualization}
+        accessibilityRole="none"
+      >
+        {holes.map((row, rowIndex) => (
+          <View
+            key={rowIndex}
+            style={styles.gridRow}
+            accessibilityRole="none"
+          >
+            {row.map((isHole, colIndex) => {
+              const key = cellKey(rowIndex, colIndex);
+              const disagreements = cellDisagreementMap?.get(key) || [];
+              const severity = getHighestCellSeverity(disagreements);
+              const hasDisagreement = disagreements.length > 0;
+              const severityStyle = severity ? {
+                borderColor: SEVERITY_COLORS[severity].border,
+                borderWidth: 2,
+                backgroundColor: SEVERITY_COLORS[severity].bg,
+              } : {};
 
-            const cellContent = (
-              <View
-                style={[
-                  styles.gridCell,
-                  isHole ? styles.gridCellHole : styles.gridCellValid,
-                  hasDisagreement && severityStyle,
-                ]}
-              >
-                <Text style={[
-                  styles.gridCellText,
-                  isHole && styles.gridCellTextHole,
-                  hasDisagreement && { color: SEVERITY_COLORS[severity!].text },
-                ]}>
-                  {isHole ? '#' : '·'}
-                </Text>
-              </View>
-            );
+              const cellAccessibilityLabel = isHole
+                ? `Row ${rowIndex + 1}, column ${colIndex + 1}: hole`
+                : `Row ${rowIndex + 1}, column ${colIndex + 1}: cell${hasDisagreement ? `, ${severity} disagreement` : ''}`;
 
-            if (hasDisagreement && onCellPress) {
+              const cellContent = (
+                <View
+                  style={[
+                    styles.gridCell,
+                    { width: cellSize, height: cellSize },
+                    isHole ? styles.gridCellHole : styles.gridCellValid,
+                    hasDisagreement && severityStyle,
+                  ]}
+                >
+                  <Text style={[
+                    styles.gridCellText,
+                    isHole && styles.gridCellTextHole,
+                    hasDisagreement && { color: SEVERITY_COLORS[severity!].text },
+                  ]}>
+                    {isHole ? '#' : '·'}
+                  </Text>
+                </View>
+              );
+
+              if (hasDisagreement && onCellPress) {
+                return (
+                  <Pressable
+                    key={colIndex}
+                    onPress={() => onCellPress({ row: rowIndex, col: colIndex }, disagreements)}
+                    accessibilityRole="button"
+                    accessibilityLabel={cellAccessibilityLabel}
+                    accessibilityHint="Tap to view disagreement details"
+                    style={{ minWidth: MIN_TOUCH_TARGET, minHeight: MIN_TOUCH_TARGET, justifyContent: 'center', alignItems: 'center' }}
+                  >
+                    {cellContent}
+                  </Pressable>
+                );
+              }
+
               return (
-                <Pressable
+                <View
                   key={colIndex}
-                  onPress={() => onCellPress({ row: rowIndex, col: colIndex }, disagreements)}
+                  accessibilityLabel={cellAccessibilityLabel}
                 >
                   {cellContent}
-                </Pressable>
+                </View>
               );
-            }
-
-            return <View key={colIndex}>{cellContent}</View>;
-          })}
-        </View>
-      ))}
-    </View>
+            })}
+          </View>
+        ))}
+      </View>
+    </ScrollView>
   );
 }
 
 /**
- * Region visualization component with color-coded cells and disagreement highlighting
+ * Region visualization component with color-coded cells and disagreement highlighting.
+ * Includes responsive sizing and accessibility support.
  */
 function RegionVisualization({
   regions,
@@ -858,6 +1050,7 @@ function RegionVisualization({
   cols,
   cellDisagreementMap,
   onCellPress,
+  cellSize = GRID_CELL_DEFAULT_SIZE,
 }: {
   regions: (string | null)[][];
   holes?: boolean[][];
@@ -865,64 +1058,102 @@ function RegionVisualization({
   cols: number;
   cellDisagreementMap?: Map<string, CellDisagreement[]>;
   onCellPress?: (coordinate: CellCoordinate, disagreements: CellDisagreement[]) => void;
+  cellSize?: number;
 }) {
+  // Count unique regions for accessibility summary
+  const uniqueRegions = new Set(regions.flat().filter(r => r !== null && r !== '.'));
+  const regionCount = uniqueRegions.size;
+
   return (
-    <View style={styles.gridVisualization}>
-      {regions.map((row, rowIndex) => (
-        <View key={rowIndex} style={styles.gridRow}>
-          {row.map((region, colIndex) => {
-            const isHole = holes?.[rowIndex]?.[colIndex] || region === null;
-            const bgColor = isHole ? '#333' : getRegionColor(region);
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={true}
+      style={styles.gridScrollContainer}
+      contentContainerStyle={styles.gridScrollContent}
+      accessibilityLabel={`Region grid with ${rows} rows and ${cols} columns. ${regionCount} distinct regions.`}
+    >
+      <View
+        style={styles.gridVisualization}
+        accessibilityRole="none"
+      >
+        {regions.map((row, rowIndex) => (
+          <View
+            key={rowIndex}
+            style={styles.gridRow}
+            accessibilityRole="none"
+          >
+            {row.map((region, colIndex) => {
+              const isHole = holes?.[rowIndex]?.[colIndex] || region === null;
+              const bgColor = isHole ? '#333' : getRegionColor(region);
 
-            const key = cellKey(rowIndex, colIndex);
-            const disagreements = cellDisagreementMap?.get(key) || [];
-            const severity = getHighestCellSeverity(disagreements);
-            const hasDisagreement = disagreements.length > 0;
-            const severityStyle = severity ? {
-              borderColor: SEVERITY_COLORS[severity].border,
-              borderWidth: 2,
-            } : {};
+              const key = cellKey(rowIndex, colIndex);
+              const disagreements = cellDisagreementMap?.get(key) || [];
+              const severity = getHighestCellSeverity(disagreements);
+              const hasDisagreement = disagreements.length > 0;
+              const severityStyle = severity ? {
+                borderColor: SEVERITY_COLORS[severity].border,
+                borderWidth: 2,
+              } : {};
 
-            const cellContent = (
-              <View
-                style={[
-                  styles.gridCell,
-                  styles.gridCellRegion,
-                  { backgroundColor: bgColor },
-                  hasDisagreement && severityStyle,
-                ]}
-              >
-                <Text style={[
-                  styles.regionCellText,
-                  isHole && styles.gridCellTextHole,
-                ]}>
-                  {isHole ? '#' : region || '.'}
-                </Text>
-                {hasDisagreement && (
-                  <View style={[
-                    styles.disagreementIndicator,
-                    { backgroundColor: SEVERITY_COLORS[severity!].border },
-                  ]} />
-                )}
-              </View>
-            );
+              const cellAccessibilityLabel = isHole
+                ? `Row ${rowIndex + 1}, column ${colIndex + 1}: hole`
+                : `Row ${rowIndex + 1}, column ${colIndex + 1}: region ${region || 'unlabeled'}${hasDisagreement ? `, ${severity} disagreement` : ''}`;
 
-            if (hasDisagreement && onCellPress) {
+              const cellContent = (
+                <View
+                  style={[
+                    styles.gridCell,
+                    styles.gridCellRegion,
+                    { backgroundColor: bgColor, width: cellSize, height: cellSize },
+                    hasDisagreement && severityStyle,
+                  ]}
+                >
+                  <Text style={[
+                    styles.regionCellText,
+                    isHole && styles.gridCellTextHole,
+                  ]}>
+                    {isHole ? '#' : region || '.'}
+                  </Text>
+                  {hasDisagreement && (
+                    <View
+                      style={[
+                        styles.disagreementIndicator,
+                        { backgroundColor: SEVERITY_COLORS[severity!].border },
+                      ]}
+                      accessibilityLabel={`${severity} disagreement indicator`}
+                    />
+                  )}
+                </View>
+              );
+
+              if (hasDisagreement && onCellPress) {
+                return (
+                  <Pressable
+                    key={colIndex}
+                    onPress={() => onCellPress({ row: rowIndex, col: colIndex }, disagreements)}
+                    accessibilityRole="button"
+                    accessibilityLabel={cellAccessibilityLabel}
+                    accessibilityHint="Tap to view disagreement details"
+                    style={{ minWidth: MIN_TOUCH_TARGET, minHeight: MIN_TOUCH_TARGET, justifyContent: 'center', alignItems: 'center' }}
+                  >
+                    {cellContent}
+                  </Pressable>
+                );
+              }
+
               return (
-                <Pressable
+                <View
                   key={colIndex}
-                  onPress={() => onCellPress({ row: rowIndex, col: colIndex }, disagreements)}
+                  accessibilityLabel={cellAccessibilityLabel}
                 >
                   {cellContent}
-                </Pressable>
+                </View>
               );
-            }
-
-            return <View key={colIndex}>{cellContent}</View>;
-          })}
-        </View>
-      ))}
-    </View>
+            })}
+          </View>
+        ))}
+      </View>
+    </ScrollView>
   );
 }
 
@@ -1107,16 +1338,22 @@ function ModelResultView({
   timing,
   cellDisagreementMap,
   onCellPress,
+  screenWidth,
 }: {
   modelResult: NormalizedModelResult;
   timing?: ModelTiming;
   cellDisagreementMap?: Map<string, CellDisagreement[]>;
   onCellPress?: (coordinate: CellCoordinate, disagreements: CellDisagreement[]) => void;
+  screenWidth: number;
 }) {
   if (!modelResult.success) {
     return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorTitle}>Extraction Failed</Text>
+      <View
+        style={styles.errorContainer}
+        accessibilityRole="alert"
+        accessibilityLabel={`Extraction failed: ${modelResult.error || 'Unknown error'}`}
+      >
+        <Text style={styles.errorTitle} accessibilityRole="header">Extraction Failed</Text>
         <Text style={styles.errorText}>{modelResult.error || 'Unknown error'}</Text>
       </View>
     );
@@ -1126,14 +1363,27 @@ function ModelResultView({
   const rows = dimensions?.rows || 0;
   const cols = dimensions?.cols || 0;
 
+  // Calculate responsive cell size based on screen width and grid columns
+  // Account for padding (40px total) and margins between cells (2px each)
+  const availableWidth = screenWidth - 40 - 16; // padding + grid container padding
+  const cellMargin = 2; // margin between cells
+  const calculatedCellSize = Math.floor((availableWidth - (cols * cellMargin * 2)) / cols);
+  const cellSize = Math.min(
+    GRID_CELL_MAX_SIZE,
+    Math.max(GRID_CELL_MIN_SIZE, calculatedCellSize)
+  );
+
   // Count disagreements for this model's grid
   const disagreementCount = cellDisagreementMap ? cellDisagreementMap.size : 0;
 
   return (
-    <View style={styles.modelResultContainer}>
+    <View
+      style={styles.modelResultContainer}
+      accessibilityLabel={`Model extraction results: ${rows} rows by ${cols} columns grid`}
+    >
       {/* Grid Dimensions */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Grid Dimensions</Text>
+        <Text style={styles.sectionTitle} accessibilityRole="header">Grid Dimensions</Text>
         <Text style={styles.text}>
           {rows} rows × {cols} columns
         </Text>
@@ -1141,21 +1391,28 @@ function ModelResultView({
 
       {/* Disagreement Legend (if there are disagreements) */}
       {disagreementCount > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Disagreements</Text>
+        <View
+          style={styles.section}
+          accessibilityLabel={`${disagreementCount} cells with disagreements between models`}
+        >
+          <Text style={styles.sectionTitle} accessibilityRole="header">Disagreements</Text>
           <Text style={styles.textSmall}>
             {disagreementCount} cell{disagreementCount !== 1 ? 's' : ''} with disagreements. Tap to see details.
           </Text>
-          <View style={styles.legendRow}>
-            <View style={styles.legendItem}>
+          <View
+            style={styles.legendRow}
+            accessibilityRole="none"
+            accessibilityLabel="Severity legend: critical shown in red, warning shown in yellow, info shown in blue"
+          >
+            <View style={styles.legendItem} accessibilityLabel="Critical severity, shown in red">
               <View style={[styles.legendDot, { backgroundColor: SEVERITY_COLORS.critical.border }]} />
               <Text style={styles.legendText}>Critical</Text>
             </View>
-            <View style={styles.legendItem}>
+            <View style={styles.legendItem} accessibilityLabel="Warning severity, shown in yellow">
               <View style={[styles.legendDot, { backgroundColor: SEVERITY_COLORS.warning.border }]} />
               <Text style={styles.legendText}>Warning</Text>
             </View>
-            <View style={styles.legendItem}>
+            <View style={styles.legendItem} accessibilityLabel="Info severity, shown in blue">
               <View style={[styles.legendDot, { backgroundColor: SEVERITY_COLORS.info.border }]} />
               <Text style={styles.legendText}>Info</Text>
             </View>
@@ -1166,13 +1423,14 @@ function ModelResultView({
       {/* Grid with Holes */}
       {holes && holes.length > 0 && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Shape (# = hole)</Text>
+          <Text style={styles.sectionTitle} accessibilityRole="header">Shape (# = hole)</Text>
           <GridVisualization
             holes={holes}
             rows={rows}
             cols={cols}
             cellDisagreementMap={cellDisagreementMap}
             onCellPress={onCellPress}
+            cellSize={cellSize}
           />
         </View>
       )}
@@ -1180,9 +1438,10 @@ function ModelResultView({
       {/* Regions */}
       {regions && regions.length > 0 && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Regions</Text>
+          <Text style={styles.sectionTitle} accessibilityRole="header">Regions</Text>
           <RegionVisualization
             regions={regions}
+            cellSize={cellSize}
             holes={holes}
             rows={rows}
             cols={cols}
@@ -1261,6 +1520,9 @@ export default function ExtractionComparisonModal({
   onClose,
   onAccept,
 }: Props) {
+  // Get screen dimensions for responsive grid sizing
+  const { width: screenWidth } = useWindowDimensions();
+
   const [selectedTab, setSelectedTab] = useState<TabType>('summary');
 
   // State for cell detail popup
@@ -1533,13 +1795,28 @@ export default function ExtractionComparisonModal({
   }
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      accessibilityViewIsModal={true}
+      accessibilityLabel="Extraction comparison modal"
+    >
       <View style={styles.container}>
         {/* Header */}
-        <View style={styles.header}>
+        <View style={styles.header} accessibilityRole="header">
           <View style={styles.headerTop}>
-            <Text style={styles.title}>Extraction Comparison</Text>
-            <View style={styles.headerBadges}>
+            <Text
+              style={styles.title}
+              accessibilityRole="header"
+              accessibilityLabel="Extraction Comparison"
+            >
+              Extraction Comparison
+            </Text>
+            <View
+              style={styles.headerBadges}
+              accessibilityLabel={`${comparison.summary.critical} critical, ${comparison.summary.warning} warning, ${comparison.summary.info} info disagreements`}
+            >
               <SeverityBadge severity="critical" count={comparison.summary.critical} />
               <SeverityBadge severity="warning" count={comparison.summary.warning} />
               <SeverityBadge severity="info" count={comparison.summary.info} />
@@ -1576,6 +1853,7 @@ export default function ExtractionComparisonModal({
               timing={currentModelTiming}
               cellDisagreementMap={comparison.cellDisagreementMap}
               onCellPress={handleCellPress}
+              screenWidth={screenWidth}
             />
           ) : (
             <View style={styles.emptyState}>
@@ -1585,11 +1863,27 @@ export default function ExtractionComparisonModal({
         </ScrollView>
 
         {/* Footer Buttons */}
-        <View style={styles.buttons}>
-          <TouchableOpacity style={[styles.button, styles.closeButton]} onPress={onClose}>
+        <View
+          style={styles.buttons}
+          accessibilityRole="toolbar"
+          accessibilityLabel="Modal actions"
+        >
+          <TouchableOpacity
+            style={[styles.button, styles.closeButton]}
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+            accessibilityHint="Dismiss the comparison modal without accepting"
+          >
             <Text style={styles.buttonText}>Close</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.button, styles.acceptButton]} onPress={onAccept}>
+          <TouchableOpacity
+            style={[styles.button, styles.acceptButton]}
+            onPress={onAccept}
+            accessibilityRole="button"
+            accessibilityLabel="Accept Consensus"
+            accessibilityHint="Accept the consensus extraction result and close the modal"
+          >
             <Text style={styles.buttonText}>Accept Consensus</Text>
           </TouchableOpacity>
         </View>
@@ -1647,6 +1941,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#333',
     backgroundColor: '#1a1a1a',
+  },
+  tabBarContent: {
+    flexDirection: 'row',
   },
   tab: {
     paddingHorizontal: 16,
@@ -1809,7 +2106,13 @@ const styles = StyleSheet.create({
     fontFamily: 'Courier',
   },
 
-  // Grid Visualization
+  // Grid Visualization (responsive with horizontal scroll on small screens)
+  gridScrollContainer: {
+    maxHeight: 300, // Limit vertical height for very large grids
+  },
+  gridScrollContent: {
+    flexGrow: 0, // Don't grow to fill space
+  },
   gridVisualization: {
     backgroundColor: '#000',
     padding: 8,
@@ -1820,8 +2123,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   gridCell: {
-    width: 28,
-    height: 28,
+    // width and height set dynamically for responsive sizing
     justifyContent: 'center',
     alignItems: 'center',
     margin: 1,
