@@ -1,0 +1,373 @@
+{
+  "summary": {
+    "total_tests": 37,
+    "passed_tests": 33,
+    "failed_tests": 4,
+    "accuracy_percentage": 89.19,
+    "total_execution_time_sec": 1.53,
+    "target_accuracy": 85.0,
+    "target_met": true
+  },
+  "category_results": {
+    "Color Segmentation": {
+      "passed": 9,
+      "total": 11,
+      "accuracy": 81.82
+    },
+    "Grid Detection": {
+      "passed": 6,
+      "total": 7,
+      "accuracy": 85.71
+    },
+    "Contour Detection": {
+      "passed": 6,
+      "total": 6,
+      "accuracy": 100.0
+    },
+    "Distortion Handling": {
+      "passed": 4,
+      "total": 5,
+      "accuracy": 80.0
+    },
+    "Integration": {
+      "passed": 8,
+      "total": 8,
+      "accuracy": 100.0
+    }
+  },
+  "detailed_results": [
+    {
+      "name": "DBSCAN 3 clusters well-separated",
+      "category": "Color Segmentation",
+      "passed": true,
+      "expected": "3",
+      "actual": "3",
+      "error_message": "",
+      "execution_time_ms": 2.0
+    },
+    {
+      "name": "DBSCAN 5 clusters moderate noise",
+      "category": "Color Segmentation",
+      "passed": true,
+      "expected": "5",
+      "actual": "5",
+      "error_message": "",
+      "execution_time_ms": 2.0
+    },
+    {
+      "name": "DBSCAN 4 clusters higher noise",
+      "category": "Color Segmentation",
+      "passed": true,
+      "expected": "4",
+      "actual": "4",
+      "error_message": "",
+      "execution_time_ms": 2.11
+    },
+    {
+      "name": "DBSCAN 6 clusters well-separated",
+      "category": "Color Segmentation",
+      "passed": true,
+      "expected": "6",
+      "actual": "6",
+      "error_message": "",
+      "execution_time_ms": 2.0
+    },
+    {
+      "name": "DBSCAN 2 clusters tight",
+      "category": "Color Segmentation",
+      "passed": true,
+      "expected": "2",
+      "actual": "2",
+      "error_message": "",
+      "execution_time_ms": 1.0
+    },
+    {
+      "name": "MeanShift 3 clusters",
+      "category": "Color Segmentation",
+      "passed": true,
+      "expected": "3(+/-1)",
+      "actual": "3",
+      "error_message": "",
+      "execution_time_ms": 254.69
+    },
+    {
+      "name": "MeanShift 4 clusters",
+      "category": "Color Segmentation",
+      "passed": false,
+      "expected": "4(+/-1)",
+      "actual": "2",
+      "error_message": "Expected ~4 clusters, found 2",
+      "execution_time_ms": 23.47
+    },
+    {
+      "name": "MeanShift 5 clusters",
+      "category": "Color Segmentation",
+      "passed": false,
+      "expected": "5(+/-1)",
+      "actual": "2",
+      "error_message": "Expected ~5 clusters, found 2",
+      "execution_time_ms": 62.0
+    },
+    {
+      "name": "Adaptive clustering (should use DBSCAN)",
+      "category": "Color Segmentation",
+      "passed": true,
+      "expected": "2-6 clusters via dbscan",
+      "actual": "4 clusters via dbscan",
+      "error_message": "",
+      "execution_time_ms": 2.37
+    },
+    {
+      "name": "Adaptive clustering (may trigger fallback)",
+      "category": "Color Segmentation",
+      "passed": true,
+      "expected": "2-5 clusters via meanshift",
+      "actual": "2 clusters via meanshift",
+      "error_message": "",
+      "execution_time_ms": 47.9
+    },
+    {
+      "name": "Confidence scoring produces valid range",
+      "category": "Color Segmentation",
+      "passed": true,
+      "expected": "0.4-1.0",
+      "actual": "0.765",
+      "error_message": "",
+      "execution_time_ms": 6.61
+    },
+    {
+      "name": "4x4 regular grid",
+      "category": "Grid Detection",
+      "passed": true,
+      "expected": "4x4",
+      "actual": "(4, 4)",
+      "error_message": "",
+      "execution_time_ms": 23.52
+    },
+    {
+      "name": "5x5 regular grid",
+      "category": "Grid Detection",
+      "passed": true,
+      "expected": "5x5",
+      "actual": "(5, 5)",
+      "error_message": "",
+      "execution_time_ms": 13.73
+    },
+    {
+      "name": "6x6 regular grid",
+      "category": "Grid Detection",
+      "passed": true,
+      "expected": "6x6",
+      "actual": "(6, 6)",
+      "error_message": "",
+      "execution_time_ms": 15.14
+    },
+    {
+      "name": "3x5 rectangular grid",
+      "category": "Grid Detection",
+      "passed": true,
+      "expected": "3x5",
+      "actual": "(3, 5)",
+      "error_message": "",
+      "execution_time_ms": 8.59
+    },
+    {
+      "name": "7x7 regular grid",
+      "category": "Grid Detection",
+      "passed": true,
+      "expected": "7x7",
+      "actual": "(7, 7)",
+      "error_message": "",
+      "execution_time_ms": 20.3
+    },
+    {
+      "name": "Grid detection with noise",
+      "category": "Grid Detection",
+      "passed": false,
+      "expected": "5x5(+/-1)",
+      "actual": "(7, 7)",
+      "error_message": "Failed to detect grid with noise",
+      "execution_time_ms": 21.48
+    },
+    {
+      "name": "Grid detection confidence valid",
+      "category": "Grid Detection",
+      "passed": true,
+      "expected": "0.0-1.0",
+      "actual": "1.000",
+      "error_message": "",
+      "execution_time_ms": 7.91
+    },
+    {
+      "name": "Convex polygon approximation",
+      "category": "Contour Detection",
+      "passed": true,
+      "expected": "3-202 points",
+      "actual": "6 points (eps=8.33)",
+      "error_message": "",
+      "execution_time_ms": 0.0
+    },
+    {
+      "name": "Concave polygon approximation",
+      "category": "Contour Detection",
+      "passed": true,
+      "expected": "3-207 points",
+      "actual": "10 points (eps=9.20)",
+      "error_message": "",
+      "execution_time_ms": 0.0
+    },
+    {
+      "name": "Irregular polygon approximation",
+      "category": "Contour Detection",
+      "passed": true,
+      "expected": "3-151 points",
+      "actual": "7 points (eps=7.09)",
+      "error_message": "",
+      "execution_time_ms": 0.0
+    },
+    {
+      "name": "Convex hull - convex shape",
+      "category": "Contour Detection",
+      "passed": true,
+      "expected": "convex",
+      "actual": "convex (conf=0.90)",
+      "error_message": "",
+      "execution_time_ms": 0.0
+    },
+    {
+      "name": "Convex hull - concave shape",
+      "category": "Contour Detection",
+      "passed": true,
+      "expected": "concave",
+      "actual": "highly_concave (conf=0.75)",
+      "error_message": "",
+      "execution_time_ms": 1.0
+    },
+    {
+      "name": "Watershed separates merged regions",
+      "category": "Contour Detection",
+      "passed": true,
+      "expected": ">=1 region(s)",
+      "actual": "1 region(s), conf=0.50",
+      "error_message": "",
+      "execution_time_ms": 1.11
+    },
+    {
+      "name": "Clear image passes quality check",
+      "category": "Distortion Handling",
+      "passed": true,
+      "expected": "acceptable=True",
+      "actual": "acceptable=True",
+      "error_message": "",
+      "execution_time_ms": 2.0
+    },
+    {
+      "name": "Quality validation returns valid scores",
+      "category": "Distortion Handling",
+      "passed": true,
+      "expected": "All scores 0-1",
+      "actual": "overall=0.919",
+      "error_message": "",
+      "execution_time_ms": 2.12
+    },
+    {
+      "name": "Distortion detection on clean image",
+      "category": "Distortion Handling",
+      "passed": true,
+      "expected": "distortion < 0.5",
+      "actual": "distortion=0.001",
+      "error_message": "",
+      "execution_time_ms": 5.44
+    },
+    {
+      "name": "Distortion detection on perspective image",
+      "category": "Distortion Handling",
+      "passed": true,
+      "expected": "0-1.0 range",
+      "actual": "distortion=0.091",
+      "error_message": "",
+      "execution_time_ms": 6.0
+    },
+    {
+      "name": "Perspective correction produces output",
+      "category": "Distortion Handling",
+      "passed": false,
+      "expected": "Valid corrected image",
+      "actual": "No output",
+      "error_message": "Correction failed",
+      "execution_time_ms": 0.0
+    },
+    {
+      "name": "Quality validation: IMG_2050.png",
+      "category": "Integration",
+      "passed": true,
+      "expected": "overall > 0.3",
+      "actual": "0.988",
+      "error_message": "",
+      "execution_time_ms": 181.98
+    },
+    {
+      "name": "Distortion analysis: IMG_2050.png",
+      "category": "Integration",
+      "passed": true,
+      "expected": "0-1.0 range",
+      "actual": "0.159",
+      "error_message": "",
+      "execution_time_ms": 104.37
+    },
+    {
+      "name": "Grid detection: IMG_2050.png",
+      "category": "Integration",
+      "passed": true,
+      "expected": "Valid result",
+      "actual": "dims=(62, 9), conf=0.683",
+      "error_message": "",
+      "execution_time_ms": 121.79
+    },
+    {
+      "name": "Contour extraction: IMG_2050.png",
+      "category": "Integration",
+      "passed": true,
+      "expected": ">=0 contours",
+      "actual": "77 contours",
+      "error_message": "",
+      "execution_time_ms": 65.19
+    },
+    {
+      "name": "Quality validation: IMG_2051.png",
+      "category": "Integration",
+      "passed": true,
+      "expected": "overall > 0.3",
+      "actual": "0.890",
+      "error_message": "",
+      "execution_time_ms": 191.4
+    },
+    {
+      "name": "Distortion analysis: IMG_2051.png",
+      "category": "Integration",
+      "passed": true,
+      "expected": "0-1.0 range",
+      "actual": "0.108",
+      "error_message": "",
+      "execution_time_ms": 117.44
+    },
+    {
+      "name": "Grid detection: IMG_2051.png",
+      "category": "Integration",
+      "passed": true,
+      "expected": "Valid result",
+      "actual": "dims=(104, 48), conf=0.521",
+      "error_message": "",
+      "execution_time_ms": 141.01
+    },
+    {
+      "name": "Contour extraction: IMG_2051.png",
+      "category": "Integration",
+      "passed": true,
+      "expected": ">=0 contours",
+      "actual": "12 contours",
+      "error_message": "",
+      "execution_time_ms": 63.68
+    }
+  ]
+}
