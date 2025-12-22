@@ -1,0 +1,417 @@
+{
+  "feature": "Improved Region Detection for Complex Layouts",
+  "workflow_type": "feature",
+  "workflow_rationale": "This is a feature enhancement expanding existing computer vision capabilities to handle previously unsupported edge cases (irregular shapes, color gradients, camera distortions). We're adding new algorithmic approaches rather than fixing bugs or refactoring existing code.",
+
+  "phases": [
+    {
+      "id": "phase-1-color-segmentation",
+      "name": "Color Segmentation Enhancement",
+      "type": "implementation",
+      "description": "Replace k-means with adaptive clustering (DBSCAN/MeanShift) to automatically determine number of color regions and handle gradients",
+      "depends_on": [],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-1-1",
+          "description": "Add pyrMeanShiftFiltering preprocessing to screenshot_to_regions.py",
+          "service": "cv-service",
+          "files_to_modify": ["screenshot_to_regions.py"],
+          "files_to_create": [],
+          "patterns_from": ["cv-service/hybrid_extraction.py"],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"import cv2; import numpy as np; from screenshot_to_regions import main; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-1-2",
+          "description": "Implement DBSCAN clustering in cells_to_regions.py as primary method",
+          "service": "cv-service",
+          "files_to_modify": ["cells_to_regions.py"],
+          "files_to_create": [],
+          "patterns_from": ["pips-agent/utils/cv_extraction_v2.py"],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"from cells_to_regions import kmeans_cluster; from sklearn.cluster import DBSCAN; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-1-3",
+          "description": "Add MeanShift clustering as secondary fallback in cells_to_regions.py",
+          "service": "cv-service",
+          "files_to_modify": ["cells_to_regions.py"],
+          "files_to_create": [],
+          "patterns_from": ["pips-agent/utils/cv_extraction_v2.py"],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"from sklearn.cluster import MeanShift; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-1-4",
+          "description": "Add confidence scoring to clustering results in cells_to_regions.py",
+          "service": "cv-service",
+          "files_to_modify": ["cells_to_regions.py"],
+          "files_to_create": [],
+          "patterns_from": ["cv-service/hybrid_extraction.py"],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"from cells_to_regions import main; print('Confidence scoring added')\"",
+            "expected": "Confidence"
+          },
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "phase-2-grid-estimation",
+      "name": "Grid Estimation Improvements",
+      "type": "implementation",
+      "description": "Enhance grid dimension estimation for irregular and non-standard layouts using RANSAC-style robust fitting and histogram analysis",
+      "depends_on": [],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-2-1",
+          "description": "Add RANSAC-style robust fitting for grid parameters in hybrid_extraction.py",
+          "service": "cv-service",
+          "files_to_modify": ["cv-service/hybrid_extraction.py"],
+          "files_to_create": [],
+          "patterns_from": ["cv-service/hybrid_extraction.py"],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"from cv-service.hybrid_extraction import detect_grid_lines_adaptive; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-2-2",
+          "description": "Implement histogram analysis fallback for grid estimation in hybrid_extraction.py",
+          "service": "cv-service",
+          "files_to_modify": ["cv-service/hybrid_extraction.py"],
+          "files_to_create": [],
+          "patterns_from": ["pips-agent/utils/cv_extraction_v2.py"],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"from cv-service.hybrid_extraction import find_puzzle_roi; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-2-3",
+          "description": "Add support for non-rectangular and partial grids in hybrid_extraction.py",
+          "service": "cv-service",
+          "files_to_modify": ["cv-service/hybrid_extraction.py"],
+          "files_to_create": [],
+          "patterns_from": ["cv-service/hybrid_extraction.py"],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"from cv-service.hybrid_extraction import GridLineResult; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "phase-3-contour-enhancement",
+      "name": "Contour Enhancement",
+      "type": "implementation",
+      "description": "Add polygon approximation, convex hull analysis, and watershed algorithm for better region boundary identification",
+      "depends_on": ["phase-1-color-segmentation"],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-3-1",
+          "description": "Add polygon approximation with approxPolyDP to cv_extraction_v2.py",
+          "service": "cv-service",
+          "files_to_modify": ["pips-agent/utils/cv_extraction_v2.py"],
+          "files_to_create": [],
+          "patterns_from": ["pips-agent/utils/cv_extraction_v2.py"],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"import cv2; import numpy as np; cnt = np.array([[[0,0]], [[10,0]], [[10,10]], [[0,10]]]); approx = cv2.approxPolyDP(cnt, 0.1, True); print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-3-2",
+          "description": "Implement convex hull analysis for concave regions in cv_extraction_v2.py",
+          "service": "cv-service",
+          "files_to_modify": ["pips-agent/utils/cv_extraction_v2.py"],
+          "files_to_create": [],
+          "patterns_from": ["pips-agent/utils/cv_extraction_v2.py"],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"import cv2; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-3-3",
+          "description": "Add watershed algorithm for separating merged regions in cv_extraction_v2.py",
+          "service": "cv-service",
+          "files_to_modify": ["pips-agent/utils/cv_extraction_v2.py"],
+          "files_to_create": [],
+          "patterns_from": ["pips-agent/utils/cv_extraction_v2.py"],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"import cv2; print('Watershed available:', hasattr(cv2, 'watershed'))\"",
+            "expected": "True"
+          },
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "phase-4-distortion-handling",
+      "name": "Distortion Handling",
+      "type": "implementation",
+      "description": "Add perspective correction for mobile camera angle distortions and image quality validation",
+      "depends_on": ["phase-2-grid-estimation"],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-4-1",
+          "description": "Implement perspective correction using getPerspectiveTransform in hybrid_extraction.py",
+          "service": "cv-service",
+          "files_to_modify": ["cv-service/hybrid_extraction.py"],
+          "files_to_create": [],
+          "patterns_from": ["cv-service/hybrid_extraction.py"],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"import cv2; import numpy as np; pts1 = np.float32([[0,0],[100,0],[0,100],[100,100]]); pts2 = np.float32([[10,10],[90,10],[10,90],[90,90]]); M = cv2.getPerspectiveTransform(pts1, pts2); print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-4-2",
+          "description": "Add image quality validation and distortion detection in hybrid_extraction.py",
+          "service": "cv-service",
+          "files_to_modify": ["cv-service/hybrid_extraction.py"],
+          "files_to_create": [],
+          "patterns_from": ["cv-service/hybrid_extraction.py"],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"from cv-service.hybrid_extraction import find_puzzle_roi; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "phase-5-integration-testing",
+      "name": "Integration & Testing",
+      "type": "integration",
+      "description": "Wire fallback pipeline, add logging/metrics, and validate accuracy on test dataset",
+      "depends_on": ["phase-3-contour-enhancement", "phase-4-distortion-handling"],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-5-1",
+          "description": "Wire fallback pipeline across all modules with confidence scoring triggers",
+          "all_services": true,
+          "files_to_modify": ["cells_to_regions.py", "screenshot_to_regions.py", "cv-service/hybrid_extraction.py"],
+          "files_to_create": [],
+          "patterns_from": ["pips-agent/utils/cv_extraction_v2.py"],
+          "verification": {
+            "type": "manual",
+            "instructions": "Test with complex puzzle images and verify fallback triggers are logged correctly"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-5-2",
+          "description": "Add comprehensive logging and confidence metrics to all detection methods",
+          "all_services": true,
+          "files_to_modify": ["cells_to_regions.py", "screenshot_to_regions.py", "cv-service/hybrid_extraction.py", "pips-agent/utils/cv_extraction_v2.py"],
+          "files_to_create": [],
+          "patterns_from": ["cv-service/hybrid_extraction.py"],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"import logging; logging.basicConfig(level=logging.DEBUG); print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-5-3",
+          "description": "Run accuracy evaluation on test dataset and measure 85% accuracy target",
+          "all_services": true,
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "e2e",
+            "steps": [
+              "Create test dataset with 20+ complex puzzle images",
+              "Run detection on all test images",
+              "Calculate accuracy percentage",
+              "Verify >= 85% accuracy achieved"
+            ]
+          },
+          "status": "pending"
+        }
+      ]
+    }
+  ],
+
+  "summary": {
+    "total_phases": 5,
+    "total_subtasks": 16,
+    "services_involved": ["cv-service"],
+    "parallelism": {
+      "max_parallel_phases": 2,
+      "parallel_groups": [
+        {
+          "phases": ["phase-1-color-segmentation", "phase-2-grid-estimation"],
+          "reason": "Both have no dependencies and modify different file sets (color segmentation: screenshot_to_regions.py, cells_to_regions.py; grid estimation: hybrid_extraction.py)"
+        }
+      ],
+      "recommended_workers": 2,
+      "speedup_estimate": "1.4x faster than sequential (phases 1 & 2 run in parallel)"
+    },
+    "startup_command": "source auto-claude/.venv/bin/activate && python auto-claude/run.py --spec 012 --parallel 2"
+  },
+
+  "verification_strategy": {
+    "risk_level": "high",
+    "skip_validation": false,
+    "test_creation_phase": "post_implementation",
+    "test_types_required": ["unit", "integration", "e2e"],
+    "security_scanning_required": false,
+    "staging_deployment_required": false,
+    "acceptance_criteria": [
+      "All existing tests pass (no regressions)",
+      "New algorithms achieve 85%+ accuracy on complex puzzle test set",
+      "Fallback strategies trigger correctly when primary methods fail",
+      "Processing time remains < 5 seconds per image",
+      "API contracts unchanged - internal algorithm changes only"
+    ],
+    "verification_steps": [
+      {
+        "name": "Unit Tests - Color Segmentation",
+        "command": "pytest cv-service/test_region_detection.py::test_dbscan_clustering cv-service/test_region_detection.py::test_meanshift_clustering -v",
+        "expected_outcome": "All color segmentation tests pass",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Unit Tests - Grid Estimation",
+        "command": "pytest cv-service/test_grid_estimation.py::test_hough_line_detection cv-service/test_grid_estimation.py::test_histogram_fallback -v",
+        "expected_outcome": "All grid estimation tests pass",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Unit Tests - Contour Enhancement",
+        "command": "pytest cv-service/test_region_detection.py::test_watershed_segmentation cv-service/test_region_detection.py::test_polygon_approximation -v",
+        "expected_outcome": "All contour enhancement tests pass",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Integration Tests - Complex Puzzles",
+        "command": "pytest cv-service/test_e2e_extraction.py::test_extract_geometry_complex -v",
+        "expected_outcome": "85%+ accuracy on complex puzzle test set",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Integration Tests - API Compatibility",
+        "command": "pytest cv-service/test_service.py::test_api_response_format -v",
+        "expected_outcome": "All API responses maintain backward compatibility",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Regression Tests",
+        "command": "pytest cv-service/test_e2e_extraction.py -v",
+        "expected_outcome": "All existing tests pass - no degradation",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      }
+    ],
+    "reasoning": "High risk due to core CV functionality affecting all puzzle-solving users. Requires unit tests for individual algorithms, integration tests for API endpoints, and E2E tests with diverse puzzle images to verify 85%+ accuracy target."
+  },
+
+  "qa_acceptance": {
+    "unit_tests": {
+      "required": true,
+      "commands": [
+        "pytest cv-service/test_region_detection.py -v",
+        "pytest cv-service/test_grid_estimation.py -v",
+        "pytest cv-service/test_image_preprocessing.py -v",
+        "pytest cv-service/test_color_processing.py -v"
+      ],
+      "minimum_coverage": 85
+    },
+    "integration_tests": {
+      "required": true,
+      "commands": [
+        "pytest cv-service/test_e2e_extraction.py -v",
+        "pytest cv-service/test_service.py -v"
+      ],
+      "services_to_test": ["cv-service"]
+    },
+    "e2e_tests": {
+      "required": true,
+      "commands": ["pytest cv-service/test_e2e_extraction.py::test_complex_puzzles -v"],
+      "flows": ["complex-puzzle-detection", "mobile-distortion-handling", "gradient-color-segmentation", "fallback-strategy"]
+    },
+    "browser_verification": {
+      "required": false,
+      "pages": []
+    },
+    "database_verification": {
+      "required": false,
+      "checks": []
+    },
+    "manual_verification": {
+      "required": true,
+      "scenarios": [
+        {
+          "name": "Irregular shapes",
+          "test_images": "5+ puzzles with concave/complex regions",
+          "checks": ["Visual inspection: contours match region boundaries", "No merged regions"]
+        },
+        {
+          "name": "Color gradients",
+          "test_images": "5+ puzzles with gradients/similar colors",
+          "checks": ["Clustering correctly separates similar colors", "No over-segmentation"]
+        },
+        {
+          "name": "Distorted images",
+          "test_images": "5+ angled mobile captures",
+          "checks": ["Perspective correction visible", "Detection accuracy comparable to straight-on images"]
+        },
+        {
+          "name": "Non-standard grids",
+          "test_images": "5+ irregular grid patterns",
+          "checks": ["Grid dimensions estimated", "Cell boundaries identified correctly"]
+        }
+      ]
+    }
+  },
+
+  "qa_signoff": null
+}

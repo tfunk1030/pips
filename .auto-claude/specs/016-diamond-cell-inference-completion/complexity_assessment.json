@@ -1,0 +1,70 @@
+{
+  "complexity": "standard",
+  "workflow_type": "feature",
+  "confidence": 0.85,
+  "reasoning": "Completing TODO-marked cell inference algorithm within existing grid detection module. Multiple files but contained scope, no external dependencies, patterns exist in codebase. Algorithmic work requires careful testing but no infrastructure or integration complexity.",
+
+  "analysis": {
+    "scope": {
+      "estimated_files": 4,
+      "estimated_services": 1,
+      "is_cross_cutting": false,
+      "notes": "Localized to grid detection module. Completing existing TODO for cell inference from diamond markers."
+    },
+    "integrations": {
+      "external_services": [],
+      "new_dependencies": [],
+      "research_needed": false,
+      "notes": "Pure internal logic. Extends existing diamond detection without external APIs or libraries."
+    },
+    "infrastructure": {
+      "docker_changes": false,
+      "database_changes": false,
+      "config_changes": false,
+      "notes": "Algorithmic implementation only. No infrastructure impact."
+    },
+    "knowledge": {
+      "patterns_exist": true,
+      "research_required": false,
+      "unfamiliar_tech": [],
+      "notes": "Diamond detection already works. Need to extend with cell position inference using existing patterns."
+    },
+    "risk": {
+      "level": "medium",
+      "concerns": [
+        "Detection accuracy for various diamond sizes",
+        "Handling different orientations",
+        "Integration with existing grid detection pipeline",
+        "Edge cases in geometric calculations"
+      ],
+      "notes": "Affects detection accuracy but not security/payment critical. Needs thorough testing with various diamond geometries."
+    }
+  },
+
+  "recommended_phases": [
+    "discovery",
+    "requirements",
+    "context",
+    "spec_writing",
+    "planning",
+    "validation"
+  ],
+
+  "flags": {
+    "needs_research": false,
+    "needs_self_critique": false,
+    "needs_infrastructure_setup": false
+  },
+
+  "validation_recommendations": {
+    "risk_level": "medium",
+    "skip_validation": false,
+    "minimal_mode": false,
+    "test_types_required": ["unit", "integration"],
+    "security_scan_required": false,
+    "staging_deployment_required": false,
+    "reasoning": "Algorithm change affecting detection accuracy requires unit tests for cell inference logic and integration tests to verify correct pipeline behavior with various diamond geometries."
+  },
+
+  "created_at": "2025-12-22T12:00:00Z"
+}

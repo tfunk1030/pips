@@ -1,0 +1,52 @@
+{
+  "existing_features": [],
+  "tech_stack": [
+    "Python",
+    "React",
+    "FastAPI",
+    "TypeScript"
+  ],
+  "target_audience": "NYT Pips puzzle enthusiasts who want AI-assisted solving",
+  "planned_features": [
+    "Add Image Stats Diagnostic Endpoint",
+    "Graduated Hint System",
+    "AI Verification Modal lacks keyboard accessibility for constraint editing",
+    "Enhanced OCR Constraint Detection",
+    "Share Solutions",
+    "Step1GridAlignment should use themed UI components",
+    "Automated Test Suite",
+    "Multi-Puzzle Type Support",
+    "Diamond Cell Inference Completion",
+    "Premium Features Tier",
+    "Add Domino Tray Preprocessing",
+    "Add Cross-Stage Confidence Warnings to UI",
+    "Offline Mode",
+    "Add haptic feedback for puzzle grid interactions",
+    "Solution Verification Mode",
+    "Strategy Tutorial Mode",
+    "Performance Optimization",
+    "Puzzle History & Favorites",
+    "Inconsistent button styling in Step1GridAlignment uses hardcoded colors",
+    "Add Extraction Comparison/Diff View",
+    "Complete Domino Pip Detection",
+    "ML-Based Puzzle Detection",
+    "Accurate Confidence Scoring",
+    "Specification: Enhance AI Visual Pips Board Extraction Accuracy",
+    "Improved Region Detection for Complex Layouts",
+    "Puzzle Analytics Dashboard",
+    "Complete User Correction UI Workflow",
+    "Enhanced Confidence Feedback UI"
+  ],
+  "graph_hints": {},
+  "config": {
+    "enabled_types": [
+      "code_improvements",
+      "ui_ux_improvements",
+      "security_hardening"
+    ],
+    "include_roadmap_context": true,
+    "include_kanban_context": true,
+    "max_ideas_per_type": 5
+  },
+  "created_at": "2025-12-22T03:08:15.057928"
+}

@@ -1,0 +1,72 @@
+{
+  "complexity": "standard",
+  "workflow_type": "feature",
+  "confidence": 0.80,
+  "reasoning": "Algorithm enhancement work affecting 8-12 files in a single service. Requires research for advanced OpenCV techniques but no external integrations or infrastructure changes. Computer vision work adds inherent complexity but scope is well-contained.",
+
+  "analysis": {
+    "scope": {
+      "estimated_files": 10,
+      "estimated_services": 1,
+      "is_cross_cutting": false,
+      "notes": "Changes contained to cv-service. Will touch color segmentation, grid detection, contour identification algorithms, and add fallback mechanisms. Test files will also need updates."
+    },
+    "integrations": {
+      "external_services": [],
+      "new_dependencies": [],
+      "research_needed": true,
+      "notes": "No external integrations. opencv-python already in use, but advanced techniques for color segmentation (handling gradients/similar colors), grid detection (irregular layouts), and contour refinement require research."
+    },
+    "infrastructure": {
+      "docker_changes": false,
+      "database_changes": false,
+      "config_changes": false,
+      "notes": "No infrastructure impact. Pure algorithm enhancement work."
+    },
+    "knowledge": {
+      "patterns_exist": true,
+      "research_required": true,
+      "unfamiliar_tech": [],
+      "notes": "Codebase has existing region detection patterns. Research needed for: (1) Color segmentation with gradients/similar colors, (2) Grid dimension estimation for irregular layouts, (3) Robust contour identification, (4) Fallback strategy patterns when primary detection fails."
+    },
+    "risk": {
+      "level": "high",
+      "concerns": [
+        "Core functionality for puzzle solving - breaks impact all users",
+        "85%+ accuracy target is ambitious",
+        "Could introduce regressions in currently working cases",
+        "Complex CV work with edge cases",
+        "Needs extensive testing with diverse puzzle types"
+      ],
+      "notes": "High risk due to being core functionality. False positives/negatives directly impact user experience. Must maintain backward compatibility while improving accuracy."
+    }
+  },
+
+  "recommended_phases": [
+    "discovery",
+    "requirements",
+    "research",
+    "context",
+    "spec_writing",
+    "planning",
+    "validation"
+  ],
+
+  "flags": {
+    "needs_research": true,
+    "needs_self_critique": false,
+    "needs_infrastructure_setup": false
+  },
+
+  "validation_recommendations": {
+    "risk_level": "high",
+    "skip_validation": false,
+    "minimal_mode": false,
+    "test_types_required": ["unit", "integration", "e2e"],
+    "security_scan_required": false,
+    "staging_deployment_required": false,
+    "reasoning": "Core CV functionality affecting all puzzle-solving users. Requires unit tests for individual algorithms, integration tests for API endpoints, and E2E tests with diverse puzzle images to verify 85%+ accuracy target. No security concerns as this is image processing only."
+  },
+
+  "created_at": "2025-12-22T00:00:00Z"
+}

@@ -1,0 +1,419 @@
+{
+  "id": "ideation-20251222-031657",
+  "project_id": "C:\\Users\\tfunk\\pips",
+  "config": {
+    "enabled_types": [
+      "code_improvements",
+      "ui_ux_improvements",
+      "security_hardening"
+    ],
+    "include_roadmap_context": true,
+    "include_kanban_context": true,
+    "max_ideas_per_type": 5
+  },
+  "ideas": [
+    {
+      "id": "ci-001",
+      "type": "code_improvements",
+      "title": "Add Solution Export Formats (JSON/PNG)",
+      "description": "Extend the existing exportPuzzle() function to support multiple export formats beyond YAML. Add JSON export for data interchange and PNG export for sharing visual solutions on social media or messaging apps.",
+      "rationale": "The exportPuzzle() pattern exists in storage/puzzles.ts returning YAML via specToYAML(). The GridRenderer component already renders solutions visually. The Button component has icon support for format selection. react-native-view-shot could capture GridRenderer output. This is a natural extension of existing export infrastructure.",
+      "builds_upon": [
+        "exportPuzzle() in storage/puzzles.ts",
+        "GridRenderer visual rendering",
+        "specToYAML() in model/parser.ts"
+      ],
+      "estimated_effort": "small",
+      "affected_files": [
+        "pips-solver/src/storage/puzzles.ts",
+        "pips-solver/src/model/parser.ts",
+        "pips-solver/src/app/screens/PuzzleViewerScreen.tsx"
+      ],
+      "existing_patterns": [
+        "exportPuzzle() function pattern",
+        "GridRenderer for visual output",
+        "Button variant for format selection",
+        "Expo sharing APIs"
+      ],
+      "implementation_approach": "1. Add exportPuzzleAsJSON() returning JSON.stringify(puzzle.spec). 2. Add exportPuzzleAsImage() using react-native-view-shot to capture GridRenderer ref. 3. Update PuzzleViewerScreen with export format dropdown/modal. 4. Use Expo.shareAsync for sharing. ~80 lines following existing patterns.",
+      "status": "draft",
+      "created_at": "2025-12-22T03:15:00.000Z"
+    },
+    {
+      "id": "ci-002",
+      "type": "code_improvements",
+      "title": "Add Domino Tray Validator",
+      "description": "Create a new validator for domino tray completeness and validity following the existing validation pattern. Check for duplicate dominoes in non-duplicate mode, verify pip ranges match maxPip setting, and validate tray size against puzzle requirements.",
+      "rationale": "The validator pattern is well-established with validatePuzzleSpec, validateSolution, validateRegionMapping, and validateConstraints. Each returns {valid, errors, warnings}. The domino tray is a critical input but lacks dedicated validation. The dominoUtils.ts already has helper functions for domino manipulation.",
+      "builds_upon": [
+        "validatePuzzleSpec() pattern",
+        "validateSolution() pattern",
+        "extraction/validation/* validators",
+        "utils/dominoUtils.ts"
+      ],
+      "estimated_effort": "trivial",
+      "affected_files": [
+        "pips-solver/src/validator/validateDominoTray.ts",
+        "pips-solver/src/validator/validateSpec.ts"
+      ],
+      "existing_patterns": [
+        "ValidationResult interface with valid/errors/warnings",
+        "Constraint validation in regionValidator.ts",
+        "Domino [pip1, pip2] tuple type"
+      ],
+      "implementation_approach": "1. Create validateDominoTray(dominoes, spec) in new file. 2. Check for duplicates when allowDuplicates=false. 3. Verify all pips are in [0, maxPip] range. 4. Warn if tray size seems insufficient for grid. 5. Call from validatePuzzleSpec when spec.dominoes exists. ~60 lines.",
+      "status": "draft",
+      "created_at": "2025-12-22T03:15:00.000Z"
+    },
+    {
+      "id": "ci-003",
+      "type": "code_improvements",
+      "title": "Add CV Service Request Retry with Exponential Backoff",
+      "description": "Add retry logic with exponential backoff to CV service API calls. Handle transient network failures and server overload gracefully without requiring user intervention.",
+      "rationale": "The TASK_FALLBACK_CHAIN and StrategyConfig.maxRetries patterns in config/models.ts demonstrate failure handling concepts. The apiClient.ts in extraction/ makes HTTP calls that could benefit from retries. The cv-service endpoints return structured errors that can be used to determine retryability.",
+      "builds_upon": [
+        "TASK_FALLBACK_CHAIN pattern in config/models.ts",
+        "StrategyConfig.maxRetries pattern",
+        "cvExtraction.ts API calls"
+      ],
+      "estimated_effort": "small",
+      "affected_files": [
+        "pips-solver/src/services/cvExtraction.ts",
+        "pips-solver/src/utils/retry.ts"
+      ],
+      "existing_patterns": [
+        "maxRetries in StrategyConfig",
+        "fetch with timeout pattern",
+        "Error response structure from cv-service"
+      ],
+      "implementation_approach": "1. Create utils/retry.ts with retryWithBackoff<T>(fn, maxRetries, baseDelay). 2. Implement exponential backoff: delay = baseDelay * 2^attempt + jitter. 3. Wrap fetch calls in cvExtraction.ts with retry utility. 4. Only retry on network errors and 5xx responses, not 4xx. ~50 lines.",
+      "status": "draft",
+      "created_at": "2025-12-22T03:15:00.000Z"
+    },
+    {
+      "id": "ci-004",
+      "type": "code_improvements",
+      "title": "Add Skeleton Loading States to UI Components",
+      "description": "Create themed skeleton loading placeholder components following the existing UI component pattern. Add skeleton variants for puzzle grid, constraint cards, and domino tray that show during data loading.",
+      "rationale": "The theme system has comprehensive tokens (colors.surface.slate/ash, animations.ts timing configs) and the Button component demonstrates loading states and Reanimated animations. Currently loading states show text 'Loading...' but lack visual placeholders that match the final content shape.",
+      "builds_upon": [
+        "Button component loading prop",
+        "theme/animations.ts timing configs",
+        "Card component structure",
+        "colors.surface.slate/ash palette"
+      ],
+      "estimated_effort": "medium",
+      "affected_files": [
+        "pips-solver/src/app/components/ui/Skeleton.tsx",
+        "pips-solver/src/app/components/ui/index.ts",
+        "pips-solver/src/app/screens/HomeScreen.tsx"
+      ],
+      "existing_patterns": [
+        "AnimatedPressable pattern from Button",
+        "colors.surface.slate for bg",
+        "timingConfigs for animation",
+        "theme/styled.ts createStyles()"
+      ],
+      "implementation_approach": "1. Create Skeleton.tsx base with shimmer animation using Reanimated interpolation. 2. Use colors.surface.slate bg with lighter highlight sweep. 3. Add Skeleton.Grid matching 5x5 cell layout. 4. Add Skeleton.Card matching Card dimensions. 5. Export from ui/index.ts. ~120 lines.",
+      "status": "draft",
+      "created_at": "2025-12-22T03:15:00.000Z"
+    },
+    {
+      "id": "ci-005",
+      "type": "code_improvements",
+      "title": "Add Solver Progress Persistence for Resume",
+      "description": "Save solver progress to AsyncStorage periodically during long-running solves, enabling users to resume solving after app closure or background kill. The solver already has progress callbacks that track nodes/backtracks.",
+      "rationale": "The solvePuzzleAsync function (solver.ts) already has onProgress callbacks that fire every maxIterationsPerTick iterations with full state. AsyncStorage CRUD patterns (puzzles.ts) are well-established. This enables resumable solving for complex puzzles that may take minutes on mobile.",
+      "builds_upon": [
+        "solvePuzzleAsync function",
+        "SolverProgress interface",
+        "AsyncStorage patterns from puzzles.ts",
+        "SolverState type"
+      ],
+      "estimated_effort": "medium",
+      "affected_files": [
+        "pips-solver/src/solver/solver.ts",
+        "pips-solver/src/storage/puzzles.ts",
+        "pips-solver/src/app/screens/SolveScreen.tsx"
+      ],
+      "existing_patterns": [
+        "AsyncStorage.setItem/getItem pattern",
+        "JSON.stringify for state serialization",
+        "onProgress callback pattern",
+        "SolverConfig interface"
+      ],
+      "implementation_approach": "1. Add SOLVER_PROGRESS_KEY to puzzles.ts. 2. Create saveSolverProgress/loadSolverProgress functions following puzzle storage pattern. 3. In onProgress callback (every 1000 nodes), save serialized SolverState. 4. Add restoreFromProgress option to solvePuzzleAsync. 5. On SolveScreen mount, check for existing progress and offer resume. ~150 lines.",
+      "status": "draft",
+      "created_at": "2025-12-22T03:15:00.000Z"
+    },
+    {
+      "id": "uiux-001",
+      "type": "ui_ux_improvements",
+      "title": "Add Accessibility Labels Throughout App",
+      "description": "Add comprehensive accessibility support including accessibilityLabel, accessibilityRole, and accessibilityHint attributes to all interactive elements across the React Native app",
+      "rationale": "Screen reader users currently cannot navigate or use the app effectively. Zero accessibility attributes were found in the codebase, making the app completely inaccessible to users with visual impairments. A grep search for 'accessibilityLabel|accessibilityRole|accessible|aria-' returned zero matches.",
+      "category": "accessibility",
+      "affected_components": [
+        "pips-solver/src/app/components/ui/Button.tsx",
+        "pips-solver/src/app/screens/HomeScreen.tsx",
+        "pips-solver/src/app/screens/SolveScreen.tsx",
+        "pips-solver/src/app/screens/builder/Step1GridAlignment.tsx",
+        "pips-solver/src/app/components/AIVerificationModal.tsx",
+        "pips-solver/src/app/components/GridRenderer.tsx"
+      ],
+      "screenshots": [],
+      "current_state": "No accessibilityLabel, accessibilityRole, accessibilityHint, or accessible props exist anywhere in the codebase. Grep search for accessibility attributes returns zero matches across all .tsx files.",
+      "proposed_change": "1. Add accessibilityLabel to all Button components describing their action (e.g., 'Solve puzzle', 'Import YAML'). 2. Add accessibilityRole='button' to TouchableOpacity/Pressable elements. 3. Add accessibilityHint for complex interactions (e.g., 'Double tap to open puzzle'). 4. Mark decorative elements with accessible={false}. 5. Add accessibilityLabel to grid cells describing their content (e.g., 'Row 2, Column 3, Region A, pip value 5'). 6. Update GridRenderer to announce cell values when revealed in step-by-step mode.",
+      "user_benefit": "Users with visual impairments can navigate and use the puzzle solver app with screen readers (VoiceOver/TalkBack). This also helps users with motor impairments who rely on switch control or voice commands.",
+      "status": "draft",
+      "created_at": "2025-12-22T03:25:00.000Z"
+    },
+    {
+      "id": "uiux-002",
+      "type": "ui_ux_improvements",
+      "title": "ConfidenceIndicator Uses Hardcoded iOS Colors Instead of Theme",
+      "description": "Replace hardcoded iOS system colors (#34C759, #FF9500, #FF3B30) in ConfidenceIndicator.tsx with the app's semantic theme colors (colors.semantic.jade, amber, coral)",
+      "rationale": "The ConfidenceIndicator component breaks visual consistency by using iOS-specific colors instead of the established 'Tactile Game Table' design system colors. This creates a jarring visual inconsistency with the rest of the app's refined aesthetic.",
+      "category": "visual",
+      "affected_components": [
+        "pips-solver/src/app/components/ConfidenceIndicator.tsx"
+      ],
+      "screenshots": [],
+      "current_state": "ConfidenceIndicator.tsx lines 21-27 use hardcoded iOS colors: #34C759 (green), #FF9500 (orange), #FF3B30 (red). These don't match the app's theme tokens which define colors.semantic.jade (#7ECFB3), colors.semantic.amber (#E8C547), and colors.semantic.coral (#E85D75). Also lines 60-95 use additional hardcoded colors: '#fff', '#888', '#333', '#ccc'.",
+      "proposed_change": "Import colors from theme/tokens.ts and replace: 1) '#34C759' -> colors.semantic.jade, 2) '#FF9500' -> colors.semantic.amber (or colors.accent.brass), 3) '#FF3B30' -> colors.semantic.coral, 4) '#fff' -> colors.text.primary, 5) '#888' -> colors.text.tertiary, 6) '#333' -> colors.surface.slate, 7) '#ccc' -> colors.text.secondary",
+      "user_benefit": "Consistent visual language across the app creates a more polished, professional experience. Users won't experience jarring color shifts when viewing confidence indicators.",
+      "status": "draft",
+      "created_at": "2025-12-22T03:25:00.000Z"
+    },
+    {
+      "id": "uiux-003",
+      "type": "ui_ux_improvements",
+      "title": "Increase Touch Targets in Grid Controls to Meet Accessibility Guidelines",
+      "description": "Increase touch target sizes in Step1GridAlignment.tsx row/column control buttons from 36x36 to minimum 44x44 pixels to meet WCAG touch target accessibility guidelines",
+      "rationale": "The current 36x36 pixel touch targets for row/column increment/decrement buttons are below the WCAG 2.5.5 AAA minimum of 44x44 pixels. This makes the controls difficult to use for users with motor impairments or on smaller screens.",
+      "category": "accessibility",
+      "affected_components": [
+        "pips-solver/src/app/screens/builder/Step1GridAlignment.tsx"
+      ],
+      "screenshots": [],
+      "current_state": "Step1GridAlignment.tsx line 538-542 defines controlButton with width: 36, height: 36. This is 8 pixels below the minimum 44x44 recommended by WCAG for touch targets. The -/+ buttons for adjusting rows and columns are difficult to tap precisely.",
+      "proposed_change": "1. Update styles.controlButton: width: 44, height: 44 (was 36x36). 2. Increase fontSize in controlButtonText from 20 to 22 to maintain visual balance. 3. Alternatively, add hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} to TouchableOpacity to expand touch area without changing visual size. 4. Adjust controlRow gap to account for larger button sizes.",
+      "user_benefit": "Users with motor impairments, tremors, or those using the app on small screens can more easily tap the row/column adjustment controls without frustration or accidental mis-taps.",
+      "status": "draft",
+      "created_at": "2025-12-22T03:25:00.000Z"
+    },
+    {
+      "id": "uiux-004",
+      "type": "ui_ux_improvements",
+      "title": "Increase Domino Half Touch Targets in AI Verification Modal",
+      "description": "Increase the touch target size for domino pip editing in AIVerificationModal from 22x22 to minimum 44x44 pixels while maintaining the compact visual display",
+      "rationale": "The domino half touch targets in the AI Verification Modal are only 22x22 pixels (dominoHalf style), less than half the recommended minimum. Users trying to edit pip values by tapping or long-pressing must be extremely precise, leading to frustration and errors.",
+      "category": "usability",
+      "affected_components": [
+        "pips-solver/src/app/components/AIVerificationModal.tsx"
+      ],
+      "screenshots": [],
+      "current_state": "AIVerificationModal.tsx lines 1658-1661 define dominoHalf with width: 22, height: 22. The TouchableOpacity wrapper (dominoHalfTouchable) also constrains to this small size. Users must tap with high precision to cycle pip values (0-6) using tap/long-press gestures.",
+      "proposed_change": "1. Keep visual dominoHalf size at 22x22 for compact display. 2. Add hitSlop={{ top: 11, bottom: 11, left: 11, right: 11 }} to the TouchableOpacity wrapper to expand touch area to 44x44. 3. Add visual feedback on touch (slight scale animation using withTiming(0.95)). 4. Consider adding a tooltip or visual indicator showing the current tap/long-press interaction pattern.",
+      "user_benefit": "Users can more easily edit domino pip values without needing pixel-perfect precision. Reduces frustration when correcting AI extraction errors, leading to faster puzzle setup.",
+      "status": "draft",
+      "created_at": "2025-12-22T03:25:00.000Z"
+    },
+    {
+      "id": "uiux-005",
+      "type": "ui_ux_improvements",
+      "title": "Add Loading Spinner Animation to Button Component",
+      "description": "Replace the static 'Loading...' text in the Button component with an animated ActivityIndicator spinner for better visual feedback during async operations",
+      "rationale": "The Button component currently just shows 'Loading...' text when in loading state, which provides minimal visual feedback. An animated spinner is more universally recognizable as a loading indicator and provides continuous visual feedback that something is happening.",
+      "category": "interaction",
+      "affected_components": [
+        "pips-solver/src/app/components/ui/Button.tsx"
+      ],
+      "screenshots": [],
+      "current_state": "Button.tsx line 128 shows: {loading ? 'Loading...' : title}. This is a static text replacement with no animation. The theme defines animation utilities in animations.ts but they're not used for loading feedback.",
+      "proposed_change": "1. Import ActivityIndicator from 'react-native'. 2. Replace line 128 with conditional rendering that includes both spinner and optional text: {loading ? (<View style={styles.loadingContainer}><ActivityIndicator size='small' color={variantStyles.text.color} style={{ marginRight: spacing[2] }} /><Text style={[styles.text, variantStyles.text]}>{title}</Text></View>) : (<Text>{title}</Text>)}. 3. Add styles.loadingContainer: { flexDirection: 'row', alignItems: 'center' }. 4. The spinner inherits the text color from the button variant for visual consistency.",
+      "user_benefit": "Users receive immediate, animated visual feedback when triggering async operations like AI extraction or puzzle solving, reducing uncertainty about whether their action was registered.",
+      "status": "draft",
+      "created_at": "2025-12-22T03:25:00.000Z"
+    },
+    {
+      "id": "sec-001",
+      "type": "security_hardening",
+      "title": "Remediate exposed Anthropic API key in pips-agent/.env",
+      "description": "A real Anthropic API key (sk-ant-api03-vb9Pi...) is exposed in pips-agent/.env file. While pips-agent/.gitignore excludes .env files, the root .gitignore only excludes .auto-claude/.env. If this file was committed before the subdirectory gitignore was added, the key persists in git history.",
+      "rationale": "Exposed API keys allow attackers to make unauthorized API calls at the victim's expense. Anthropic API keys provide unrestricted access to Claude models. Once keys are in git history, they persist even after deletion from current files. This is an immediate, exploitable vulnerability.",
+      "category": "secrets_management",
+      "severity": "critical",
+      "affectedFiles": [
+        "pips-agent/.env",
+        ".gitignore"
+      ],
+      "vulnerability": "CWE-798: Use of Hard-coded Credentials",
+      "currentRisk": "Real Anthropic API token (sk-ant-api03-...) is visible in pips-agent/.env. Attackers with repository access can immediately use this key for unauthorized Claude API access, potentially incurring significant costs.",
+      "remediation": "1) IMMEDIATELY rotate the Anthropic API key at console.anthropic.com. 2) Add '**/.env' and '.env' patterns to root .gitignore. 3) Verify git history for commits containing .env: `git log --all --full-history -- '**/.env'`. 4) Use BFG Repo-Cleaner or git-filter-repo to purge secrets from history if found. 5) Implement pre-commit hooks using gitleaks to prevent future commits. 6) Use environment injection at runtime for production deployments.",
+      "references": [
+        "https://owasp.org/www-community/vulnerabilities/Use_of_hard-coded_credentials",
+        "https://cwe.mitre.org/data/definitions/798.html",
+        "https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/removing-sensitive-data-from-a-repository"
+      ],
+      "compliance": [
+        "SOC2",
+        "PCI-DSS",
+        "GDPR"
+      ]
+    },
+    {
+      "id": "sec-002",
+      "type": "security_hardening",
+      "title": "Use expo-secure-store for API keys in React Native app",
+      "description": "The pips-solver React Native app stores API keys in AsyncStorage (puzzles.ts lines 42-47). The AppSettings interface includes openrouterApiKey, anthropicApiKey, googleApiKey, and openaiApiKey fields, all stored in unencrypted local storage accessible to any app with storage permissions.",
+      "rationale": "Mobile devices are frequently lost, stolen, or compromised. AsyncStorage data is stored in plain SQLite on Android and plist on iOS, readable by any app with storage access. Users entering their personal API keys trust the app to protect these credentials.",
+      "category": "data_protection",
+      "severity": "high",
+      "affectedFiles": [
+        "pips-solver/src/storage/puzzles.ts"
+      ],
+      "vulnerability": "CWE-312: Cleartext Storage of Sensitive Information",
+      "currentRisk": "API keys entered by users are stored in plaintext AsyncStorage. A malicious app, rooted device, or backup extraction can access these keys, enabling unauthorized API usage billed to the user.",
+      "remediation": "1) Install expo-secure-store: `npx expo install expo-secure-store`. 2) Create secureStorage.ts module using SecureStore for sensitive data. 3) Move API key fields to SecureStore while keeping preferences in AsyncStorage. 4) Implement migration for existing users: read from AsyncStorage, write to SecureStore, delete from AsyncStorage. 5) SecureStore uses iOS Keychain and Android Keystore for encrypted storage.",
+      "references": [
+        "https://docs.expo.dev/versions/latest/sdk/securestore/",
+        "https://owasp.org/www-project-mobile-top-10/2016-risks/m2-insecure-data-storage",
+        "https://cwe.mitre.org/data/definitions/312.html"
+      ],
+      "compliance": [
+        "SOC2",
+        "PCI-DSS",
+        "GDPR"
+      ]
+    },
+    {
+      "id": "sec-003",
+      "type": "security_hardening",
+      "title": "Restrict CORS origins and add security headers to CV service",
+      "description": "The cv-service FastAPI application (main.py:26-32) uses allow_origins=['*'] with allow_credentials=True - a particularly dangerous CORS configuration. No security headers (CSP, X-Frame-Options, HSTS) are configured. This allows any website to make authenticated cross-origin requests.",
+      "rationale": "The combination of wildcard origins with credentials is explicitly warned against in CORS specifications. While the service is currently stateless, this pattern creates security debt and enables CSRF-like attacks if authentication is added. Any malicious website can interact with the API.",
+      "category": "configuration",
+      "severity": "high",
+      "affectedFiles": [
+        "cv-service/main.py"
+      ],
+      "vulnerability": "CWE-942: Overly Permissive Cross-domain Whitelist",
+      "currentRisk": "Any website can make cross-origin requests to the CV service. An attacker could trick users into visiting a malicious page that sends images to your service, potentially for reconnaissance or abuse.",
+      "remediation": "1) Use environment-based CORS: ALLOWED_ORIGINS env var. 2) Development: ['http://localhost:3000', 'http://localhost:19006', 'exp://*']. 3) Only enable allow_credentials when origins are explicitly listed. 4) Add security headers middleware for X-Content-Type-Options, X-Frame-Options, Referrer-Policy. 5) Consider adding HTTPS enforcement header (Strict-Transport-Security) for production.",
+      "references": [
+        "https://owasp.org/www-community/attacks/cors-chained-with-xss",
+        "https://fastapi.tiangolo.com/tutorial/cors/",
+        "https://cwe.mitre.org/data/definitions/942.html",
+        "https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS#credentialed_requests_and_wildcards"
+      ],
+      "compliance": [
+        "SOC2",
+        "OWASP Top 10"
+      ]
+    },
+    {
+      "id": "sec-004",
+      "type": "security_hardening",
+      "title": "Add rate limiting and request size validation to CV service",
+      "description": "The cv-service endpoints (/extract-geometry, /crop-puzzle, /crop-dominoes, /preprocess-image) accept base64-encoded images without rate limiting or pre-decode size validation. The decode_image function (line 70-83) processes any size payload. Image processing with OpenCV is CPU-intensive, making DoS attacks effective.",
+      "rationale": "Without rate limiting, a single client can exhaust server resources. The base64 decode and image processing operations are expensive. An attacker sending rapid requests or massive payloads can deny service to legitimate users or cause out-of-memory crashes.",
+      "category": "configuration",
+      "severity": "medium",
+      "affectedFiles": [
+        "cv-service/main.py"
+      ],
+      "vulnerability": "CWE-770: Allocation of Resources Without Limits or Throttling",
+      "currentRisk": "Attackers can submit unlimited requests or oversized images to crash the service, consume memory, or exhaust CPU, affecting availability for legitimate users.",
+      "remediation": "1) Install slowapi: `pip install slowapi`. 2) Add rate limiting decorator: @limiter.limit('10/minute') per IP. 3) Validate base64 string length before decode: max 15MB (len(base64_str) * 0.75 < 11MB). 4) Add uvicorn limit: --limit-request-body-size 15000000. 5) Validate decoded image dimensions: max 4096x4096 pixels. 6) Add request timeouts using asyncio.wait_for for CV operations.",
+      "references": [
+        "https://owasp.org/www-community/controls/Blocking_Brute_Force_Attacks",
+        "https://slowapi.readthedocs.io/en/latest/",
+        "https://cwe.mitre.org/data/definitions/770.html"
+      ],
+      "compliance": [
+        "SOC2"
+      ]
+    },
+    {
+      "id": "sec-005",
+      "type": "security_hardening",
+      "title": "Run Docker container as non-root user and pin dependencies",
+      "description": "The cv-service Dockerfile runs as root (no USER directive). Additionally, requirements.txt files use >= version specifiers without lock files, allowing dependency versions to drift between builds. No yarn.lock or package-lock.json found for complete dependency resolution.",
+      "rationale": "Running as root amplifies any container vulnerability impact. Dependency drift can introduce untested code or known CVEs. OpenCV image parsing vulnerabilities combined with root privileges could enable container escape. Defense-in-depth requires minimal privileges.",
+      "category": "configuration",
+      "severity": "medium",
+      "affectedFiles": [
+        "cv-service/Dockerfile",
+        "cv-service/requirements.txt",
+        "pips-agent/requirements.txt"
+      ],
+      "vulnerability": "CWE-250: Execution with Unnecessary Privileges",
+      "currentRisk": "Container runs as root. OpenCV, numpy, or Pillow vulnerabilities could be exploited to gain root access. Combined with kernel vulnerabilities, this enables container escape to host system.",
+      "remediation": "1) Add non-root user to Dockerfile: RUN adduser --disabled-password appuser && chown -R appuser /app && USER appuser. 2) Generate lock files: pip-compile requirements.txt -o requirements.lock. 3) Add security scanning: pip-audit in CI pipeline. 4) Consider distroless base images for minimal attack surface. 5) Add securityContext in K8s: runAsNonRoot: true, readOnlyRootFilesystem: true.",
+      "references": [
+        "https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html",
+        "https://docs.docker.com/develop/develop-images/dockerfile_best-practices/#user",
+        "https://cwe.mitre.org/data/definitions/250.html",
+        "https://pypi.org/project/pip-audit/"
+      ],
+      "compliance": [
+        "SOC2",
+        "CIS Docker Benchmark"
+      ]
+    }
+  ],
+  "project_context": {
+    "existing_features": [],
+    "tech_stack": [
+      "Python",
+      "React",
+      "FastAPI",
+      "TypeScript"
+    ],
+    "target_audience": "NYT Pips puzzle enthusiasts who want AI-assisted solving",
+    "planned_features": [
+      "Add Image Stats Diagnostic Endpoint",
+      "Graduated Hint System",
+      "AI Verification Modal lacks keyboard accessibility for constraint editing",
+      "Enhanced OCR Constraint Detection",
+      "Share Solutions",
+      "Step1GridAlignment should use themed UI components",
+      "Automated Test Suite",
+      "Multi-Puzzle Type Support",
+      "Diamond Cell Inference Completion",
+      "Premium Features Tier",
+      "Add Domino Tray Preprocessing",
+      "Add Cross-Stage Confidence Warnings to UI",
+      "Offline Mode",
+      "Add haptic feedback for puzzle grid interactions",
+      "Solution Verification Mode",
+      "Strategy Tutorial Mode",
+      "Performance Optimization",
+      "Puzzle History & Favorites",
+      "Inconsistent button styling in Step1GridAlignment uses hardcoded colors",
+      "Add Extraction Comparison/Diff View",
+      "Complete Domino Pip Detection",
+      "ML-Based Puzzle Detection",
+      "Accurate Confidence Scoring",
+      "Specification: Enhance AI Visual Pips Board Extraction Accuracy",
+      "Improved Region Detection for Complex Layouts",
+      "Puzzle Analytics Dashboard",
+      "Complete User Correction UI Workflow",
+      "Enhanced Confidence Feedback UI"
+    ]
+  },
+  "summary": {
+    "total_ideas": 15,
+    "by_type": {
+      "code_improvements": 5,
+      "ui_ux_improvements": 5,
+      "security_hardening": 5
+    },
+    "by_status": {
+      "draft": 15
+    }
+  },
+  "generated_at": "2025-12-22T03:16:57.151502",
+  "updated_at": "2025-12-22T03:16:57.151502"
+}

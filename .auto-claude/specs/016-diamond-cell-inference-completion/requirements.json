@@ -1,0 +1,4 @@
+{
+  "task_description": "# Diamond Cell Inference Completion\n\nComplete the diamond detection cell inference that is currently marked as TODO. Diamond detection works but cell inference from markers is incomplete.\n\n## Rationale\nThis is explicit technical debt noted in the codebase. Completing it improves detection accuracy for puzzles using diamond markers.\n\n## User Stories\n- As a user with diamond-marked puzzles, I want accurate detection so that the full puzzle is captured\n\n## Acceptance Criteria\n- [ ] Diamond markers correctly infer cell positions\n- [ ] Works with various diamond sizes and orientations\n- [ ] Integrates with grid detection pipeline\n- [ ] Test coverage for diamond-based puzzles\n",
+  "workflow_type": "feature"
+}

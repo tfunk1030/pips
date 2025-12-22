@@ -1,0 +1,133 @@
+{
+  "project_name": "Pips Puzzle Solver",
+  "project_type": "mobile-app",
+  "tech_stack": {
+    "primary_language": "TypeScript",
+    "frameworks": ["React Native", "Expo", "FastAPI", "Claude Agent SDK"],
+    "key_dependencies": [
+      "expo",
+      "react-native",
+      "react-navigation",
+      "fastapi",
+      "opencv-python",
+      "numpy",
+      "scikit-learn",
+      "pytesseract",
+      "claude-agent-sdk",
+      "pydantic"
+    ]
+  },
+  "target_audience": {
+    "primary_persona": "NYT Pips puzzle enthusiasts who want AI-assisted solving",
+    "secondary_personas": [
+      "Casual mobile puzzle gamers seeking quick solutions",
+      "Puzzle learners who prefer hints over direct answers",
+      "Power users who want to understand puzzle-solving strategies"
+    ],
+    "pain_points": [
+      "Stuck on difficult Pips puzzles with no in-game hints",
+      "Manual puzzle-solving takes too long",
+      "Hard to track constraint logic mentally",
+      "Want to learn strategies without spoiling the puzzle completely",
+      "No easy way to get partial hints"
+    ],
+    "goals": [
+      "Quickly solve Pips puzzles from screenshots",
+      "Get strategic hints without full spoilers",
+      "Learn puzzle-solving techniques",
+      "Verify their solutions are correct",
+      "Reduce frustration on harder puzzles"
+    ],
+    "usage_context": "Mobile users playing NYT Pips on their phone who take a screenshot when stuck and want AI assistance to solve or get hints for the puzzle"
+  },
+  "product_vision": {
+    "one_liner": "AI-powered mobile app that solves NYT Pips puzzles from screenshots with optional hints or full solutions",
+    "problem_statement": "NYT Pips puzzles can be challenging with no built-in hint system, leaving players stuck with no way to progress without fully looking up solutions online and spoiling the experience",
+    "value_proposition": "Unlike looking up solutions online, Pips Solver offers graduated assistance - from strategic hints to full solutions - using AI to extract puzzles from screenshots and a constraint-satisfaction solver for accurate answers",
+    "success_metrics": [
+      "Puzzle extraction accuracy rate (currently ~40-60% on complex puzzles)",
+      "Time from screenshot to solution under 10 seconds",
+      "User engagement with hints vs full solve feature",
+      "Successful puzzle solve rate",
+      "App retention for repeat usage"
+    ]
+  },
+  "current_state": {
+    "maturity": "mvp",
+    "existing_features": [
+      "Mobile app with React Native/Expo",
+      "4-step puzzle builder wizard (Grid alignment, Region painting, Constraints, Dominoes)",
+      "Screenshot capture and image upload",
+      "CV-based grid geometry extraction from screenshots",
+      "Multi-strategy detection system (region contours, color segmentation, constraint labels)",
+      "Puzzle cropping and preprocessing endpoints",
+      "Image preprocessing with CLAHE contrast enhancement",
+      "CSP-based puzzle solver",
+      "Hints generation system",
+      "AI agent for puzzle analysis using Claude",
+      "OCR for constraint text detection",
+      "Confidence indicator UI component",
+      "AI verification modal for user corrections",
+      "Theme system support",
+      "Health check endpoints"
+    ],
+    "known_gaps": [
+      "Automated test suite (noted as TODO)",
+      "Domino pip detection not complete",
+      "OCR improvements needed for better constraint reading",
+      "User correction UI workflow incomplete",
+      "ML-based detection not implemented (future)",
+      "Confidence scores are conservative",
+      "Region detection imperfect on complex layouts",
+      "Grid dimension estimation approximate for irregular layouts"
+    ],
+    "technical_debt": [
+      "Automated tests missing - marked as TODO throughout codebase",
+      "Diamond detection works but cell inference from markers incomplete",
+      "40% confidence when actual accuracy may be higher",
+      "Detection accuracy ~40-60% on complex puzzles (was 10-15%)",
+      "Multiple worktrees suggest active parallel development that may need consolidation"
+    ]
+  },
+  "competitive_context": {
+    "alternatives": [
+      "Manual solving without assistance",
+      "Online puzzle solution lookup sites",
+      "General AI assistants (ChatGPT, Claude) with manual description",
+      "Other puzzle solver apps (Sudoku solvers, crossword helpers)"
+    ],
+    "differentiators": [
+      "Screenshot-based automatic puzzle extraction - no manual input needed",
+      "Graduated assistance from hints to full solutions",
+      "Specialized for NYT Pips game specifically",
+      "Mobile-first design for on-device puzzle solving",
+      "AI-powered with computer vision for puzzle understanding",
+      "CSP solver for mathematically correct solutions"
+    ],
+    "market_position": "Niche productivity tool for NYT Pips players - first-to-market specialized solver with screenshot extraction, competing against generic online solutions that require manual input or spoil the entire puzzle",
+    "competitor_pain_points": [],
+    "competitor_analysis_available": false
+  },
+  "constraints": {
+    "technical": [
+      "CV extraction accuracy varies with puzzle complexity (40-60% on complex puzzles)",
+      "OCR performance depends on image quality and text clarity",
+      "Requires API key for Claude AI agent functionality",
+      "Mobile device camera/screenshot quality affects detection",
+      "Processing time ~2-5 seconds per image",
+      "Memory usage ~50MB per image during processing"
+    ],
+    "resources": [
+      "Solo developer or small team (no multi-contributor git history)",
+      "Active development with multiple parallel worktrees",
+      "Reliance on external AI API (Anthropic Claude)"
+    ],
+    "dependencies": [
+      "Anthropic API for Claude agent (ANTHROPIC_API_KEY required)",
+      "OpenCV and scikit-learn for computer vision",
+      "Expo/React Native ecosystem for mobile",
+      "FastAPI backend must be accessible from mobile app"
+    ]
+  },
+  "created_at": "2025-12-22T18:30:00Z"
+}

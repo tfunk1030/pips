@@ -1,0 +1,4 @@
+{
+  "task_description": "# Complete Domino Pip Detection\n\nFinish implementing domino pip detection to accurately identify pip values on domino tiles. Currently marked as incomplete in the codebase.\n\n## Rationale\nDomino pip values are essential puzzle data. Without accurate detection, the solver cannot produce correct solutions. This is a critical gap that blocks full automated puzzle extraction.\n\n## User Stories\n- As a Pips player, I want the app to correctly detect domino pip values so that the solution accounts for all constraints\n\n## Acceptance Criteria\n- [ ] Pip detection correctly identifies 0-6 pip values on each domino half\n- [ ] Detection works with rotated dominoes\n- [ ] Handles different domino visual styles and colors\n- [ ] Confidence score reflects actual detection accuracy\n",
+  "workflow_type": "feature"
+}

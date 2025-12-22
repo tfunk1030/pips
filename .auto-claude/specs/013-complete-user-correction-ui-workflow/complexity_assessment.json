@@ -1,0 +1,70 @@
+{
+  "complexity": "standard",
+  "workflow_type": "feature",
+  "confidence": 0.85,
+  "reasoning": "Standard UI feature spanning 8-12 files in a single service. Multiple editing modes with real-time preview require state management, but no external integrations or infrastructure changes. Existing React Native patterns reduce complexity.",
+
+  "analysis": {
+    "scope": {
+      "estimated_files": 10,
+      "estimated_services": 1,
+      "is_cross_cutting": false,
+      "notes": "Frontend-only feature in pips-solver. Multiple editor components (grid, regions, constraints, dominoes) plus state management and preview rendering system."
+    },
+    "integrations": {
+      "external_services": [],
+      "new_dependencies": [],
+      "research_needed": false,
+      "notes": "Works with existing detection system output. No external APIs or new libraries needed - using existing React Native/Expo stack."
+    },
+    "infrastructure": {
+      "docker_changes": false,
+      "database_changes": false,
+      "config_changes": false,
+      "notes": "Pure frontend UI work, no infrastructure modifications required."
+    },
+    "knowledge": {
+      "patterns_exist": true,
+      "research_required": false,
+      "unfamiliar_tech": [],
+      "notes": "React Native/Expo patterns likely exist. Need to discover existing detection output format and current UI implementation state. No unfamiliar technologies involved."
+    },
+    "risk": {
+      "level": "medium",
+      "concerns": [
+        "State consistency between edited and detected data",
+        "Multiple editing modes requiring unified UX",
+        "Real-time preview performance with frequent updates",
+        "Incomplete existing implementation - scope unclear until discovery"
+      ],
+      "notes": "Not security-sensitive. Main risks are UX consistency across edit modes and state management complexity for real-time preview synchronization."
+    }
+  },
+
+  "recommended_phases": [
+    "discovery",
+    "requirements",
+    "context",
+    "spec_writing",
+    "planning",
+    "validation"
+  ],
+
+  "flags": {
+    "needs_research": false,
+    "needs_self_critique": false,
+    "needs_infrastructure_setup": false
+  },
+
+  "validation_recommendations": {
+    "risk_level": "medium",
+    "skip_validation": false,
+    "minimal_mode": false,
+    "test_types_required": ["unit", "integration"],
+    "security_scan_required": false,
+    "staging_deployment_required": false,
+    "reasoning": "Multiple UI components with shared state management require unit tests for individual editors and integration tests for state synchronization and preview updates. Not security-critical so no scan needed."
+  },
+
+  "created_at": "2025-12-22T00:00:00Z"
+}

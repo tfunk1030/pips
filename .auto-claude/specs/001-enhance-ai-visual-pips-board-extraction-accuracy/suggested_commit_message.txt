@@ -1,0 +1,3 @@
+feat(extraction): enhance pips board extraction accuracy with improved pipeline
+
+Refactor multi-stage extraction pipeline to improve AI-based puzzle data extraction from screenshots. Enhance cell detection, domino extraction, constraint mapping, and grid validation with new confidence scoring. Add AIVerificationModal component and comprehensive test suite for E2E extraction and low-confidence flows.

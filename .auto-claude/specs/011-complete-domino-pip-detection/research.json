@@ -1,0 +1,297 @@
+{
+  "integrations_researched": [
+    {
+      "name": "OpenCV (opencv-python)",
+      "type": "library",
+      "verified_package": {
+        "name": "opencv-python",
+        "install_command": "pip install opencv-python>=4.8.0",
+        "version": ">=4.8.0",
+        "verified": true
+      },
+      "api_patterns": {
+        "imports": [
+          "import cv2",
+          "import numpy as np"
+        ],
+        "initialization": "N/A - functions called directly",
+        "key_functions": [
+          "cv2.imread(path) - Load image from file",
+          "cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) - Convert color spaces",
+          "cv2.threshold(img, threshold, maxval, type) - Binary thresholding",
+          "cv2.adaptiveThreshold(img, maxval, method, type, blockSize, C) - Adaptive thresholding",
+          "cv2.findContours(img, mode, method) - Find contours in binary image",
+          "cv2.contourArea(contour) - Calculate contour area",
+          "cv2.boundingRect(contour) - Get bounding rectangle of contour",
+          "cv2.Canny(img, threshold1, threshold2) - Edge detection",
+          "cv2.HoughLinesP(img, rho, theta, threshold, minLineLength, maxLineGap) - Line detection",
+          "cv2.morphologyEx(img, operation, kernel) - Morphological operations",
+          "cv2.getStructuringElement(shape, size) - Create morphological kernel",
+          "cv2.dilate(img, kernel, iterations) - Dilation operation",
+          "cv2.bilateralFilter(img, d, sigmaColor, sigmaSpace) - Noise reduction while preserving edges",
+          "cv2.HoughCircles(img, method, dp, minDist, param1, param2, minRadius, maxRadius) - Circle detection (for pip counting)"
+        ],
+        "verified_against": "Existing codebase: cv-service/hybrid_extraction.py, extract_dominoes.py"
+      },
+      "configuration": {
+        "env_vars": [],
+        "config_files": [],
+        "dependencies": ["numpy>=1.24.0"]
+      },
+      "infrastructure": {
+        "requires_docker": false,
+        "docker_image": null,
+        "ports": [],
+        "volumes": []
+      },
+      "gotchas": [
+        "cv2.findContours returns different number of values in OpenCV 3.x vs 4.x (use unpacking with _ for hierarchy)",
+        "Images are loaded in BGR format by default, not RGB - convert when needed",
+        "Threshold values (e.g., 150, 200) are highly dependent on lighting conditions - adaptive thresholding preferred",
+        "Contour area filtering (10 < area < 200) needs tuning based on image resolution and domino size",
+        "Circle detection (HoughCircles) can be more robust than contour counting for pips but requires parameter tuning",
+        "Rotated dominoes require orientation detection before splitting into halves",
+        "Different domino styles (white background, colored backgrounds, different pip colors) require different preprocessing"
+      ],
+      "research_sources": [
+        "Project file: cv-service/requirements.txt (line 6: opencv-python>=4.8.0)",
+        "Project file: cv-service/hybrid_extraction.py (extensive OpenCV usage for grid detection)",
+        "Project file: extract_dominoes.py (basic pip detection implementation)",
+        "OpenCV Documentation: https://docs.opencv.org/"
+      ]
+    },
+    {
+      "name": "NumPy",
+      "type": "library",
+      "verified_package": {
+        "name": "numpy",
+        "install_command": "pip install numpy>=1.24.0",
+        "version": ">=1.24.0",
+        "verified": true
+      },
+      "api_patterns": {
+        "imports": [
+          "import numpy as np"
+        ],
+        "initialization": "N/A - functions called directly",
+        "key_functions": [
+          "np.ndarray - Core array type used by OpenCV",
+          "np.frombuffer(buffer, dtype) - Create array from bytes",
+          "np.mean(array) - Calculate mean of array",
+          "np.std(array) - Calculate standard deviation",
+          "np.diff(array) - Calculate differences between adjacent elements",
+          "np.arctan2(y, x) - Calculate angle from coordinates",
+          "np.pi - Pi constant for angle calculations",
+          "np.sqrt(x) - Square root for distance calculations"
+        ],
+        "verified_against": "Existing codebase: cv-service/hybrid_extraction.py"
+      },
+      "configuration": {
+        "env_vars": [],
+        "config_files": [],
+        "dependencies": []
+      },
+      "infrastructure": {
+        "requires_docker": false,
+        "docker_image": null,
+        "ports": [],
+        "volumes": []
+      },
+      "gotchas": [
+        "OpenCV images are NumPy arrays with shape (height, width, channels)",
+        "Array indexing is [y, x] not [x, y] - y is rows, x is columns",
+        "Slicing images: img[y1:y2, x1:x2] for cropping regions"
+      ],
+      "research_sources": [
+        "Project file: cv-service/requirements.txt (line 7: numpy>=1.24.0)",
+        "Project file: cv-service/hybrid_extraction.py"
+      ]
+    },
+    {
+      "name": "FastAPI",
+      "type": "library",
+      "verified_package": {
+        "name": "fastapi",
+        "install_command": "pip install fastapi>=0.104.0",
+        "version": ">=0.104.0",
+        "verified": true
+      },
+      "api_patterns": {
+        "imports": [
+          "from fastapi import FastAPI",
+          "from pydantic import BaseModel"
+        ],
+        "initialization": "app = FastAPI(title='Pips CV Service', version='1.0.0')",
+        "key_functions": [
+          "@app.post('/endpoint') - Define POST endpoint",
+          "@app.get('/endpoint') - Define GET endpoint",
+          "BaseModel - Pydantic model for request/response validation"
+        ],
+        "verified_against": "Existing codebase: cv-service/main.py"
+      },
+      "configuration": {
+        "env_vars": [],
+        "config_files": [],
+        "dependencies": ["pydantic>=2.0.0", "python-multipart>=0.0.6"]
+      },
+      "infrastructure": {
+        "requires_docker": true,
+        "docker_image": "Custom - see cv-service/Dockerfile",
+        "ports": [8080],
+        "volumes": []
+      },
+      "gotchas": [
+        "Base64 image handling requires proper decoding (check for 'base64,' prefix)",
+        "Large image payloads may need increased request size limits",
+        "CORS middleware needed for cross-origin requests from mobile app"
+      ],
+      "research_sources": [
+        "Project file: cv-service/requirements.txt",
+        "Project file: cv-service/main.py",
+        "Project file: cv-service/Dockerfile"
+      ]
+    },
+    {
+      "name": "Uvicorn",
+      "type": "library",
+      "verified_package": {
+        "name": "uvicorn",
+        "install_command": "pip install uvicorn>=0.24.0",
+        "version": ">=0.24.0",
+        "verified": true
+      },
+      "api_patterns": {
+        "imports": [
+          "import uvicorn"
+        ],
+        "initialization": "uvicorn.run(app, host='0.0.0.0', port=8080)",
+        "key_functions": [
+          "uvicorn.run(app, host, port) - Run ASGI server"
+        ],
+        "verified_against": "Existing codebase: cv-service/main.py"
+      },
+      "configuration": {
+        "env_vars": [],
+        "config_files": [],
+        "dependencies": []
+      },
+      "infrastructure": {
+        "requires_docker": false,
+        "docker_image": null,
+        "ports": [8080],
+        "volumes": []
+      },
+      "gotchas": [
+        "Default host 127.0.0.1 won't work in Docker - use 0.0.0.0",
+        "Reload mode (--reload) useful for development but not production"
+      ],
+      "research_sources": [
+        "Project file: cv-service/requirements.txt",
+        "Project file: cv-service/main.py"
+      ]
+    },
+    {
+      "name": "Pydantic",
+      "type": "library",
+      "verified_package": {
+        "name": "pydantic",
+        "install_command": "pip install pydantic>=2.0.0",
+        "version": ">=2.0.0",
+        "verified": true
+      },
+      "api_patterns": {
+        "imports": [
+          "from pydantic import BaseModel"
+        ],
+        "initialization": "N/A - define models as classes",
+        "key_functions": [
+          "class ModelName(BaseModel) - Define data model",
+          "Optional[type] - Optional field typing",
+          "Field(...) - Field with validation"
+        ],
+        "verified_against": "Existing codebase: cv-service/main.py, cv-service/hybrid_extraction.py"
+      },
+      "configuration": {
+        "env_vars": [],
+        "config_files": [],
+        "dependencies": []
+      },
+      "infrastructure": {
+        "requires_docker": false,
+        "docker_image": null,
+        "ports": [],
+        "volumes": []
+      },
+      "gotchas": [
+        "Pydantic v2 has breaking changes from v1 - use >=2.0.0 as specified",
+        "BaseModel automatically validates and serializes data"
+      ],
+      "research_sources": [
+        "Project file: cv-service/requirements.txt",
+        "Project file: cv-service/hybrid_extraction.py"
+      ]
+    }
+  ],
+  "unverified_claims": [],
+  "recommendations": [
+    "Consider using cv2.HoughCircles() for more robust pip detection instead of just contour counting - circles are a more specific shape match for pips",
+    "Implement rotation detection (cv2.minAreaRect) to handle rotated dominoes before splitting into halves",
+    "Add preprocessing steps (CLAHE, brightness normalization) before pip detection for better accuracy in various lighting conditions - this was done for puzzle detection and should be applied to dominoes too (see spec 002-add-domino-tray-preprocessing)",
+    "Consider template matching (cv2.matchTemplate) for pip patterns as an alternative/supplement to contour detection",
+    "Implement confidence scoring based on pip detection quality (e.g., circularity of detected contours, size consistency)",
+    "Add support for different domino visual styles (colored pips, colored backgrounds) by using color-based segmentation in addition to grayscale thresholding",
+    "Current implementation in extract_dominoes.py is basic and incomplete - needs enhancement for production use",
+    "Test with various domino orientations (0, 90, 180, 270 degrees) to ensure rotation invariance"
+  ],
+  "computer_vision_techniques": [
+    {
+      "technique": "Contour Detection",
+      "description": "Current approach - find black dots (pips) by detecting contours after thresholding",
+      "opencv_functions": ["cv2.findContours", "cv2.contourArea"],
+      "pros": ["Simple", "Fast", "Works for standard dominoes"],
+      "cons": ["Sensitive to lighting", "Fails with rotated dominoes", "Cannot distinguish overlapping pips", "Threshold values need manual tuning"],
+      "current_status": "Implemented in extract_dominoes.py but incomplete"
+    },
+    {
+      "technique": "Circle Detection (Hough Circles)",
+      "description": "Detect circular pip shapes using Hough transform",
+      "opencv_functions": ["cv2.HoughCircles"],
+      "pros": ["More robust than contour counting", "Better handles overlapping pips", "Shape-specific (circles)"],
+      "cons": ["Requires parameter tuning", "Slower than contour detection", "May miss slightly elliptical pips on rotated tiles"],
+      "current_status": "Not implemented - recommended for improvement"
+    },
+    {
+      "technique": "Template Matching",
+      "description": "Match known pip patterns against domino halves",
+      "opencv_functions": ["cv2.matchTemplate", "cv2.minMaxLoc"],
+      "pros": ["Very accurate for known patterns", "Can handle different orientations with multiple templates"],
+      "cons": ["Requires template library for each pip count (0-6)", "Sensitive to scale changes", "Slower than contour detection"],
+      "current_status": "Not implemented - could supplement other methods"
+    },
+    {
+      "technique": "Adaptive Thresholding",
+      "description": "Use local threshold values to handle varying lighting",
+      "opencv_functions": ["cv2.adaptiveThreshold"],
+      "pros": ["Handles uneven lighting", "More robust than global thresholding"],
+      "cons": ["Slightly slower", "Block size needs tuning"],
+      "current_status": "Used in grid detection (hybrid_extraction.py) but not in domino pip detection"
+    },
+    {
+      "technique": "Rotation Detection",
+      "description": "Detect domino orientation before processing",
+      "opencv_functions": ["cv2.minAreaRect", "cv2.getRotationMatrix2D", "cv2.warpAffine"],
+      "pros": ["Enables handling of rotated dominoes", "Can correct rotation before pip counting"],
+      "cons": ["Adds processing time", "Requires accurate domino contour detection"],
+      "current_status": "Not implemented - needed for rotation invariance"
+    }
+  ],
+  "implementation_gaps_identified": [
+    "Rotation handling - current code assumes horizontal dominoes only",
+    "Confidence scoring - no confidence metric for pip detection",
+    "Style variation - assumes white background with black pips only",
+    "Preprocessing - no image enhancement before pip detection (contrast, brightness)",
+    "Error handling - minimal validation of detected pip counts (should be 0-6)",
+    "Edge cases - no handling of partially visible dominoes, overlapping dominoes, or shadows"
+  ],
+  "created_at": "2025-12-22T03:15:00Z"
+}

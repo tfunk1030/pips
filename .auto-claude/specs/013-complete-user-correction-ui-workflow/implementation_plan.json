@@ -2,7 +2,6 @@
   "feature": "Complete User Correction UI - Add Grid Dimension Editing",
   "workflow_type": "simple",
   "workflow_rationale": "This is a single-component enhancement to add missing grid dimension editing. The correction UI workflow is ~95% complete - only grid dimension controls are missing. All other features (cell editing, region assignment, constraint editing, domino adjustment, real-time preview) are fully implemented. This is a straightforward feature addition, not a multi-phase feature build.",
-
   "discovery_findings": {
     "existing_correction_ui": "AIVerificationModal.tsx already implements comprehensive correction UI with cell editing, region correction, constraint editing, domino pip adjustment, and real-time preview",
     "what_exists": [
@@ -17,7 +16,6 @@
     ],
     "scope_clarification": "The spec suggested building a complete correction workflow from scratch, but investigation revealed only grid dimension editing is missing. This significantly reduces task complexity from 'standard' to 'simple'."
   },
-
   "phases": [
     {
       "id": "phase-1-implementation",
@@ -106,7 +104,9 @@
       "name": "Testing and Validation",
       "type": "implementation",
       "description": "Test dimension editing with real detection results and edge cases",
-      "depends_on": ["phase-1-implementation"],
+      "depends_on": [
+        "phase-1-implementation"
+      ],
       "parallel_safe": false,
       "subtasks": [
         {
@@ -146,11 +146,12 @@
       ]
     }
   ],
-
   "summary": {
     "total_phases": 2,
     "total_subtasks": 4,
-    "services_involved": ["pips-solver"],
+    "services_involved": [
+      "pips-solver"
+    ],
     "parallelism": {
       "max_parallel_phases": 1,
       "parallel_groups": [],
@@ -159,12 +160,13 @@
     },
     "startup_command": "source auto-claude/.venv/bin/activate && python auto-claude/run.py --spec 013 --parallel 1"
   },
-
   "verification_strategy": {
     "risk_level": "low",
     "skip_validation": false,
     "test_creation_phase": "post_implementation",
-    "test_types_required": ["unit"],
+    "test_types_required": [
+      "unit"
+    ],
     "security_scanning_required": false,
     "staging_deployment_required": false,
     "acceptance_criteria": [
@@ -196,7 +198,6 @@
     ],
     "reasoning": "Low risk change - single component enhancement following existing patterns. Manual testing sufficient given the visual/interactive nature. Unit tests optional since no test suite for AIVerificationModal currently exists."
   },
-
   "qa_acceptance": {
     "unit_tests": {
       "required": false,
@@ -237,6 +238,8 @@
       "checks": []
     }
   },
-
-  "qa_signoff": null
+  "qa_signoff": null,
+  "status": "human_review",
+  "planStatus": "review",
+  "updated_at": "2025-12-22T08:29:23.750Z"
 }

@@ -1,0 +1,74 @@
+{
+  "code_improvements": [
+    {
+      "id": "ci-001",
+      "type": "code_improvements",
+      "title": "Add Solution Export Formats (JSON/PNG)",
+      "description": "Extend the existing exportPuzzle() function to support multiple export formats beyond YAML. Add JSON export for data interchange and PNG export for sharing visual solutions on social media or messaging apps.",
+      "rationale": "The exportPuzzle() pattern exists in storage/puzzles.ts returning YAML via specToYAML(). The GridRenderer component already renders solutions visually. The Button component has icon support for format selection. react-native-view-shot could capture GridRenderer output. This is a natural extension of existing export infrastructure.",
+      "builds_upon": ["exportPuzzle() in storage/puzzles.ts", "GridRenderer visual rendering", "specToYAML() in model/parser.ts"],
+      "estimated_effort": "small",
+      "affected_files": ["pips-solver/src/storage/puzzles.ts", "pips-solver/src/model/parser.ts", "pips-solver/src/app/screens/PuzzleViewerScreen.tsx"],
+      "existing_patterns": ["exportPuzzle() function pattern", "GridRenderer for visual output", "Button variant for format selection", "Expo sharing APIs"],
+      "implementation_approach": "1. Add exportPuzzleAsJSON() returning JSON.stringify(puzzle.spec). 2. Add exportPuzzleAsImage() using react-native-view-shot to capture GridRenderer ref. 3. Update PuzzleViewerScreen with export format dropdown/modal. 4. Use Expo.shareAsync for sharing. ~80 lines following existing patterns.",
+      "status": "draft",
+      "created_at": "2025-12-22T03:15:00.000Z"
+    },
+    {
+      "id": "ci-002",
+      "type": "code_improvements",
+      "title": "Add Domino Tray Validator",
+      "description": "Create a new validator for domino tray completeness and validity following the existing validation pattern. Check for duplicate dominoes in non-duplicate mode, verify pip ranges match maxPip setting, and validate tray size against puzzle requirements.",
+      "rationale": "The validator pattern is well-established with validatePuzzleSpec, validateSolution, validateRegionMapping, and validateConstraints. Each returns {valid, errors, warnings}. The domino tray is a critical input but lacks dedicated validation. The dominoUtils.ts already has helper functions for domino manipulation.",
+      "builds_upon": ["validatePuzzleSpec() pattern", "validateSolution() pattern", "extraction/validation/* validators", "utils/dominoUtils.ts"],
+      "estimated_effort": "trivial",
+      "affected_files": ["pips-solver/src/validator/validateDominoTray.ts", "pips-solver/src/validator/validateSpec.ts"],
+      "existing_patterns": ["ValidationResult interface with valid/errors/warnings", "Constraint validation in regionValidator.ts", "Domino [pip1, pip2] tuple type"],
+      "implementation_approach": "1. Create validateDominoTray(dominoes, spec) in new file. 2. Check for duplicates when allowDuplicates=false. 3. Verify all pips are in [0, maxPip] range. 4. Warn if tray size seems insufficient for grid. 5. Call from validatePuzzleSpec when spec.dominoes exists. ~60 lines.",
+      "status": "draft",
+      "created_at": "2025-12-22T03:15:00.000Z"
+    },
+    {
+      "id": "ci-003",
+      "type": "code_improvements",
+      "title": "Add CV Service Request Retry with Exponential Backoff",
+      "description": "Add retry logic with exponential backoff to CV service API calls. Handle transient network failures and server overload gracefully without requiring user intervention.",
+      "rationale": "The TASK_FALLBACK_CHAIN and StrategyConfig.maxRetries patterns in config/models.ts demonstrate failure handling concepts. The apiClient.ts in extraction/ makes HTTP calls that could benefit from retries. The cv-service endpoints return structured errors that can be used to determine retryability.",
+      "builds_upon": ["TASK_FALLBACK_CHAIN pattern in config/models.ts", "StrategyConfig.maxRetries pattern", "cvExtraction.ts API calls"],
+      "estimated_effort": "small",
+      "affected_files": ["pips-solver/src/services/cvExtraction.ts", "pips-solver/src/utils/retry.ts"],
+      "existing_patterns": ["maxRetries in StrategyConfig", "fetch with timeout pattern", "Error response structure from cv-service"],
+      "implementation_approach": "1. Create utils/retry.ts with retryWithBackoff<T>(fn, maxRetries, baseDelay). 2. Implement exponential backoff: delay = baseDelay * 2^attempt + jitter. 3. Wrap fetch calls in cvExtraction.ts with retry utility. 4. Only retry on network errors and 5xx responses, not 4xx. ~50 lines.",
+      "status": "draft",
+      "created_at": "2025-12-22T03:15:00.000Z"
+    },
+    {
+      "id": "ci-004",
+      "type": "code_improvements",
+      "title": "Add Skeleton Loading States to UI Components",
+      "description": "Create themed skeleton loading placeholder components following the existing UI component pattern. Add skeleton variants for puzzle grid, constraint cards, and domino tray that show during data loading.",
+      "rationale": "The theme system has comprehensive tokens (colors.surface.slate/ash, animations.ts timing configs) and the Button component demonstrates loading states and Reanimated animations. Currently loading states show text 'Loading...' but lack visual placeholders that match the final content shape.",
+      "builds_upon": ["Button component loading prop", "theme/animations.ts timing configs", "Card component structure", "colors.surface.slate/ash palette"],
+      "estimated_effort": "medium",
+      "affected_files": ["pips-solver/src/app/components/ui/Skeleton.tsx", "pips-solver/src/app/components/ui/index.ts", "pips-solver/src/app/screens/HomeScreen.tsx"],
+      "existing_patterns": ["AnimatedPressable pattern from Button", "colors.surface.slate for bg", "timingConfigs for animation", "theme/styled.ts createStyles()"],
+      "implementation_approach": "1. Create Skeleton.tsx base with shimmer animation using Reanimated interpolation. 2. Use colors.surface.slate bg with lighter highlight sweep. 3. Add Skeleton.Grid matching 5x5 cell layout. 4. Add Skeleton.Card matching Card dimensions. 5. Export from ui/index.ts. ~120 lines.",
+      "status": "draft",
+      "created_at": "2025-12-22T03:15:00.000Z"
+    },
+    {
+      "id": "ci-005",
+      "type": "code_improvements",
+      "title": "Add Solver Progress Persistence for Resume",
+      "description": "Save solver progress to AsyncStorage periodically during long-running solves, enabling users to resume solving after app closure or background kill. The solver already has progress callbacks that track nodes/backtracks.",
+      "rationale": "The solvePuzzleAsync function (solver.ts) already has onProgress callbacks that fire every maxIterationsPerTick iterations with full state. AsyncStorage CRUD patterns (puzzles.ts) are well-established. This enables resumable solving for complex puzzles that may take minutes on mobile.",
+      "builds_upon": ["solvePuzzleAsync function", "SolverProgress interface", "AsyncStorage patterns from puzzles.ts", "SolverState type"],
+      "estimated_effort": "medium",
+      "affected_files": ["pips-solver/src/solver/solver.ts", "pips-solver/src/storage/puzzles.ts", "pips-solver/src/app/screens/SolveScreen.tsx"],
+      "existing_patterns": ["AsyncStorage.setItem/getItem pattern", "JSON.stringify for state serialization", "onProgress callback pattern", "SolverConfig interface"],
+      "implementation_approach": "1. Add SOLVER_PROGRESS_KEY to puzzles.ts. 2. Create saveSolverProgress/loadSolverProgress functions following puzzle storage pattern. 3. In onProgress callback (every 1000 nodes), save serialized SolverState. 4. Add restoreFromProgress option to solvePuzzleAsync. 5. On SolveScreen mount, check for existing progress and offer resume. ~150 lines.",
+      "status": "draft",
+      "created_at": "2025-12-22T03:15:00.000Z"
+    }
+  ]
+}

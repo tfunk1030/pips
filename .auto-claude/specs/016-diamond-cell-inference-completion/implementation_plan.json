@@ -15,9 +15,13 @@
           "id": "subtask-1-1",
           "description": "Implement diamond shape detection using contour analysis",
           "service": "pips-agent",
-          "files_to_modify": ["utils/cv_extraction_v2.py"],
+          "files_to_modify": [
+            "utils/cv_extraction_v2.py"
+          ],
           "files_to_create": [],
-          "patterns_from": ["utils/cv_extraction_v2.py (lines 32-122: detect_by_region_contours structure)"],
+          "patterns_from": [
+            "utils/cv_extraction_v2.py (lines 32-122: detect_by_region_contours structure)"
+          ],
           "verification": {
             "type": "command",
             "command": "python -c \"from pips-agent.utils.cv_extraction_v2 import detect_by_constraint_labels; print('Function imported successfully')\"",
@@ -39,9 +43,13 @@
           "id": "subtask-1-2",
           "description": "Implement cell position inference from detected diamonds",
           "service": "pips-agent",
-          "files_to_modify": ["utils/cv_extraction_v2.py"],
+          "files_to_modify": [
+            "utils/cv_extraction_v2.py"
+          ],
           "files_to_create": [],
-          "patterns_from": ["utils/cv_extraction_v2.py (lines 273-299: estimate_grid_dims helper)"],
+          "patterns_from": [
+            "utils/cv_extraction_v2.py (lines 273-299: estimate_grid_dims helper)"
+          ],
           "verification": {
             "type": "manual",
             "instructions": "Review code: diamond positions should be analyzed to determine if they mark corners or centers, then grid spacing calculated, then cell bounding boxes computed"
@@ -60,7 +68,9 @@
           "id": "subtask-1-3",
           "description": "Add confidence scoring and region detection using existing helpers",
           "service": "pips-agent",
-          "files_to_modify": ["utils/cv_extraction_v2.py"],
+          "files_to_modify": [
+            "utils/cv_extraction_v2.py"
+          ],
           "files_to_create": [],
           "patterns_from": [
             "utils/cv_extraction_v2.py (lines 302-341: detect_regions_from_cells)",
@@ -87,16 +97,22 @@
       "name": "Multi-Strategy Integration",
       "type": "integration",
       "description": "Integrate constraint_labels strategy into extract_puzzle_multi_strategy() system",
-      "depends_on": ["phase-1-core-implementation"],
+      "depends_on": [
+        "phase-1-core-implementation"
+      ],
       "parallel_safe": false,
       "subtasks": [
         {
           "id": "subtask-2-1",
           "description": "Add constraint_labels to default strategies list",
           "service": "pips-agent",
-          "files_to_modify": ["utils/cv_extraction_v2.py"],
+          "files_to_modify": [
+            "utils/cv_extraction_v2.py"
+          ],
           "files_to_create": [],
-          "patterns_from": ["utils/cv_extraction_v2.py (lines 221-222: default strategies)"],
+          "patterns_from": [
+            "utils/cv_extraction_v2.py (lines 221-222: default strategies)"
+          ],
           "verification": {
             "type": "command",
             "command": "python -c \"from pips-agent.utils.cv_extraction_v2 import extract_puzzle_multi_strategy; import inspect; src = inspect.getsource(extract_puzzle_multi_strategy); assert 'constraint_labels' in src, 'Strategy not in defaults'; print('Strategy in defaults')\"",
@@ -135,7 +151,9 @@
       "name": "Test Coverage",
       "type": "implementation",
       "description": "Create comprehensive test suite for diamond detection and integration",
-      "depends_on": ["phase-2-integration"],
+      "depends_on": [
+        "phase-2-integration"
+      ],
       "parallel_safe": false,
       "subtasks": [
         {
@@ -143,8 +161,12 @@
           "description": "Create test file with basic structure and fixtures",
           "service": "pips-agent",
           "files_to_modify": [],
-          "files_to_create": ["test_cv_extraction_v2.py"],
-          "patterns_from": ["test_user_puzzle_cv.py (test structure and patterns)"],
+          "files_to_create": [
+            "test_cv_extraction_v2.py"
+          ],
+          "patterns_from": [
+            "test_user_puzzle_cv.py (test structure and patterns)"
+          ],
           "verification": {
             "type": "command",
             "command": "python -m pytest pips-agent/test_cv_extraction_v2.py::test_basic_structure -v",
@@ -162,7 +184,9 @@
           "id": "subtask-3-2",
           "description": "Add unit tests for diamond detection function",
           "service": "pips-agent",
-          "files_to_modify": ["test_cv_extraction_v2.py"],
+          "files_to_modify": [
+            "test_cv_extraction_v2.py"
+          ],
           "files_to_create": [],
           "patterns_from": [],
           "verification": {
@@ -184,9 +208,13 @@
           "id": "subtask-3-3",
           "description": "Add integration test for multi-strategy system",
           "service": "pips-agent",
-          "files_to_modify": ["test_cv_extraction_v2.py"],
+          "files_to_modify": [
+            "test_cv_extraction_v2.py"
+          ],
           "files_to_create": [],
-          "patterns_from": ["test_user_puzzle_cv.py (lines 59-79: multi-strategy test pattern)"],
+          "patterns_from": [
+            "test_user_puzzle_cv.py (lines 59-79: multi-strategy test pattern)"
+          ],
           "verification": {
             "type": "command",
             "command": "python -m pytest pips-agent/test_cv_extraction_v2.py::test_multi_strategy_includes_constraint_labels -v",
@@ -226,7 +254,9 @@
   "summary": {
     "total_phases": 3,
     "total_subtasks": 9,
-    "services_involved": ["pips-agent"],
+    "services_involved": [
+      "pips-agent"
+    ],
     "parallelism": {
       "max_parallel_phases": 1,
       "parallel_groups": [],
@@ -239,7 +269,10 @@
     "risk_level": "medium",
     "skip_validation": false,
     "test_creation_phase": "phase-3-testing",
-    "test_types_required": ["unit", "integration"],
+    "test_types_required": [
+      "unit",
+      "integration"
+    ],
     "security_scanning_required": false,
     "staging_deployment_required": false,
     "acceptance_criteria": [
@@ -292,13 +325,19 @@
   "qa_acceptance": {
     "unit_tests": {
       "required": true,
-      "commands": ["python -m pytest pips-agent/test_cv_extraction_v2.py -v"],
+      "commands": [
+        "python -m pytest pips-agent/test_cv_extraction_v2.py -v"
+      ],
       "minimum_coverage": null
     },
     "integration_tests": {
       "required": true,
-      "commands": ["python -m pytest pips-agent/test_cv_extraction_v2.py::test_multi_strategy_includes_constraint_labels -v"],
-      "services_to_test": ["pips-agent"]
+      "commands": [
+        "python -m pytest pips-agent/test_cv_extraction_v2.py::test_multi_strategy_includes_constraint_labels -v"
+      ],
+      "services_to_test": [
+        "pips-agent"
+      ]
     },
     "e2e_tests": {
       "required": false,
@@ -311,7 +350,9 @@
     },
     "regression_tests": {
       "required": true,
-      "commands": ["python pips-agent/test_user_puzzle_cv.py"],
+      "commands": [
+        "python pips-agent/test_user_puzzle_cv.py"
+      ],
       "expected": "Existing strategies continue to work"
     },
     "manual_checks": {
@@ -328,5 +369,8 @@
       ]
     }
   },
-  "qa_signoff": null
+  "qa_signoff": null,
+  "status": "human_review",
+  "planStatus": "review",
+  "updated_at": "2025-12-22T08:29:53.819Z"
 }

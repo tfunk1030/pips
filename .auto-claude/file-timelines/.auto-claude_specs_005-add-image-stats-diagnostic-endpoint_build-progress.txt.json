@@ -1,0 +1,28 @@
+{
+  "file_path": ".auto-claude/specs/005-add-image-stats-diagnostic-endpoint/build-progress.txt",
+  "main_branch_history": [],
+  "task_views": {
+    "005-add-image-stats-diagnostic-endpoint": {
+      "task_id": "005-add-image-stats-diagnostic-endpoint",
+      "branch_point": {
+        "commit_hash": "faf3f69f9b2794c6a85ffd2581461d3d68bdf8ef",
+        "content": "",
+        "timestamp": "2025-12-22T03:09:16.372053"
+      },
+      "worktree_state": {
+        "content": "# Build Progress: Add Image Stats Diagnostic Endpoint\n\n## Status: COMPLETE\n\n## Date: 2025-12-22\n\n---\n\n## Summary\n\nCreated a new `/image-stats` diagnostic endpoint in cv-service that returns\ncomprehensive image quality metrics to help users diagnose issues before extraction.\n\n## Implementation Complete\n\n### Phase 1: Core Function Implementation\n- [x] 1.1 Create _calculate_image_stats function\n- [x] 1.2 Create Pydantic models for request/response\n\n### Phase 2: API Endpoint Implementation\n- [x] 2.1 Create /image-stats POST endpoint\n\n### Phase 3: Testing\n- [x] 3.1 Create test file for image stats endpoint\n- [x] 3.2 Run tests and verify functionality\n\n### Phase 4: Documentation & Finalization\n- [x] 4.1 Update build-progress.txt (this file)\n- [x] 4.2 Create git commit\n\n---\n\n## Files Modified\n\n| File | Changes |\n|------|---------|\n| cv-service/main.py | Added Pydantic models (lines 70-128), _calculate_image_stats function (lines 130-176), and /image-stats endpoint (lines 416-476) |\n| cv-service/test_image_stats.py | New file with 18 comprehensive tests |\n\n---\n\n## Metrics Implemented\n\n| Metric | Description | Range |\n|--------|-------------|-------|\n| brightness | Mean luminance value from grayscale | 0-255 |\n| contrast | Standard deviation of luminance | 0+ |\n| dynamic_range | Min/max luminance values | {min: 0-255, max: 0-255} |\n| color_balance | RGB channel means and ratios | means: 0-255, ratios: ~1.0 |\n| saturation | HSV saturation stats | mean/min/max: 0-255 |\n\n---\n\n## API Endpoint Details\n\n### POST /image-stats\n\n**Request:**\n```json\n{\n  \"image\": \"<base64_encoded_image>\",\n  \"roi\": {                    // Optional\n    \"x\": 100,\n    \"y\": 100,\n    \"width\": 200,\n    \"height\": 200\n  }\n}\n```\n\n**Response:**\n```json\n{\n  \"success\": true,\n  \"brightness\": 127.5,\n  \"contrast\": 73.9,\n  \"dynamic_range\": {\"min\": 0, \"max\": 255},\n  \"color_balance\": {\n    \"mean_r\": 127.5,\n    \"mean_g\": 127.5,\n    \"mean_b\": 127.5,\n    \"ratio_r\": 1.0,\n    \"ratio_g\": 1.0,\n    \"ratio_b\": 1.0\n  },\n  \"saturation\": {\"mean\": 0.0, \"min\": 0.0, \"max\": 0.0},\n  \"image_width\": 640,\n  \"image_height\": 480,\n  \"roi_applied\": false,\n  \"extraction_ms\": 5.2\n}\n```\n\n---\n\n## Testing Results\n\n**18 tests passing:**\n\nUnit Tests (7):\n- test_calculate_image_stats_gray_image\n- test_calculate_image_stats_gradient\n- test_calculate_image_stats_colored\n- test_brightness_range\n- test_contrast_range\n- test_dynamic_range_values\n- test_color_balance_ratios\n\nIntegration Tests (11):\n- test_endpoint_valid_image\n- test_endpoint_returns_all_metrics\n- test_endpoint_invalid_base64\n- test_endpoint_non_image_data\n- test_endpoint_with_roi\n- test_endpoint_roi_out_of_bounds\n- test_endpoint_roi_negative_coords\n- test_endpoint_includes_timing\n- test_endpoint_gray_gradient_metrics\n- test_endpoint_colored_image_saturation\n- test_endpoint_roi_partial_overlap\n\n---\n\n## Technical Notes\n\n1. **TestClient Compatibility**: Fixed httpx 0.28+/starlette 0.36+ compatibility by\n   using httpx.ASGITransport with AsyncClient wrapped in asyncio.run() for sync tests.\n\n2. **ROI Bounds Validation**: Endpoint validates ROI coordinates and dimensions,\n   returning 400 error if ROI extends beyond image boundaries or has negative values.\n\n3. **API Pattern**: Follows existing /crop-puzzle and /crop-dominoes patterns with\n   base64 input, JSON response, success/error fields, and extraction_ms timing.\n\n4. **Efficiency**: Uses OpenCV for all metric calculations - single pass through\n   grayscale and HSV conversions for optimal performance.\n\n---\n\n## Git Commits\n\n1. `f1ede4a` - auto-claude: 1.1 - Implement _calculate_image_stats function\n2. `e511836` - auto-claude: 1.2 - Define ImageStatsRequest and ImageStatsResponse models\n3. `ec31cfe` - auto-claude: 2.1 - Add /image-stats POST endpoint\n4. `35900e6` - auto-claude: 3.1 - Add tests for /image-stats endpoint\n5. `786c177` - auto-claude: 3.2 - Execute the test suite to verify the endpoint work\n\n---\n\n## Final Acceptance Criteria\n\n- [x] POST /image-stats endpoint returns brightness, contrast, dynamic range, color balance, and saturation metrics\n- [x] Endpoint accepts base64-encoded images\n- [x] Proper error handling for invalid images\n- [x] All tests pass (18/18)\n- [x] Response includes timing metrics (extraction_ms)\n- [x] Code follows existing patterns in cv-service\n",
+        "last_modified": "2025-12-22T03:30:38.635933"
+      },
+      "task_intent": {
+        "title": "005-add-image-stats-diagnostic-endpoint",
+        "description": "Create a _calculate_image_stats function and expose it as a standalone API endpoint that returns brightness, contrast, dynamic range, color balance, and saturation metrics without requiring preprocessing. This helps users diagnose image quality issues before extraction.",
+        "from_plan": true
+      },
+      "commits_behind_main": 0,
+      "status": "active",
+      "merged_at": null
+    }
+  },
+  "created_at": "2025-12-22T03:09:18.531117",
+  "last_updated": "2025-12-22T03:09:18.622243"
+}

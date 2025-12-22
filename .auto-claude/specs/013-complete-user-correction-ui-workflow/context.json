@@ -1,4 +1,5 @@
 {
+  "task_description": "Complete the user correction UI workflow by adding grid dimension editing capability to AIVerificationModal, enabling users to adjust detected puzzle grid rows/columns before solving.",
   "files_to_modify": {
     "pips-solver": [
       "src/app/components/AIVerificationModal.tsx"

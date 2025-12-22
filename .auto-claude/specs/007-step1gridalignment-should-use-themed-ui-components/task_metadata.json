@@ -1,0 +1,12 @@
+{
+  "sourceType": "ideation",
+  "ideationType": "ui_ux_improvements",
+  "ideaId": "uiux-003",
+  "rationale": "The app has a well-designed component library (Button, Card, Text, Label, Heading, etc.) with built-in animations, consistent styling, and accessibility features. Using raw primitives bypasses these benefits.",
+  "category": "ui_ux",
+  "uiuxCategory": "usability",
+  "affectedFiles": [
+    "pips-solver/src/app/screens/builder/Step1GridAlignment.tsx"
+  ],
+  "problemSolved": "The file imports React Native primitives (TouchableOpacity, Text) and creates custom styled buttons (pickButton, aiButton, controlButton, newImageButton) with local StyleSheet definitions. It does not import or use Button, Card, or themed Text components from '../components/ui'."
+}

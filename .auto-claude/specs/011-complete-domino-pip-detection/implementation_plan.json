@@ -1,0 +1,437 @@
+{
+  "feature": "Complete Domino Pip Detection",
+  "workflow_type": "feature",
+  "workflow_rationale": "This is a feature implementation task completing partially built pip detection functionality. Follows a logical build sequence: core detection → rotation handling → confidence scoring → API integration → testing. Single service (cv-service) implementation with clear dependency chain between phases.",
+
+  "phases": [
+    {
+      "id": "phase-1-core-detection",
+      "name": "Core Pip Detection Algorithm",
+      "type": "implementation",
+      "description": "Implement robust pip detection using OpenCV HoughCircles and contour analysis with preprocessing pipeline",
+      "depends_on": [],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-1-1",
+          "description": "Create preprocessing pipeline for domino images (grayscale, adaptive threshold, morphological ops)",
+          "service": "cv-service",
+          "files_to_modify": ["cv-service/extract_dominoes.py"],
+          "files_to_create": [],
+          "patterns_from": ["cv-service/hybrid_extraction.py"],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"import sys; sys.path.insert(0, 'cv-service'); import extract_dominoes; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending",
+          "notes": "Follow adaptive thresholding pattern from hybrid_extraction.py lines 84-89. Use ADAPTIVE_THRESH_GAUSSIAN_C with THRESH_BINARY_INV."
+        },
+        {
+          "id": "subtask-1-2",
+          "description": "Implement pip detection using cv2.HoughCircles with configurable parameters",
+          "service": "cv-service",
+          "files_to_modify": ["cv-service/extract_dominoes.py"],
+          "files_to_create": [],
+          "patterns_from": ["cv-service/hybrid_extraction.py"],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"import sys; sys.path.insert(0, 'cv-service'); from extract_dominoes import detect_pips_hough; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending",
+          "notes": "Primary detection method. Parameters: dp=1, minDist=20, param1=50, param2=30, minRadius=5, maxRadius=50. Return detected circle count."
+        },
+        {
+          "id": "subtask-1-3",
+          "description": "Add fallback contour-based pip detection for cases where HoughCircles fails",
+          "service": "cv-service",
+          "files_to_modify": ["cv-service/extract_dominoes.py"],
+          "files_to_create": [],
+          "patterns_from": ["extract_dominoes.py"],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"import sys; sys.path.insert(0, 'cv-service'); from extract_dominoes import detect_pips_contours; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending",
+          "notes": "Fallback method using findContours + contourArea filtering (10 < area < 200). Apply morphological closing before contour detection."
+        },
+        {
+          "id": "subtask-1-4",
+          "description": "Validate pip counts are in range 0-6 and handle blank dominoes (0 pips)",
+          "service": "cv-service",
+          "files_to_modify": ["cv-service/extract_dominoes.py"],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"import sys; sys.path.insert(0, 'cv-service'); from extract_dominoes import validate_pip_count; assert validate_pip_count(0) == True; assert validate_pip_count(6) == True; assert validate_pip_count(7) == False; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending",
+          "notes": "Return True for 0-6, False otherwise. Blank dominoes should return 0 with high confidence when no circles detected."
+        }
+      ]
+    },
+    {
+      "id": "phase-2-rotation-handling",
+      "name": "Rotation Handling",
+      "type": "implementation",
+      "description": "Add rotation detection and correction to handle dominoes at any angle before pip detection",
+      "depends_on": ["phase-1-core-detection"],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-2-1",
+          "description": "Implement rotation angle detection using cv2.minAreaRect",
+          "service": "cv-service",
+          "files_to_modify": ["cv-service/extract_dominoes.py"],
+          "files_to_create": [],
+          "patterns_from": ["cv-service/hybrid_extraction.py"],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"import sys; sys.path.insert(0, 'cv-service'); from extract_dominoes import detect_rotation_angle; import numpy as np; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending",
+          "notes": "Use minAreaRect() to find domino bounding box and extract rotation angle. Handle angle normalization for correct orientation."
+        },
+        {
+          "id": "subtask-2-2",
+          "description": "Implement image rotation correction using cv2.warpAffine",
+          "service": "cv-service",
+          "files_to_modify": ["cv-service/extract_dominoes.py"],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"import sys; sys.path.insert(0, 'cv-service'); from extract_dominoes import rotate_domino; import numpy as np; import cv2; test_img = np.zeros((100, 50, 3), dtype=np.uint8); rotated = rotate_domino(test_img, 45.0); print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending",
+          "notes": "Apply rotation correction before splitting domino into halves. Use getRotationMatrix2D and warpAffine."
+        },
+        {
+          "id": "subtask-2-3",
+          "description": "Update domino half splitting to use rotation-corrected images",
+          "service": "cv-service",
+          "files_to_modify": ["cv-service/extract_dominoes.py"],
+          "files_to_create": [],
+          "patterns_from": ["extract_dominoes.py"],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"import sys; sys.path.insert(0, 'cv-service'); from extract_dominoes import split_domino_halves; import numpy as np; test_img = np.zeros((100, 200, 3), dtype=np.uint8); left, right = split_domino_halves(test_img); assert left.shape[1] == right.shape[1]; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending",
+          "notes": "Split rotated domino along vertical midline. Ensure both halves are equal width."
+        }
+      ]
+    },
+    {
+      "id": "phase-3-confidence-scoring",
+      "name": "Confidence Scoring",
+      "type": "implementation",
+      "description": "Implement confidence scoring system that reflects detection reliability based on pip characteristics",
+      "depends_on": ["phase-2-rotation-handling"],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-3-1",
+          "description": "Calculate confidence score based on pip circularity, size consistency, and count validation",
+          "service": "cv-service",
+          "files_to_modify": ["cv-service/extract_dominoes.py"],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"import sys; sys.path.insert(0, 'cv-service'); from extract_dominoes import calculate_confidence; score = calculate_confidence(pip_count=3, circularity=0.9, size_variance=0.1); assert 0.0 <= score <= 1.0; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending",
+          "notes": "Confidence factors: circularity (0.7-1.0 for circles), size variance (<0.3 good), pip count in range (0-6). Return 0.0-1.0 score. High confidence >0.85, low <0.7."
+        },
+        {
+          "id": "subtask-3-2",
+          "description": "Create PipDetectionResult Pydantic model with pip values and confidence scores",
+          "service": "cv-service",
+          "files_to_modify": ["cv-service/extract_dominoes.py"],
+          "files_to_create": [],
+          "patterns_from": ["cv-service/main.py"],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"import sys; sys.path.insert(0, 'cv-service'); from extract_dominoes import PipDetectionResult; result = PipDetectionResult(left_pips=3, right_pips=5, left_confidence=0.92, right_confidence=0.87); print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending",
+          "notes": "Pydantic v2 model with Field validation: pips in [0,6], confidence in [0.0,1.0]. Use model_config not Config class."
+        },
+        {
+          "id": "subtask-3-3",
+          "description": "Integrate confidence scoring into main pip detection function",
+          "service": "cv-service",
+          "files_to_modify": ["cv-service/extract_dominoes.py"],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"import sys; sys.path.insert(0, 'cv-service'); from extract_dominoes import detect_domino_pips; import numpy as np; test_img = np.zeros((100, 200, 3), dtype=np.uint8); result = detect_domino_pips(test_img); assert hasattr(result, 'left_confidence'); print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending",
+          "notes": "Main function should return PipDetectionResult with both pip counts and confidence scores for each half."
+        }
+      ]
+    },
+    {
+      "id": "phase-4-api-integration",
+      "name": "API Integration",
+      "type": "implementation",
+      "description": "Update FastAPI endpoints to return pip detection results with confidence scores",
+      "depends_on": ["phase-3-confidence-scoring"],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-4-1",
+          "description": "Create Pydantic response models for domino extraction with pip values",
+          "service": "cv-service",
+          "files_to_modify": ["cv-service/main.py"],
+          "files_to_create": [],
+          "patterns_from": ["cv-service/main.py"],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"import sys; sys.path.insert(0, 'cv-service'); from main import DominoResult; result = DominoResult(x=10, y=20, width=100, height=50, left_pips=3, right_pips=4, left_confidence=0.9, right_confidence=0.85); print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending",
+          "notes": "Extend existing DominoResult or create new model. Include Optional pip fields for backward compatibility."
+        },
+        {
+          "id": "subtask-4-2",
+          "description": "Update /crop-dominoes endpoint to include pip detection in response",
+          "service": "cv-service",
+          "files_to_modify": ["cv-service/main.py"],
+          "files_to_create": [],
+          "patterns_from": ["cv-service/main.py"],
+          "verification": {
+            "type": "command",
+            "command": "cd cv-service && python -c \"import sys; from main import app; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending",
+          "notes": "Import detect_domino_pips from extract_dominoes.py. Call for each cropped domino. Include pip values in response JSON."
+        },
+        {
+          "id": "subtask-4-3",
+          "description": "Add error handling for pip detection failures (partial dominoes, poor quality)",
+          "service": "cv-service",
+          "files_to_modify": ["cv-service/main.py"],
+          "files_to_create": [],
+          "patterns_from": ["cv-service/main.py"],
+          "verification": {
+            "type": "command",
+            "command": "cd cv-service && python -c \"from main import app; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending",
+          "notes": "Return null pip values or -1 for failed detection. Log low confidence cases. Don't fail entire request."
+        },
+        {
+          "id": "subtask-4-4",
+          "description": "Verify OpenCV version >=4.8.0 in requirements.txt",
+          "service": "cv-service",
+          "files_to_modify": ["cv-service/requirements.txt"],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "grep 'opencv-python>=4.8.0' cv-service/requirements.txt && echo 'OK'",
+            "expected": "OK"
+          },
+          "status": "pending",
+          "notes": "Confirm OpenCV version. Already should be correct from research phase, but verify."
+        }
+      ]
+    },
+    {
+      "id": "phase-5-testing",
+      "name": "Testing & Validation",
+      "type": "integration",
+      "description": "Create comprehensive tests for pip detection and verify end-to-end functionality",
+      "depends_on": ["phase-4-api-integration"],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-5-1",
+          "description": "Create unit tests for pip detection (all values 0-6, rotations, edge cases)",
+          "service": "cv-service",
+          "files_to_modify": [],
+          "files_to_create": ["cv-service/test_pip_detection.py"],
+          "patterns_from": ["cv-service/test_service.py"],
+          "verification": {
+            "type": "command",
+            "command": "cd cv-service && python -m pytest test_pip_detection.py -v",
+            "expected": "All tests pass"
+          },
+          "status": "pending",
+          "notes": "Tests: test_detect_all_pip_values_0_to_6, test_rotation_invariance, test_blank_domino, test_confidence_scoring, test_invalid_pip_count"
+        },
+        {
+          "id": "subtask-5-2",
+          "description": "Create integration test for full domino extraction pipeline with pip detection",
+          "service": "cv-service",
+          "files_to_modify": ["cv-service/test_e2e_extraction.py"],
+          "files_to_create": [],
+          "patterns_from": ["cv-service/test_e2e_extraction.py"],
+          "verification": {
+            "type": "command",
+            "command": "cd cv-service && python -m pytest test_e2e_extraction.py::test_domino_pip_detection_pipeline -v",
+            "expected": "Test passes"
+          },
+          "status": "pending",
+          "notes": "Test full flow: load image → extract dominoes → detect pips → verify response format with pip values and confidence"
+        },
+        {
+          "id": "subtask-5-3",
+          "description": "Manual verification: test with real puzzle images covering different domino styles",
+          "service": "cv-service",
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "manual",
+            "instructions": "Test with IMG_2050.png and IMG_2051.png in project root. Verify pip detection accuracy ≥90% and confidence scores correlate with accuracy. Check rotated dominoes work correctly."
+          },
+          "status": "pending",
+          "notes": "Use existing test images. Document accuracy results in verification notes."
+        },
+        {
+          "id": "subtask-5-4",
+          "description": "Verify Docker container builds and runs with pip detection functionality",
+          "service": "cv-service",
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "docker build -t cv-service-test ./cv-service && docker run --rm cv-service-test python -c 'from extract_dominoes import detect_domino_pips; print(\"OK\")'",
+            "expected": "OK"
+          },
+          "status": "pending",
+          "notes": "Verify OpenCV and dependencies correctly installed in container"
+        }
+      ]
+    }
+  ],
+
+  "summary": {
+    "total_phases": 5,
+    "total_subtasks": 19,
+    "services_involved": ["cv-service"],
+    "parallelism": {
+      "max_parallel_phases": 1,
+      "parallel_groups": [],
+      "recommended_workers": 1,
+      "speedup_estimate": "Sequential execution required due to strict phase dependencies"
+    },
+    "startup_command": "source auto-claude/.venv/bin/activate && python auto-claude/run.py --spec 011 --parallel 1"
+  },
+
+  "verification_strategy": {
+    "risk_level": "medium",
+    "skip_validation": false,
+    "test_creation_phase": "post_implementation",
+    "test_types_required": ["unit", "integration"],
+    "security_scanning_required": false,
+    "staging_deployment_required": false,
+    "acceptance_criteria": [
+      "Pip detection correctly identifies values 0-6 with ≥90% accuracy",
+      "Detection works on rotated dominoes (0°, 45°, 90°, 180°)",
+      "Handles at least 2 different domino visual styles",
+      "Confidence scores range appropriately (low <0.7, high >0.85)",
+      "Edge cases handled gracefully (blank dominoes, partial visibility)",
+      "API returns pip values and confidence scores in correct format",
+      "No console errors during normal operation",
+      "Existing cv-service tests still pass",
+      "Integration tested with sample puzzle images end-to-end"
+    ],
+    "verification_steps": [
+      {
+        "name": "Unit Tests",
+        "command": "cd cv-service && python -m pytest test_pip_detection.py -v",
+        "expected_outcome": "All tests pass",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Integration Tests",
+        "command": "cd cv-service && python -m pytest test_e2e_extraction.py -v",
+        "expected_outcome": "All integration tests pass",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Existing Tests Regression",
+        "command": "cd cv-service && python -m pytest test_service.py -v",
+        "expected_outcome": "No regressions in existing functionality",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Docker Build Verification",
+        "command": "docker build -t cv-service-test ./cv-service",
+        "expected_outcome": "Build succeeds without errors",
+        "type": "build",
+        "required": true,
+        "blocking": false
+      }
+    ],
+    "reasoning": "Medium risk requires unit and integration test coverage. Accuracy is critical for solver correctness. No security implications since this is image processing only."
+  },
+
+  "qa_acceptance": {
+    "unit_tests": {
+      "required": true,
+      "commands": ["cd cv-service && python -m pytest test_pip_detection.py -v"],
+      "minimum_coverage": null
+    },
+    "integration_tests": {
+      "required": true,
+      "commands": ["cd cv-service && python -m pytest test_e2e_extraction.py -v"],
+      "services_to_test": ["cv-service"]
+    },
+    "e2e_tests": {
+      "required": false,
+      "commands": [],
+      "flows": []
+    },
+    "browser_verification": {
+      "required": false,
+      "pages": []
+    },
+    "database_verification": {
+      "required": false,
+      "checks": []
+    },
+    "manual_verification": {
+      "required": true,
+      "checklist": [
+        "Test 0-pip detection on blank domino half (expect 0 with confidence >0.8)",
+        "Test 6-pip detection on domino with 6 pips (expect 6 with confidence >0.85)",
+        "Test rotation handling with 45° rotated domino (expect same pip count as 0°)",
+        "Test poor lighting with underexposed image (expect adaptive thresholding compensates)",
+        "Test API integration with /crop-dominoes endpoint (expect JSON with pip_values and confidence)",
+        "Verify debug output saved when DEBUG_OUTPUT_DIR set"
+      ]
+    }
+  },
+
+  "qa_signoff": null,
+  "created_at": "2025-12-22T08:06:59.399Z",
+  "updated_at": "2025-12-22T08:06:59.399Z",
+  "status": "pending"
+}

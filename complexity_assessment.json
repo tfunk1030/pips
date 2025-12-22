@@ -1,0 +1,70 @@
+{
+  "complexity": "standard",
+  "workflow_type": "feature",
+  "confidence": 0.85,
+  "reasoning": "Recalibrating confidence scoring involves multiple detection components across backend calculation logic and frontend UI. Contained to 1-2 services with no external integrations or infrastructure changes, but requires understanding existing patterns and careful testing.",
+
+  "analysis": {
+    "scope": {
+      "estimated_files": 8,
+      "estimated_services": 2,
+      "is_cross_cutting": true,
+      "notes": "Backend confidence calculation logic for multiple detection components, frontend UI for visual indicators, testing infrastructure for accuracy validation"
+    },
+    "integrations": {
+      "external_services": [],
+      "new_dependencies": [],
+      "research_needed": false,
+      "notes": "No external integrations. Work is contained to existing codebase patterns."
+    },
+    "infrastructure": {
+      "docker_changes": false,
+      "database_changes": false,
+      "config_changes": true,
+      "notes": "May need configuration changes for component-specific confidence thresholds, but no major infrastructure impact"
+    },
+    "knowledge": {
+      "patterns_exist": true,
+      "research_required": false,
+      "unfamiliar_tech": [],
+      "notes": "Need to understand existing confidence calculation methods and detection component architecture, but likely using familiar technologies"
+    },
+    "risk": {
+      "level": "medium",
+      "concerns": [
+        "Confidence score changes affect user trust and decision-making",
+        "Multiple detection components need individual calibration",
+        "Need validation that new scores correlate with actual accuracy within 10%",
+        "Could confuse users if thresholds are incorrectly set"
+      ],
+      "notes": "Medium risk due to impact on user experience and trust. Incorrect calibration could undermine confidence in the system."
+    }
+  },
+
+  "recommended_phases": [
+    "discovery",
+    "requirements",
+    "context",
+    "spec_writing",
+    "planning",
+    "validation"
+  ],
+
+  "flags": {
+    "needs_research": false,
+    "needs_self_critique": false,
+    "needs_infrastructure_setup": false
+  },
+
+  "validation_recommendations": {
+    "risk_level": "medium",
+    "skip_validation": false,
+    "minimal_mode": false,
+    "test_types_required": ["unit", "integration"],
+    "security_scan_required": false,
+    "staging_deployment_required": false,
+    "reasoning": "Confidence scoring changes require thorough testing to verify that reported confidence correlates with actual detection accuracy within 10%. Unit tests for calculation logic and integration tests for end-to-end validation are essential."
+  },
+
+  "created_at": "2025-12-22T09:00:00.000Z"
+}
