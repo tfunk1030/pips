@@ -24,6 +24,82 @@ from scipy.ndimage import uniform_filter1d
 
 
 @dataclass
+class GridCell:
+    """
+    Represents a single cell in a grid.
+
+    Attributes:
+        row: Row index (0-based)
+        col: Column index (0-based)
+        x: X-coordinate of top-left corner
+        y: Y-coordinate of top-left corner
+        width: Cell width in pixels
+        height: Cell height in pixels
+        is_present: Whether the cell is present (for non-rectangular grids)
+        confidence: Confidence that this cell exists (0.0 to 1.0)
+    """
+    row: int
+    col: int
+    x: int
+    y: int
+    width: int
+    height: int
+    is_present: bool = True
+    confidence: float = 1.0
+
+    def to_dict(self) -> Dict:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "row": self.row,
+            "col": self.col,
+            "x": self.x,
+            "y": self.y,
+            "width": self.width,
+            "height": self.height,
+            "is_present": self.is_present,
+            "confidence": round(self.confidence, 4)
+        }
+
+
+@dataclass
+class PartialGridInfo:
+    """
+    Information about partial or non-rectangular grid detection.
+
+    Attributes:
+        is_rectangular: Whether the grid forms a complete rectangle
+        is_partial: Whether the grid appears to be cropped/incomplete
+        missing_cells: List of (row, col) tuples for cells that appear missing
+        cell_presence_mask: 2D boolean array indicating cell presence
+        visible_rows: Range of visible rows (start, end)
+        visible_cols: Range of visible columns (start, end)
+        extrapolated_dims: Estimated full grid dimensions if partial
+        boundary_type: Type of grid boundary ("complete", "cropped_left", "cropped_right", etc.)
+    """
+    is_rectangular: bool = True
+    is_partial: bool = False
+    missing_cells: List[Tuple[int, int]] = field(default_factory=list)
+    cell_presence_mask: Optional[np.ndarray] = None
+    visible_rows: Optional[Tuple[int, int]] = None
+    visible_cols: Optional[Tuple[int, int]] = None
+    extrapolated_dims: Optional[Tuple[int, int]] = None
+    boundary_type: str = "complete"
+
+    def to_dict(self) -> Dict:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "is_rectangular": self.is_rectangular,
+            "is_partial": self.is_partial,
+            "missing_cells": self.missing_cells,
+            "cell_presence_mask": self.cell_presence_mask.tolist() if self.cell_presence_mask is not None else None,
+            "visible_rows": list(self.visible_rows) if self.visible_rows else None,
+            "visible_cols": list(self.visible_cols) if self.visible_cols else None,
+            "extrapolated_dims": list(self.extrapolated_dims) if self.extrapolated_dims else None,
+            "boundary_type": self.boundary_type
+        }
+
+
+@dataclass
 class GridLineResult:
     """
     Result of grid line detection and analysis.
@@ -36,6 +112,8 @@ class GridLineResult:
         grid_dims: Estimated (rows, cols) of the grid (None if not determined)
         confidence: Confidence score for the grid detection (0.0 to 1.0)
         method: Detection method used ("hough_ransac", "histogram", "fallback")
+        partial_grid_info: Information about partial/non-rectangular grids
+        cells: List of detected grid cells (for non-rectangular grids)
     """
     horizontal_lines: np.ndarray
     vertical_lines: np.ndarray
@@ -44,6 +122,8 @@ class GridLineResult:
     grid_dims: Optional[Tuple[int, int]] = None
     confidence: float = 0.0
     method: str = "unknown"
+    partial_grid_info: Optional[PartialGridInfo] = None
+    cells: Optional[List[GridCell]] = None
 
     def to_dict(self) -> Dict:
         """Convert to dictionary for JSON serialization."""
@@ -54,7 +134,9 @@ class GridLineResult:
             "estimated_cell_height": self.estimated_cell_height,
             "grid_dims": list(self.grid_dims) if self.grid_dims else None,
             "confidence": round(self.confidence, 4),
-            "method": self.method
+            "method": self.method,
+            "partial_grid_info": self.partial_grid_info.to_dict() if self.partial_grid_info else None,
+            "cells": [c.to_dict() for c in self.cells] if self.cells else None
         }
 
 
@@ -1003,6 +1085,577 @@ def extract_grid_cells(
     return cells
 
 
+def detect_partial_grid_boundaries(
+    image: np.ndarray,
+    h_lines: np.ndarray,
+    v_lines: np.ndarray,
+    cell_width: Optional[float],
+    cell_height: Optional[float],
+    edge_threshold: float = 0.15
+) -> Tuple[str, bool]:
+    """
+    Detect if grid is partial (cropped) and determine boundary type.
+
+    Analyzes edge positions relative to image boundaries to determine
+    if the grid appears to be cropped on any side.
+
+    Args:
+        image: Input image
+        h_lines: Horizontal line positions
+        v_lines: Vertical line positions
+        cell_width: Estimated cell width
+        cell_height: Estimated cell height
+        edge_threshold: Relative threshold for edge detection (fraction of cell size)
+
+    Returns:
+        Tuple of (boundary_type, is_partial):
+        - boundary_type: One of "complete", "cropped_left", "cropped_right",
+                        "cropped_top", "cropped_bottom", "cropped_multiple"
+        - is_partial: Whether the grid appears to be partial
+    """
+    if image is None or len(h_lines) < 2 or len(v_lines) < 2:
+        return "unknown", False
+
+    h, w = image.shape[:2]
+    h_lines = np.sort(h_lines)
+    v_lines = np.sort(v_lines)
+
+    # Use cell size or default estimate
+    cw = cell_width if cell_width else (v_lines[-1] - v_lines[0]) / max(len(v_lines) - 1, 1)
+    ch = cell_height if cell_height else (h_lines[-1] - h_lines[0]) / max(len(h_lines) - 1, 1)
+
+    if cw <= 0 or ch <= 0:
+        return "unknown", False
+
+    # Check each edge
+    cropped_edges = []
+
+    # Left edge: first vertical line far from left boundary
+    if v_lines[0] > cw * edge_threshold:
+        # Check if the spacing suggests a cut-off cell
+        if v_lines[0] < cw * 0.9:  # First line is less than a full cell from edge
+            cropped_edges.append("left")
+
+    # Right edge: last vertical line far from right boundary
+    if (w - v_lines[-1]) > cw * edge_threshold:
+        if (w - v_lines[-1]) < cw * 0.9:
+            cropped_edges.append("right")
+
+    # Top edge: first horizontal line far from top boundary
+    if h_lines[0] > ch * edge_threshold:
+        if h_lines[0] < ch * 0.9:
+            cropped_edges.append("top")
+
+    # Bottom edge: last horizontal line far from bottom boundary
+    if (h - h_lines[-1]) > ch * edge_threshold:
+        if (h - h_lines[-1]) < ch * 0.9:
+            cropped_edges.append("bottom")
+
+    if len(cropped_edges) == 0:
+        return "complete", False
+    elif len(cropped_edges) == 1:
+        return f"cropped_{cropped_edges[0]}", True
+    else:
+        return "cropped_multiple", True
+
+
+def detect_missing_cells(
+    image: np.ndarray,
+    h_lines: np.ndarray,
+    v_lines: np.ndarray,
+    saturation_threshold: int = 15,
+    variance_threshold: float = 100.0,
+    edge_density_threshold: float = 0.02
+) -> Tuple[np.ndarray, List[Tuple[int, int]]]:
+    """
+    Detect missing or empty cells in a grid for non-rectangular detection.
+
+    Analyzes each cell region to determine if it contains meaningful content
+    or appears to be empty/missing. Uses multiple cues:
+    - Color saturation (colorful puzzles have saturated cells)
+    - Intensity variance (uniform areas suggest empty cells)
+    - Edge density (cells with content have more edges)
+
+    Args:
+        image: Input BGR image
+        h_lines: Sorted horizontal line positions
+        v_lines: Sorted vertical line positions
+        saturation_threshold: Minimum saturation for a "present" cell
+        variance_threshold: Minimum intensity variance for a "present" cell
+        edge_density_threshold: Minimum edge pixel ratio for a "present" cell
+
+    Returns:
+        Tuple of (presence_mask, missing_cells):
+        - presence_mask: 2D boolean array where True = cell is present
+        - missing_cells: List of (row, col) tuples for missing cells
+    """
+    if image is None or len(h_lines) < 2 or len(v_lines) < 2:
+        return np.array([[]]), []
+
+    h_lines = np.sort(h_lines)
+    v_lines = np.sort(v_lines)
+
+    n_rows = len(h_lines) - 1
+    n_cols = len(v_lines) - 1
+
+    if n_rows <= 0 or n_cols <= 0:
+        return np.array([[]]), []
+
+    presence_mask = np.ones((n_rows, n_cols), dtype=bool)
+    missing_cells = []
+
+    # Convert to HSV for saturation analysis
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV) if len(image.shape) == 3 else None
+
+    # Compute edges for edge density analysis
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if len(image.shape) == 3 else image
+    edges = cv2.Canny(gray, 50, 150)
+
+    for row in range(n_rows):
+        for col in range(n_cols):
+            y1 = int(h_lines[row])
+            y2 = int(h_lines[row + 1])
+            x1 = int(v_lines[col])
+            x2 = int(v_lines[col + 1])
+
+            # Ensure valid region
+            if y2 <= y1 or x2 <= x1:
+                presence_mask[row, col] = False
+                missing_cells.append((row, col))
+                continue
+
+            # Extract cell region
+            cell_gray = gray[y1:y2, x1:x2]
+            cell_edges = edges[y1:y2, x1:x2]
+
+            # Skip very small cells
+            if cell_gray.size < 100:
+                continue
+
+            # Check 1: Intensity variance (low variance = uniform/empty)
+            intensity_var = np.var(cell_gray)
+
+            # Check 2: Saturation (low saturation = possibly background)
+            mean_saturation = 0
+            if hsv is not None:
+                cell_hsv = hsv[y1:y2, x1:x2]
+                mean_saturation = np.mean(cell_hsv[:, :, 1])
+
+            # Check 3: Edge density (few edges = empty area)
+            edge_density = np.sum(cell_edges > 0) / cell_edges.size
+
+            # Cell is considered missing if it fails multiple checks
+            low_variance = intensity_var < variance_threshold
+            low_saturation = mean_saturation < saturation_threshold
+            low_edges = edge_density < edge_density_threshold
+
+            # Require at least 2 of 3 indicators to mark as missing
+            missing_indicators = sum([low_variance, low_saturation, low_edges])
+            if missing_indicators >= 2:
+                presence_mask[row, col] = False
+                missing_cells.append((row, col))
+
+    return presence_mask, missing_cells
+
+
+def analyze_grid_shape(
+    presence_mask: np.ndarray
+) -> Tuple[bool, str]:
+    """
+    Analyze the shape of a grid based on cell presence mask.
+
+    Determines if the grid is rectangular or has an irregular shape
+    (L-shaped, T-shaped, etc.).
+
+    Args:
+        presence_mask: 2D boolean array where True = cell is present
+
+    Returns:
+        Tuple of (is_rectangular, shape_description):
+        - is_rectangular: True if all cells are present (rectangular grid)
+        - shape_description: Description of the grid shape
+    """
+    if presence_mask is None or presence_mask.size == 0:
+        return True, "empty"
+
+    n_rows, n_cols = presence_mask.shape
+    total_cells = n_rows * n_cols
+    present_cells = np.sum(presence_mask)
+
+    # Fully rectangular
+    if present_cells == total_cells:
+        return True, "rectangular"
+
+    # All cells missing
+    if present_cells == 0:
+        return True, "empty"
+
+    # Analyze shape pattern
+    row_counts = np.sum(presence_mask, axis=1)  # Cells per row
+    col_counts = np.sum(presence_mask, axis=0)  # Cells per column
+
+    # Check for L-shape (rows or columns with different counts)
+    unique_row_counts = len(np.unique(row_counts[row_counts > 0]))
+    unique_col_counts = len(np.unique(col_counts[col_counts > 0]))
+
+    if unique_row_counts <= 2 and unique_col_counts <= 2:
+        # Could be L-shaped or similar
+        if unique_row_counts == 2 or unique_col_counts == 2:
+            return False, "L_shaped"
+
+    # Check for T-shape or cross
+    middle_row = n_rows // 2
+    middle_col = n_cols // 2
+    if (row_counts[middle_row] == n_cols and
+            np.mean(row_counts[row_counts < n_cols]) < n_cols / 2):
+        return False, "T_shaped"
+
+    # Check for corner-missing pattern
+    corners = [
+        presence_mask[0, 0],
+        presence_mask[0, -1],
+        presence_mask[-1, 0],
+        presence_mask[-1, -1]
+    ]
+    if sum(corners) < 4 and present_cells > total_cells * 0.7:
+        return False, "corners_missing"
+
+    # Generic irregular shape
+    if present_cells < total_cells * 0.95:
+        return False, "irregular"
+
+    return True, "nearly_rectangular"
+
+
+def extrapolate_partial_grid(
+    image_size: Tuple[int, int],
+    h_lines: np.ndarray,
+    v_lines: np.ndarray,
+    cell_width: Optional[float],
+    cell_height: Optional[float],
+    boundary_type: str
+) -> Tuple[np.ndarray, np.ndarray, Optional[Tuple[int, int]]]:
+    """
+    Extrapolate grid lines for partial/cropped grids.
+
+    Extends detected grid lines to estimate the full grid dimensions
+    based on consistent cell spacing.
+
+    Args:
+        image_size: (height, width) of the image
+        h_lines: Detected horizontal line positions
+        v_lines: Detected vertical line positions
+        cell_width: Estimated cell width
+        cell_height: Estimated cell height
+        boundary_type: Type of cropping ("cropped_left", etc.)
+
+    Returns:
+        Tuple of (extended_h_lines, extended_v_lines, extrapolated_dims):
+        - extended_h_lines: Horizontal lines extended to image boundaries
+        - extended_v_lines: Vertical lines extended to image boundaries
+        - extrapolated_dims: Estimated full (rows, cols) including cropped regions
+    """
+    img_h, img_w = image_size
+    h_lines = np.sort(h_lines.copy())
+    v_lines = np.sort(v_lines.copy())
+
+    if cell_width is None or cell_height is None:
+        return h_lines, v_lines, None
+
+    if cell_width <= 0 or cell_height <= 0:
+        return h_lines, v_lines, None
+
+    extended_h = list(h_lines)
+    extended_v = list(v_lines)
+
+    extra_rows = 0
+    extra_cols = 0
+
+    # Extend based on boundary type
+    if "left" in boundary_type or boundary_type == "cropped_multiple":
+        # Add lines to the left
+        if len(v_lines) > 0:
+            first_line = v_lines[0]
+            while first_line > cell_width * 0.3:
+                first_line -= cell_width
+                if first_line >= 0:
+                    extended_v.insert(0, first_line)
+                    extra_cols += 1
+
+    if "right" in boundary_type or boundary_type == "cropped_multiple":
+        # Add lines to the right
+        if len(v_lines) > 0:
+            last_line = v_lines[-1]
+            while last_line < img_w - cell_width * 0.3:
+                last_line += cell_width
+                if last_line <= img_w:
+                    extended_v.append(last_line)
+                    extra_cols += 1
+
+    if "top" in boundary_type or boundary_type == "cropped_multiple":
+        # Add lines to the top
+        if len(h_lines) > 0:
+            first_line = h_lines[0]
+            while first_line > cell_height * 0.3:
+                first_line -= cell_height
+                if first_line >= 0:
+                    extended_h.insert(0, first_line)
+                    extra_rows += 1
+
+    if "bottom" in boundary_type or boundary_type == "cropped_multiple":
+        # Add lines to the bottom
+        if len(h_lines) > 0:
+            last_line = h_lines[-1]
+            while last_line < img_h - cell_height * 0.3:
+                last_line += cell_height
+                if last_line <= img_h:
+                    extended_h.append(last_line)
+                    extra_rows += 1
+
+    extended_h_arr = np.array(sorted(set(extended_h)))
+    extended_v_arr = np.array(sorted(set(extended_v)))
+
+    # Estimate full grid dimensions
+    visible_rows = max(len(h_lines) - 1, 0)
+    visible_cols = max(len(v_lines) - 1, 0)
+    extrapolated_dims = (visible_rows + extra_rows, visible_cols + extra_cols)
+
+    return extended_h_arr, extended_v_arr, extrapolated_dims
+
+
+def extract_non_rectangular_cells(
+    image: np.ndarray,
+    h_lines: np.ndarray,
+    v_lines: np.ndarray,
+    presence_mask: np.ndarray,
+    roi: Optional[Tuple[int, int, int, int]] = None,
+    min_cell_area: int = 400
+) -> List[GridCell]:
+    """
+    Extract cells from a non-rectangular grid.
+
+    Creates GridCell objects for each cell position, marking cells
+    as present or missing based on the presence mask.
+
+    Args:
+        image: Input image (for dimensions)
+        h_lines: Sorted horizontal line positions
+        v_lines: Sorted vertical line positions
+        presence_mask: 2D boolean array indicating cell presence
+        roi: Optional ROI offset (x, y, w, h)
+        min_cell_area: Minimum cell area to include
+
+    Returns:
+        List of GridCell objects representing the grid
+    """
+    cells = []
+
+    if len(h_lines) < 2 or len(v_lines) < 2:
+        return cells
+
+    h_lines = np.sort(h_lines)
+    v_lines = np.sort(v_lines)
+
+    n_rows = len(h_lines) - 1
+    n_cols = len(v_lines) - 1
+
+    # Validate presence mask dimensions
+    if presence_mask is None or presence_mask.shape != (n_rows, n_cols):
+        presence_mask = np.ones((n_rows, n_cols), dtype=bool)
+
+    roi_x, roi_y = (roi[0], roi[1]) if roi else (0, 0)
+
+    for row in range(n_rows):
+        for col in range(n_cols):
+            y1 = int(h_lines[row])
+            y2 = int(h_lines[row + 1])
+            x1 = int(v_lines[col])
+            x2 = int(v_lines[col + 1])
+
+            cell_w = x2 - x1
+            cell_h = y2 - y1
+            is_present = presence_mask[row, col]
+
+            # Calculate confidence based on cell characteristics
+            confidence = 1.0 if is_present else 0.2
+
+            if cell_w * cell_h >= min_cell_area:
+                cells.append(GridCell(
+                    row=row,
+                    col=col,
+                    x=roi_x + x1,
+                    y=roi_y + y1,
+                    width=cell_w,
+                    height=cell_h,
+                    is_present=is_present,
+                    confidence=confidence
+                ))
+
+    return cells
+
+
+def detect_grid_with_partial_support(
+    image: np.ndarray,
+    use_hough: bool = True,
+    use_projection: bool = True,
+    use_histogram_fallback: bool = True,
+    use_autocorrelation_fallback: bool = True,
+    min_spacing: float = 30.0,
+    max_spacing: float = 200.0,
+    ransac_iterations: int = 100,
+    fallback_threshold: float = 0.3,
+    detect_missing: bool = True,
+    extrapolate_partial: bool = True,
+    debug_dir: Optional[str] = None
+) -> GridLineResult:
+    """
+    Detect grid lines with support for non-rectangular and partial grids.
+
+    Enhanced version of detect_grid_lines_adaptive that also:
+    - Detects missing cells in non-rectangular grids
+    - Identifies partial/cropped grids
+    - Extrapolates grid dimensions for incomplete grids
+
+    Args:
+        image: Input image (BGR or grayscale)
+        use_hough: Whether to use Hough line detection
+        use_projection: Whether to use projection-based detection
+        use_histogram_fallback: Whether to use histogram analysis as fallback
+        use_autocorrelation_fallback: Whether to use autocorrelation as final fallback
+        min_spacing: Minimum valid cell spacing
+        max_spacing: Maximum valid cell spacing
+        ransac_iterations: Number of RANSAC iterations for spacing estimation
+        fallback_threshold: Confidence threshold below which to trigger fallbacks
+        detect_missing: Whether to detect missing cells for non-rectangular grids
+        extrapolate_partial: Whether to extrapolate partial grids
+        debug_dir: Optional directory to save debug images
+
+    Returns:
+        GridLineResult with detected lines, cells, and partial grid info
+    """
+    # First run standard grid detection
+    result = detect_grid_lines_adaptive(
+        image=image,
+        use_hough=use_hough,
+        use_projection=use_projection,
+        use_histogram_fallback=use_histogram_fallback,
+        use_autocorrelation_fallback=use_autocorrelation_fallback,
+        min_spacing=min_spacing,
+        max_spacing=max_spacing,
+        ransac_iterations=ransac_iterations,
+        fallback_threshold=fallback_threshold,
+        debug_dir=debug_dir
+    )
+
+    h, w = image.shape[:2] if len(image.shape) == 2 else image.shape[:2]
+
+    # Initialize partial grid info
+    partial_info = PartialGridInfo()
+
+    # Detect partial/cropped boundaries
+    boundary_type, is_partial = detect_partial_grid_boundaries(
+        image,
+        result.horizontal_lines,
+        result.vertical_lines,
+        result.estimated_cell_width,
+        result.estimated_cell_height
+    )
+    partial_info.boundary_type = boundary_type
+    partial_info.is_partial = is_partial
+
+    # Extrapolate if partial grid detected
+    h_lines = result.horizontal_lines
+    v_lines = result.vertical_lines
+    extrapolated_dims = None
+
+    if extrapolate_partial and is_partial:
+        h_lines, v_lines, extrapolated_dims = extrapolate_partial_grid(
+            (h, w),
+            result.horizontal_lines,
+            result.vertical_lines,
+            result.estimated_cell_width,
+            result.estimated_cell_height,
+            boundary_type
+        )
+        partial_info.extrapolated_dims = extrapolated_dims
+
+        # Update result with extended lines
+        result.horizontal_lines = h_lines
+        result.vertical_lines = v_lines
+
+    # Set visible range
+    if len(h_lines) >= 2 and len(v_lines) >= 2:
+        partial_info.visible_rows = (0, len(h_lines) - 1)
+        partial_info.visible_cols = (0, len(v_lines) - 1)
+
+    # Detect missing cells for non-rectangular grids
+    presence_mask = None
+    missing_cells = []
+
+    if detect_missing and len(h_lines) >= 2 and len(v_lines) >= 2:
+        # Convert to BGR if grayscale for saturation analysis
+        if len(image.shape) == 2:
+            img_bgr = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+        else:
+            img_bgr = image
+
+        presence_mask, missing_cells = detect_missing_cells(
+            img_bgr,
+            h_lines,
+            v_lines
+        )
+
+        partial_info.cell_presence_mask = presence_mask
+        partial_info.missing_cells = missing_cells
+
+        # Analyze grid shape
+        is_rectangular, shape_desc = analyze_grid_shape(presence_mask)
+        partial_info.is_rectangular = is_rectangular
+
+        if not is_rectangular:
+            result.method = f"{result.method}_non_rect"
+
+    # Extract cells with presence information
+    cells = extract_non_rectangular_cells(
+        image,
+        h_lines,
+        v_lines,
+        presence_mask if presence_mask is not None else np.ones((max(len(h_lines) - 1, 1), max(len(v_lines) - 1, 1)), dtype=bool)
+    )
+
+    # Update result with partial grid info and cells
+    result.partial_grid_info = partial_info
+    result.cells = cells
+
+    # Save debug visualization for non-rectangular grids
+    if debug_dir and (not partial_info.is_rectangular or partial_info.is_partial):
+        out_dir = Path(debug_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        debug_img = image.copy() if len(image.shape) == 3 else cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+
+        # Draw all cells, highlighting missing ones
+        for cell in cells:
+            x, y = cell.x, cell.y
+            if cell.is_present:
+                color = (0, 255, 0)  # Green for present
+            else:
+                color = (0, 0, 255)  # Red for missing
+            cv2.rectangle(debug_img, (x, y), (x + cell.width, y + cell.height), color, 2)
+
+        cv2.imwrite(str(out_dir / "non_rectangular_grid.png"), debug_img)
+
+        # Save partial grid info
+        with open(str(out_dir / "partial_grid_info.txt"), "w") as f:
+            f.write(f"Is rectangular: {partial_info.is_rectangular}\n")
+            f.write(f"Is partial: {partial_info.is_partial}\n")
+            f.write(f"Boundary type: {partial_info.boundary_type}\n")
+            f.write(f"Missing cells: {partial_info.missing_cells}\n")
+            f.write(f"Extrapolated dims: {partial_info.extrapolated_dims}\n")
+
+    return result
+
+
 if __name__ == "__main__":
     import argparse
 
@@ -1011,6 +1664,7 @@ if __name__ == "__main__":
     parser.add_argument("--debug-dir", default="debug_hybrid", help="Directory for debug output")
     parser.add_argument("--min-spacing", type=float, default=30.0, help="Minimum cell spacing")
     parser.add_argument("--max-spacing", type=float, default=200.0, help="Maximum cell spacing")
+    parser.add_argument("--partial", action="store_true", help="Enable partial/non-rectangular grid detection")
     args = parser.parse_args()
 
     img = cv2.imread(args.image)
@@ -1027,15 +1681,32 @@ if __name__ == "__main__":
         roi = None
 
     # Detect grid lines
-    result = detect_grid_lines_adaptive(
-        roi_img,
-        min_spacing=args.min_spacing,
-        max_spacing=args.max_spacing,
-        debug_dir=args.debug_dir
-    )
+    if args.partial:
+        # Use enhanced detection with partial/non-rectangular support
+        result = detect_grid_with_partial_support(
+            roi_img,
+            min_spacing=args.min_spacing,
+            max_spacing=args.max_spacing,
+            detect_missing=True,
+            extrapolate_partial=True,
+            debug_dir=args.debug_dir
+        )
+    else:
+        # Use standard detection
+        result = detect_grid_lines_adaptive(
+            roi_img,
+            min_spacing=args.min_spacing,
+            max_spacing=args.max_spacing,
+            debug_dir=args.debug_dir
+        )
 
-    # Extract cells
-    cells = extract_grid_cells(roi_img, result, roi=roi, debug_dir=args.debug_dir)
+    # Extract cells (use cells from result if partial mode, otherwise extract)
+    if args.partial and result.cells:
+        cells = result.cells
+    else:
+        cell_tuples = extract_grid_cells(roi_img, result, roi=roi, debug_dir=args.debug_dir)
+        cells = [GridCell(row=0, col=i, x=cx, y=cy, width=cw, height=ch)
+                 for i, (cx, cy, cw, ch) in enumerate(cell_tuples)]
 
     # Output results
     print(f"Method: {result.method}")
@@ -1046,8 +1717,22 @@ if __name__ == "__main__":
     print(f"Grid dimensions: {result.grid_dims}" if result.grid_dims else "Grid dims: N/A")
     print(f"Cells detected: {len(cells)}")
 
+    # Output partial grid info if available
+    if result.partial_grid_info:
+        pgi = result.partial_grid_info
+        print(f"Is rectangular: {pgi.is_rectangular}")
+        print(f"Is partial: {pgi.is_partial}")
+        print(f"Boundary type: {pgi.boundary_type}")
+        if pgi.missing_cells:
+            print(f"Missing cells: {len(pgi.missing_cells)}")
+        if pgi.extrapolated_dims:
+            print(f"Extrapolated dims: {pgi.extrapolated_dims}")
+
     # Write cells to file
     with open("cells.txt", "w") as f:
-        for (cx, cy, cw, ch) in cells:
-            f.write(f"{cx},{cy},{cw},{ch}\n")
+        for cell in cells:
+            if isinstance(cell, GridCell):
+                f.write(f"{cell.x},{cell.y},{cell.width},{cell.height},{cell.row},{cell.col},{cell.is_present}\n")
+            else:
+                f.write(f"{cell[0]},{cell[1]},{cell[2]},{cell[3]}\n")
     print("Wrote cells.txt")
