@@ -1,0 +1,15 @@
+{
+  "discovered_files": {
+    "pips-solver/src/services/ensembleExtraction.ts": {
+      "description": "Multi-model ensemble extraction service that queries Gemini, Claude, and GPT-4o in parallel. Currently does NOT store per-model raw responses - this needs to be added for the comparison feature. Uses consensus voting to select best result.",
+      "category": "architecture",
+      "discovered_at": "2025-12-22T07:08:37.133631+00:00"
+    },
+    "pips-solver/src/app/components/AIVerificationModal.tsx": {
+      "description": "Existing verification modal that shows extraction results before applying. This is where the 'Compare Models' button will be added to open the new ExtractionComparisonModal.",
+      "category": "ui_component",
+      "discovered_at": "2025-12-22T07:08:37.462023+00:00"
+    }
+  },
+  "last_updated": "2025-12-22T07:08:37.462023+00:00"
+}

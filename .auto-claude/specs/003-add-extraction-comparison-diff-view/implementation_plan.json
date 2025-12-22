@@ -1,0 +1,315 @@
+{
+  "specId": "003-add-extraction-comparison-diff-view",
+  "title": "Add Extraction Comparison/Diff View",
+  "description": "Allow users to compare extraction results from different AI models side-by-side. This surfaces per-model responses stored during debug mode for manual verification and enables cell-by-cell disagreement analysis.",
+  "created_at": "2025-12-22T07:00:39.841Z",
+  "updated_at": "2025-12-22T07:30:00.000Z",
+  "status": "planning",
+  "planStatus": "complete",
+  "workflow_type": "development",
+  "estimatedEffort": "large",
+  "totalEstimatedMinutes": 585,
+  "phases": [
+    {
+      "id": "phase-1",
+      "name": "Data Layer - Store Raw Model Responses",
+      "description": "Extend extraction pipeline to capture and store per-model raw responses for comparison",
+      "subtasks": [
+        {
+          "id": "1.1",
+          "title": "Add debug response types to overlayTypes.ts",
+          "description": "Define TypeScript types for storing per-model raw responses including ModelResponse, RawResponses, and ExtendedAIExtractionResult with debug field",
+          "status": "pending",
+          "acceptanceCriteria": [
+            "ModelResponse type captures model name, raw text, parsed data, and timing",
+            "RawResponses type holds board and domino responses per model",
+            "AIExtractionResult extended with optional debug.rawResponses field"
+          ],
+          "estimatedMinutes": 20,
+          "filesToModify": ["pips-solver/src/model/overlayTypes.ts"]
+        },
+        {
+          "id": "1.2",
+          "title": "Modify ensembleExtraction.ts to capture raw responses",
+          "description": "Update extractBoardEnsemble and extractDominoesEnsemble to return all individual model responses alongside the consensus result",
+          "status": "pending",
+          "acceptanceCriteria": [
+            "Each model's raw text response is captured before parsing",
+            "Parsed results per model are stored with model identifier",
+            "Timing data per model is recorded",
+            "saveDebugResponses option controls whether raw responses are returned"
+          ],
+          "estimatedMinutes": 45,
+          "filesToModify": ["pips-solver/src/services/ensembleExtraction.ts"]
+        },
+        {
+          "id": "1.3",
+          "title": "Thread debug responses through extraction pipeline",
+          "description": "Ensure raw responses flow from ensemble extraction through aiExtraction.ts and are available in the final result",
+          "status": "pending",
+          "acceptanceCriteria": [
+            "MultiModelExtractionResult includes rawResponses when saveDebugResponses is true",
+            "extractPuzzleMultiModel passes debug flag through to ensemble extraction",
+            "Raw responses preserved through all result transformations"
+          ],
+          "estimatedMinutes": 30,
+          "filesToModify": ["pips-solver/src/services/aiExtraction.ts"]
+        }
+      ]
+    },
+    {
+      "id": "phase-2",
+      "name": "Validation Layer - Cell-by-Cell Disagreement Analysis",
+      "description": "Create grid validator module with comparison logic to detect and report disagreements between model responses",
+      "subtasks": [
+        {
+          "id": "2.1",
+          "title": "Create gridValidator.ts with cell comparison types",
+          "description": "Create new validation module with types for cell detection results, disagreement info, and comparison results",
+          "status": "pending",
+          "acceptanceCriteria": [
+            "CellDetection type captures per-cell data (region, constraint, etc.)",
+            "CellDisagreement type shows which models disagree and what values they report",
+            "ComparisonResult type aggregates all disagreements with severity levels"
+          ],
+          "estimatedMinutes": 25,
+          "filesToModify": ["pips-solver/src/services/extraction/validation/gridValidator.ts"]
+        },
+        {
+          "id": "2.2",
+          "title": "Implement compareCellDetections function",
+          "description": "Build core comparison logic that takes multiple model responses and identifies cell-by-cell disagreements",
+          "status": "pending",
+          "acceptanceCriteria": [
+            "Compares shape strings to find holes disagreements",
+            "Compares region assignments per cell",
+            "Compares constraint values per region",
+            "Compares domino list (order-independent)",
+            "Returns structured disagreement data with cell coordinates"
+          ],
+          "estimatedMinutes": 60,
+          "filesToModify": ["pips-solver/src/services/extraction/validation/gridValidator.ts"]
+        },
+        {
+          "id": "2.3",
+          "title": "Add disagreement severity classification",
+          "description": "Classify disagreements as critical (affects solvability), warning (may affect solution), or info (cosmetic differences)",
+          "status": "pending",
+          "acceptanceCriteria": [
+            "Grid dimension mismatches are critical",
+            "Hole position mismatches are critical",
+            "Region boundary differences are warnings",
+            "Constraint value differences are warnings",
+            "Domino count mismatches are critical, individual domino differences are warnings"
+          ],
+          "estimatedMinutes": 30,
+          "filesToModify": ["pips-solver/src/services/extraction/validation/gridValidator.ts"]
+        }
+      ]
+    },
+    {
+      "id": "phase-3",
+      "name": "UI Layer - Extraction Comparison Modal",
+      "description": "Build the visual comparison component showing side-by-side model results with highlighted disagreements",
+      "subtasks": [
+        {
+          "id": "3.1",
+          "title": "Create ExtractionComparisonModal component shell",
+          "description": "Build the basic modal structure with tabs/sections for each model's results and a summary view",
+          "status": "pending",
+          "acceptanceCriteria": [
+            "Modal opens from OverlayBuilderScreen after extraction",
+            "Tab bar shows each model name with result summary",
+            "Scrollable content area for detailed results",
+            "Close and Accept buttons in footer"
+          ],
+          "estimatedMinutes": 45,
+          "filesToModify": ["pips-solver/src/app/components/ExtractionComparisonModal.tsx"]
+        },
+        {
+          "id": "3.2",
+          "title": "Build per-model result display section",
+          "description": "Create reusable component showing a single model's extraction: grid, regions, constraints, dominoes",
+          "status": "pending",
+          "acceptanceCriteria": [
+            "Grid visualization with hole markers",
+            "Region visualization with color-coded cells",
+            "Constraints list with type and values",
+            "Dominoes list with pip counts",
+            "Confidence scores displayed",
+            "Timing info shown"
+          ],
+          "estimatedMinutes": 50,
+          "filesToModify": ["pips-solver/src/app/components/ExtractionComparisonModal.tsx"]
+        },
+        {
+          "id": "3.3",
+          "title": "Add disagreement highlighting to comparison view",
+          "description": "Visually highlight cells/regions where models disagree with color-coded indicators",
+          "status": "pending",
+          "acceptanceCriteria": [
+            "Cells with disagreements have colored border/background",
+            "Severity indicated by color (red=critical, yellow=warning, blue=info)",
+            "Tooltip/popup shows what each model reported for that cell",
+            "Summary badge shows total disagreement count per severity"
+          ],
+          "estimatedMinutes": 45,
+          "filesToModify": ["pips-solver/src/app/components/ExtractionComparisonModal.tsx"]
+        },
+        {
+          "id": "3.4",
+          "title": "Add diff summary panel",
+          "description": "Create summary panel showing all disagreements in list form with navigation to specific cells",
+          "status": "pending",
+          "acceptanceCriteria": [
+            "Lists all disagreements grouped by type (grid, regions, constraints, dominoes)",
+            "Each disagreement shows cell coordinates and per-model values",
+            "Tap on disagreement scrolls/highlights the relevant cell in the grid view",
+            "Filter controls to show/hide by severity level"
+          ],
+          "estimatedMinutes": 40,
+          "filesToModify": ["pips-solver/src/app/components/ExtractionComparisonModal.tsx"]
+        }
+      ]
+    },
+    {
+      "id": "phase-4",
+      "name": "Integration - Wire Up Components",
+      "description": "Connect all components and add UI controls to access the comparison view",
+      "subtasks": [
+        {
+          "id": "4.1",
+          "title": "Add comparison button to AIVerificationModal",
+          "description": "Add 'Compare Models' button to existing verification modal that opens the detailed comparison view",
+          "status": "pending",
+          "acceptanceCriteria": [
+            "Button only visible when multiple models were used",
+            "Button opens ExtractionComparisonModal with raw responses",
+            "Button disabled/hidden when only single model was used"
+          ],
+          "estimatedMinutes": 25,
+          "filesToModify": ["pips-solver/src/app/components/AIVerificationModal.tsx"]
+        },
+        {
+          "id": "4.2",
+          "title": "Update OverlayBuilderScreen to pass debug data",
+          "description": "Modify screen to request debug responses during extraction and pass them to modals",
+          "status": "pending",
+          "acceptanceCriteria": [
+            "saveDebugResponses enabled when using ensemble/accurate strategies",
+            "rawResponses passed to AIVerificationModal",
+            "State management updated to hold comparison data"
+          ],
+          "estimatedMinutes": 35,
+          "filesToModify": ["pips-solver/src/app/screens/OverlayBuilderScreen.tsx"]
+        },
+        {
+          "id": "4.3",
+          "title": "Add Settings toggle for debug mode",
+          "description": "Add user-facing setting to enable/disable storing debug responses (affects storage and performance)",
+          "status": "pending",
+          "acceptanceCriteria": [
+            "Toggle in Settings screen under AI/Extraction section",
+            "Setting persisted to AsyncStorage",
+            "Default is OFF for performance",
+            "Tooltip explains the feature and performance impact"
+          ],
+          "estimatedMinutes": 25,
+          "filesToModify": ["pips-solver/src/app/screens/SettingsScreen.tsx", "pips-solver/src/storage/puzzles.ts"]
+        }
+      ]
+    },
+    {
+      "id": "phase-5",
+      "name": "Testing and Polish",
+      "description": "Add tests, error handling, and UX polish",
+      "subtasks": [
+        {
+          "id": "5.1",
+          "title": "Add unit tests for compareCellDetections",
+          "description": "Create comprehensive tests for the grid comparison logic with various disagreement scenarios",
+          "status": "pending",
+          "acceptanceCriteria": [
+            "Test identical inputs return no disagreements",
+            "Test dimension mismatches detected",
+            "Test region disagreements at specific cells detected",
+            "Test constraint value disagreements detected",
+            "Test domino differences detected"
+          ],
+          "estimatedMinutes": 45,
+          "filesToModify": ["pips-solver/src/services/extraction/validation/__tests__/gridValidator.test.ts"]
+        },
+        {
+          "id": "5.2",
+          "title": "Add error boundary and loading states",
+          "description": "Handle edge cases gracefully with proper error messages and loading indicators",
+          "status": "pending",
+          "acceptanceCriteria": [
+            "Loading spinner while comparison is computed",
+            "Error state if comparison fails with retry option",
+            "Graceful degradation if rawResponses is missing/corrupted",
+            "Empty state if no disagreements found"
+          ],
+          "estimatedMinutes": 30,
+          "filesToModify": ["pips-solver/src/app/components/ExtractionComparisonModal.tsx"]
+        },
+        {
+          "id": "5.3",
+          "title": "Accessibility and responsive design",
+          "description": "Ensure comparison modal works on various screen sizes and is accessible",
+          "status": "pending",
+          "acceptanceCriteria": [
+            "Modal scrolls properly on small screens",
+            "Grid visualization scales appropriately",
+            "Color contrast meets WCAG AA",
+            "Screen reader labels on interactive elements"
+          ],
+          "estimatedMinutes": 35,
+          "filesToModify": ["pips-solver/src/app/components/ExtractionComparisonModal.tsx"]
+        }
+      ]
+    }
+  ],
+  "dependencies": {
+    "external": ["zod (already installed)", "react-native", "expo"],
+    "internal": ["ensembleExtraction.ts", "aiExtraction.ts", "overlayTypes.ts"]
+  },
+  "risks": [
+    {
+      "risk": "Performance impact of storing all raw responses",
+      "mitigation": "Make debug mode opt-in via settings, compress or truncate large responses"
+    },
+    {
+      "risk": "Memory usage with multiple large model responses",
+      "mitigation": "Lazy load comparison data, clear after modal closes"
+    },
+    {
+      "risk": "UI complexity with many disagreements",
+      "mitigation": "Implement filtering, pagination, and progressive disclosure"
+    }
+  ],
+  "services_involved": [
+    "pips-solver/src/services/ensembleExtraction.ts",
+    "pips-solver/src/services/aiExtraction.ts",
+    "pips-solver/src/model/overlayTypes.ts",
+    "pips-solver/src/app/components/ExtractionComparisonModal.tsx",
+    "pips-solver/src/app/components/AIVerificationModal.tsx",
+    "pips-solver/src/app/screens/OverlayBuilderScreen.tsx",
+    "pips-solver/src/services/extraction/validation/gridValidator.ts"
+  ],
+  "final_acceptance": [
+    "User can trigger AI extraction with ensemble strategy",
+    "After extraction, user sees verification modal with 'Compare Models' option",
+    "Comparison modal shows side-by-side results from each model",
+    "Disagreements are highlighted with severity indicators",
+    "User can navigate between models and see detailed diff summary",
+    "Setting exists to enable/disable debug response storage",
+    "Performance impact is minimal when debug mode is disabled"
+  ],
+  "spec_file": "spec.md",
+  "qaStatus": {
+    "status": "pending",
+    "tests_passed": "",
+    "issues": ""
+  }
+}
