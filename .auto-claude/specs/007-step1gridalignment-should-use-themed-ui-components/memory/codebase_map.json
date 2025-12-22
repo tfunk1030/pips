@@ -1,0 +1,15 @@
+{
+  "discovered_files": {
+    "pips-solver/src/app/components/ui/": {
+      "description": "The UI component library (Button, Card, Text, etc.) and theme system already exist in the current branch. Button is already imported in Step1GridAlignment.tsx. Components can be imported from '../../components/ui' relative to screens/builder/",
+      "category": "architecture",
+      "discovered_at": "2025-12-22T08:14:42.911879+00:00"
+    },
+    "pips-solver/src/theme/": {
+      "description": "Complete theme system with colors (surface, accent, semantic, text), spacing (8pt grid), radii, shadows, typography, and animations. Available via import from '../../../theme' from component files.",
+      "category": "architecture",
+      "discovered_at": "2025-12-22T08:14:43.232070+00:00"
+    }
+  },
+  "last_updated": "2025-12-22T08:14:43.232070+00:00"
+}
