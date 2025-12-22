@@ -13,37 +13,128 @@ import { callAllModels } from '../apiClient';
 // =============================================================================
 
 function getCellDetectionPrompt(grid: GridGeometryResult): string {
-  return `Given this ${grid.rows}x${grid.cols} NYT Pips puzzle grid, identify which positions are cells vs holes.
+  return `Analyze this NYT Pips puzzle screenshot and identify which positions are CELLS vs HOLES in the ${grid.rows}x${grid.cols} grid.
 
-DEFINITIONS:
-- Cell (.): A colored background position where a domino pip can be placed
-- Hole (#): An empty/dark space where no cell exists (often at corners or edges)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+VISUAL IDENTIFICATION GUIDE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-INSTRUCTIONS:
-1. Examine each position in the ${grid.rows}x${grid.cols} grid
-2. Build a shape string with ${grid.rows} lines, each with ${grid.cols} characters
-3. Use '.' for cells (colored), '#' for holes (dark/empty)
+CELLS (use '.' in output):
+┌────────────────────────────────────────┐
+│ • Have COLORED backgrounds (green,     │
+│   pink, yellow, blue, orange, etc.)    │
+│ • May contain a white diamond with     │
+│   a number or symbol inside            │
+│ • Are part of the playable puzzle area │
+│ • Look FILLED and BRIGHT               │
+└────────────────────────────────────────┘
 
-EXAMPLE for a 5x6 grid with corner holes:
-##....
-......
-......
-......
-....##
+HOLES (use '#' in output):
+┌────────────────────────────────────────┐
+│ • Are DARK or BLACK empty spaces       │
+│ • Have NO colored background           │
+│ • Are WITHIN the grid boundary         │
+│ • Look EMPTY like gaps or cutouts      │
+│ • Often appear at corners or edges     │
+│ • May have subtle grid lines but       │
+│   no fill color                        │
+└────────────────────────────────────────┘
 
-CRITICAL RULES:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP-BY-STEP DETECTION METHOD:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. SCAN ROW BY ROW (top to bottom):
+   - For each of the ${grid.rows} rows, examine ${grid.cols} positions left to right
+   - Ask: "Does this position have a colored background?"
+   - YES (colored) → write '.'
+   - NO (dark/empty) → write '#'
+
+2. EXAMPLE - 5x6 grid with corner holes:
+
+   Visual appearance:          Output shape:
+   ┌─┬─┬─┬─┬─┬─┐
+   │▓│▓│█│█│█│█│  Row 1       ##....
+   ├─┼─┼─┼─┼─┼─┤
+   │█│█│█│█│█│█│  Row 2       ......
+   ├─┼─┼─┼─┼─┼─┤
+   │█│█│█│█│█│█│  Row 3       ......
+   ├─┼─┼─┼─┼─┼─┤
+   │█│█│█│█│█│█│  Row 4       ......
+   ├─┼─┼─┼─┼─┼─┤
+   │█│█│█│█│▓│▓│  Row 5       ....##
+   └─┴─┴─┴─┴─┴─┘
+
+   Legend: █ = colored cell (.), ▓ = dark hole (#)
+
+3. EXAMPLE - 6x5 grid with L-shape holes:
+
+   Visual appearance:          Output shape:
+   ┌─┬─┬─┬─┬─┐
+   │█│█│█│█│▓│  Row 1         ....#
+   ├─┼─┼─┼─┼─┤
+   │█│█│█│█│▓│  Row 2         ....#
+   ├─┼─┼─┼─┼─┤
+   │█│█│█│█│█│  Row 3         .....
+   ├─┼─┼─┼─┼─┤
+   │█│█│█│█│█│  Row 4         .....
+   ├─┼─┼─┼─┼─┤
+   │▓│█│█│█│█│  Row 5         #....
+   ├─┼─┼─┼─┼─┤
+   │▓│█│█│█│█│  Row 6         #....
+   └─┴─┴─┴─┴─┘
+
+4. EXAMPLE - 5x5 grid with scattered internal holes:
+
+   Visual appearance:          Output shape:
+   ┌─┬─┬─┬─┬─┐
+   │█│█│█│█│█│  Row 1         .....
+   ├─┼─┼─┼─┼─┤
+   │█│▓│█│▓│█│  Row 2         .#.#.
+   ├─┼─┼─┼─┼─┤
+   │█│█│█│█│█│  Row 3         .....
+   ├─┼─┼─┼─┼─┤
+   │█│▓│█│▓│█│  Row 4         .#.#.
+   ├─┼─┼─┼─┼─┤
+   │█│█│█│█│█│  Row 5         .....
+   └─┴─┴─┴─┴─┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+COMMON MISTAKES TO AVOID:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✗ DON'T confuse SHADOWS with holes (shadows are on colored cells, holes have NO color)
+✗ DON'T confuse DARK-COLORED cells with holes (dark green/blue ARE cells, not holes)
+✗ DON'T mark cells as holes just because they have constraint diamonds
+✗ DON'T include the DOMINO TRAY (row of dominoes below puzzle) in your analysis
+✗ DON'T count areas OUTSIDE the grid boundaries
+
+✓ DO look for the absence of ANY background color = hole
+✓ DO include corner holes that define irregular shapes
+✓ DO count internal holes (gaps within the puzzle, not just edges)
+✓ DO verify: total cells (.) should be EVEN (dominoes need pairs)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+VALIDATION RULES:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 - Output EXACTLY ${grid.rows} lines
 - Each line has EXACTLY ${grid.cols} characters
 - ONLY use '.' and '#' characters
-- Total '.' count must be EVEN (dominoes need pairs)
+- Total cell count (.) MUST be EVEN (for domino pairs)
+- Typical puzzles have 0-8 holes, rarely more
 
-Return ONLY valid JSON (no markdown, no explanation):
-{"shape": "line1\\nline2\\n...", "confidence": 0.XX}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RESPONSE FORMAT:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Return ONLY this JSON (no markdown, no explanation, no code blocks):
+{"shape": "line1\\nline2\\nline3\\n...", "confidence": 0.XX}
 
 Confidence scoring:
-- 0.95-1.00: All cell/hole boundaries perfectly clear
-- 0.85-0.94: Very confident, minor edge ambiguity
-- 0.70-0.84: Some positions unclear
+- 0.95-1.00: All cell/hole boundaries crystal clear
+- 0.85-0.94: Very confident, only minor visual ambiguity
+- 0.70-0.84: Some positions unclear (shadows, dark colors)
 - Below 0.70: Multiple positions ambiguous`;
 }
 
@@ -56,31 +147,79 @@ function getRetryPrompt(
   previousAttempts: CellDetectionResult[]
 ): string {
   const attemptsStr = previousAttempts
-    .map((a, i) => `Attempt ${i + 1}:\n${a.shape}`)
+    .map((a, i) => `Model ${i + 1}:\n${a.shape}`)
     .join('\n\n');
 
-  return `Given this ${grid.rows}x${grid.cols} NYT Pips puzzle grid, identify cells vs holes.
+  // Calculate differences to provide hints
+  const shapes = previousAttempts.map(a => a.shape);
+  const holeCountHint = shapes.length > 0
+    ? `Hole counts ranged from ${Math.min(...shapes.map(s => (s.match(/#/g) || []).length))} to ${Math.max(...shapes.map(s => (s.match(/#/g) || []).length))}`
+    : '';
 
-PREVIOUS ATTEMPTS DISAGREED:
+  return `⚠️ RE-EXAMINE: Previous cell/hole detection attempts DISAGREED for this ${grid.rows}x${grid.cols} grid.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PREVIOUS CONFLICTING RESULTS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 ${attemptsStr}
 
-Please look again MORE CAREFULLY:
-1. Colored/bright areas = cells (.)
-2. Dark/black/empty areas within grid bounds = holes (#)
-3. The grid is EXACTLY ${grid.rows} rows by ${grid.cols} columns
+${holeCountHint}
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PRECISE IDENTIFICATION TECHNIQUE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. CELL vs HOLE - THE KEY QUESTION:
+   For each grid position, ask: "Does this square have ANY background color?"
+
+   CELL (.) answers:
+   • "Yes, it's green/pink/yellow/blue/orange/purple"
+   • "Yes, even though it looks dark, there's color there"
+   • "Yes, it has a constraint diamond on a colored background"
+
+   HOLE (#) answers:
+   • "No, it's completely black/dark with no color"
+   • "No, it's an empty cutout in the grid"
+   • "No, it looks like a gap, not a playable space"
+
+2. SCAN SYSTEMATICALLY:
+   Row 1: [position 1] [position 2] ... [position ${grid.cols}]
+   Row 2: [position 1] [position 2] ... [position ${grid.cols}]
+   ...continue for all ${grid.rows} rows...
+
+3. VISUAL COMPARISON:
+
+   This is a CELL (colored):     This is a HOLE (empty):
+   ┌─────────────────────┐       ┌─────────────────────┐
+   │   ████████████████  │       │                     │
+   │   █  COLORED BG  █  │       │   ▒▒▒▒▒▒▒▒▒▒▒▒▒▒  │
+   │   █  maybe with  █  │       │   ▒ DARK/BLACK ▒  │
+   │   █  ◇ diamond  █  │       │   ▒  NO COLOR   ▒  │
+   │   ████████████████  │       │   ▒▒▒▒▒▒▒▒▒▒▒▒▒▒  │
+   └─────────────────────┘       └─────────────────────┘
+        Output: .                     Output: #
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CRITICAL REMINDERS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+• Dark-COLORED cells (dark blue, dark green) are still CELLS, not holes
+• Shadows on colored cells do NOT make them holes
+• Constraint diamonds (◇ with numbers) sit ON cells, not holes
+• Holes have ZERO color - they are pure gaps in the puzzle
+• Verify: count of '.' characters must be EVEN
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 VALIDATION RULES:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 - Exactly ${grid.rows} lines in output
 - Each line exactly ${grid.cols} characters
-- Only '.' and '#' allowed
-- Total cells must be even (for domino pairs)
+- Only '.' and '#' characters allowed
+- Total '.' count MUST be even (dominoes need pairs)
 
-Common mistakes to avoid:
-- Counting areas OUTSIDE the grid
-- Mistaking shadows for holes
-- Missing small corner holes
-
-Return ONLY valid JSON:
+Return ONLY valid JSON (no markdown, no explanation):
 {"shape": "line1\\nline2\\n...", "confidence": 0.XX}`;
 }
 
