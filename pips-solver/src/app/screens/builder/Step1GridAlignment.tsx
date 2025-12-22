@@ -18,6 +18,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated from 'react-native-reanimated';
 import Svg, { Circle, Line, Rect } from 'react-native-svg';
 import { BuilderAction, GridBounds, OverlayBuilderState } from '../../../model/overlayTypes';
+import { tokens } from '../../../theme/tokens';
 import { constrainBounds, hitTestCell } from '../../../utils/gridCalculations';
 import ConfidenceIndicator from '../../components/ConfidenceIndicator';
 
@@ -469,7 +470,7 @@ const styles = StyleSheet.create({
     marginTop: 40,
   },
   pickButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: tokens.colors.accent.primary,
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 8,
@@ -509,7 +510,7 @@ const styles = StyleSheet.create({
   controlButton: {
     width: 36,
     height: 36,
-    backgroundColor: '#333',
+    backgroundColor: tokens.colors.surface.elevated,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
@@ -546,7 +547,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   aiButton: {
-    backgroundColor: '#9C27B0',
+    backgroundColor: tokens.colors.accent.ai,
     paddingVertical: 14,
     paddingHorizontal: 24,
     borderRadius: 8,
