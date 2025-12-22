@@ -1,0 +1,20 @@
+{
+  "discovered_files": {
+    "src/extraction/types.ts": {
+      "description": "Extraction pipeline types file with ExtractionStage (union type), StageConfidence, ConfidenceHint, HintSeverity, ExtractedCell, and ExtractionResult interfaces. All confidence-related types are here.",
+      "category": "types",
+      "discovered_at": "2025-12-22T08:16:33.747001+00:00"
+    },
+    "src/app/components/ui/ConfidenceSummary.tsx": {
+      "description": "Composite component combining ConfidenceIndicator and ConfidenceHintsList in a card layout. Features: expandable/collapsible hints section with LayoutAnimation, warning count badge, 'No warnings' state with checkmark, full accessibility support. Uses the same styling patterns as sibling components.",
+      "category": "ui-component",
+      "discovered_at": "2025-12-22T08:25:34.358658+00:00"
+    },
+    "src/app/screens/ExtractionResultScreen.tsx": {
+      "description": "New ExtractionResultScreen component for displaying extraction results with puzzle grid preview, confidence summary, stage breakdown toggle, and Accept/Retry actions. Navigates to Solve screen when accepted.",
+      "category": "component",
+      "discovered_at": "2025-12-22T08:32:03.088329+00:00"
+    }
+  },
+  "last_updated": "2025-12-22T08:32:03.088329+00:00"
+}

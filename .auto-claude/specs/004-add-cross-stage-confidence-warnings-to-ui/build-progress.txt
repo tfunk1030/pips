@@ -1,0 +1,30 @@
+# Build Progress - Add Cross-Stage Confidence Warnings to UI
+
+## Current Status
+- Phase 1 (Extraction Pipeline): COMPLETED (3/3 subtasks)
+- Phase 2 (UI Components): COMPLETED (3/3 subtasks)
+- Phase 3 (Extraction Results Screen): COMPLETED (2/2 subtasks)
+- Phase 4 (Integration and Testing): PENDING (0/3 subtasks)
+
+## Completed Subtasks
+- [x] 1.1 - Define TypeScript types (ExtractionStage, StageConfidence, ConfidenceHint, ExtractionResult)
+- [x] 1.2 - Implement generateConfidenceHints function
+- [x] 1.3 - Create mock extraction results for testing
+- [x] 2.1 - Create ConfidenceIndicator component
+- [x] 2.2 - Create ConfidenceHintsList component
+- [x] 2.3 - Create ConfidenceSummary composite component
+- [x] 3.1 - Create ExtractionResultScreen
+- [x] 3.2 - Add navigation route for ExtractionResultScreen
+
+## Next Up
+- [ ] 4.1 - Wire up extraction pipeline to UI
+- [ ] 4.2 - Add unit tests for generateConfidenceHints
+- [ ] 4.3 - Manual integration testing with mock data
+
+## Session Notes
+- 2024-12-22: Verified subtask 1.1 already completed and committed (22acced)
+- Types file includes: ExtractionStage, StageConfidence, ConfidenceHint, HintSeverity, ExtractedCell, ExtractionResult
+- TypeScript compilation successful with no errors
+- 2024-12-22: Created ExtractionResultScreen.tsx with grid preview, confidence summary, stage breakdown toggle, and action buttons
+- Fixed accessibility role issue in ConfidenceSummary.tsx ('region' -> 'accessible' prop)
+- Added ExtractionResult route to RootNavigator with extractionResult and sourceImageUri params

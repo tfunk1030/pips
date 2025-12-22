@@ -50,7 +50,7 @@ export default function ConfidenceSummary({
   return (
     <View
       style={[styles.card, style]}
-      accessibilityRole="region"
+      accessible
       accessibilityLabel={`Extraction confidence summary. ${Math.round(confidence * 100)} percent confidence with ${warningCount} warnings.`}
     >
       {/* Confidence Indicator */}

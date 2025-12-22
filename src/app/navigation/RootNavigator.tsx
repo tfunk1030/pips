@@ -5,7 +5,9 @@ import PuzzleEditorScreen from '../screens/PuzzleEditorScreen';
 import PuzzleViewerScreen from '../screens/PuzzleViewerScreen';
 import SolveScreen from '../screens/SolveScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import ExtractionResultScreen from '../screens/ExtractionResultScreen';
 import { PuzzleSpec } from '../../model/types';
+import { ExtractionResult } from '../../extraction/types';
 
 export type RootStackParamList = {
   Home: undefined;
@@ -13,6 +15,7 @@ export type RootStackParamList = {
   Viewer: { puzzle: PuzzleSpec; sourceText: string };
   Solve: { puzzle: PuzzleSpec; sourceText: string };
   Settings: undefined;
+  ExtractionResult: { extractionResult: ExtractionResult; sourceImageUri?: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -27,6 +30,7 @@ const RootNavigator = () => (
     <Stack.Screen name="Viewer" component={PuzzleViewerScreen} options={{ title: 'Puzzle' }} />
     <Stack.Screen name="Solve" component={SolveScreen} options={{ title: 'Solve' }} />
     <Stack.Screen name="Settings" component={SettingsScreen} />
+    <Stack.Screen name="ExtractionResult" component={ExtractionResultScreen} options={{ title: 'Extraction Results' }} />
   </Stack.Navigator>
 );
 

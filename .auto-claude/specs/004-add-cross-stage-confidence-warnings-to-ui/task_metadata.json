@@ -1,0 +1,13 @@
+{
+  "sourceType": "ideation",
+  "ideationType": "code_improvements",
+  "ideaId": "ci-003",
+  "rationale": "The generateConfidenceHints function (pipeline.ts lines 236-282) already generates human-readable warnings like 'Low confidence in Grid dimensions' and 'Extraction confidence varies significantly across stages'. The ConfidenceSummary component exists but doesn't show these text hints.",
+  "category": "feature",
+  "estimatedEffort": "small",
+  "complexity": "small",
+  "affectedFiles": [
+    "pips-solver/src/app/components/ui/ConfidenceIndicator.tsx",
+    "pips-solver/src/app/screens/OverlayBuilderScreen.tsx"
+  ]
+}
