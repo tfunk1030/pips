@@ -1,0 +1,134 @@
+=== AUTO-BUILD PROGRESS ===
+
+Project: Pips Puzzle Application - Complete Domino Pip Detection
+Spec: 011-complete-domino-pip-detection
+Workspace: Managed by orchestrator (branch/worktree auto-created)
+Started: 2025-12-22
+
+Workflow Type: feature
+Rationale: Feature implementation task completing partially built pip detection functionality.
+           Single service (cv-service) implementation with clear dependency chain between phases.
+           Follows logical build sequence: core detection → rotation handling → confidence
+           scoring → API integration → testing.
+
+Session 1 (Planner):
+- Created implementation_plan.json
+- Updated context.json with investigation findings
+- Verified project_index.json exists
+- Phases: 5
+- Total subtasks: 19
+- Created init.sh for development environment
+- Created build-progress.txt
+
+Phase Summary:
+- Phase 1 (Core Pip Detection Algorithm): 4 subtasks, no dependencies
+  * Preprocessing pipeline (adaptive threshold, morphological ops)
+  * HoughCircles detection implementation
+  * Fallback contour-based detection
+  * Pip count validation (0-6 range)
+
+- Phase 2 (Rotation Handling): 3 subtasks, depends on Phase 1
+  * Rotation angle detection (minAreaRect)
+  * Image rotation correction (warpAffine)
+  * Domino half splitting with rotation support
+
+- Phase 3 (Confidence Scoring): 3 subtasks, depends on Phase 2
+  * Confidence calculation algorithm
+  * PipDetectionResult Pydantic model
+  * Integration into main detection function
+
+- Phase 4 (API Integration): 4 subtasks, depends on Phase 3
+  * Update Pydantic response models
+  * Update /crop-dominoes endpoint
+  * Error handling for detection failures
+  * Verify OpenCV version
+
+- Phase 5 (Testing & Validation): 4 subtasks, depends on Phase 4
+  * Unit tests for pip detection
+  * Integration tests for full pipeline
+  * Manual verification with real images
+  * Docker container verification
+
+Services Involved:
+- cv-service (primary) - Python/FastAPI service for computer vision operations
+  * Port: 8080
+  * Tech: FastAPI, OpenCV ≥4.8.0, NumPy, Pydantic v2
+  * Key files: extract_dominoes.py, main.py, hybrid_extraction.py
+
+Key Patterns Identified:
+- OpenCV preprocessing: Adaptive thresholding with ADAPTIVE_THRESH_GAUSSIAN_C
+- Pip detection: HoughCircles (primary) + contour filtering (fallback)
+- Rotation handling: minAreaRect → warpAffine correction
+- Pydantic v2: model_config instead of Config class
+- Base64 handling: Strip 'base64,' prefix before decoding
+
+Parallelism Analysis:
+- Max parallel phases: 1
+- Recommended workers: 1
+- Parallel groups: None (strict sequential dependencies required)
+- Speedup estimate: Sequential execution required
+
+Verification Strategy:
+- Risk level: medium
+- Test types required: unit, integration
+- Security scan: not required
+- Staging deployment: not required
+- Acceptance criteria: ≥90% accuracy, rotation invariance, confidence scoring
+
+QA Requirements:
+- Unit tests: test_pip_detection.py (all values 0-6, rotations, edge cases)
+- Integration tests: test_e2e_extraction.py (full pipeline)
+- Manual verification: Real puzzle images (IMG_2050.png, IMG_2051.png)
+- Docker verification: Container builds and runs correctly
+
+=== STARTUP COMMAND ===
+
+To continue building this spec, run:
+
+  source auto-claude/.venv/bin/activate && python auto-claude/run.py --spec 011 --parallel 1
+
+Example (from project root):
+  cd C:\Users\tfunk\pips
+  source auto-claude/.venv/bin/activate
+  python auto-claude/run.py --spec 011 --parallel 1
+
+=== DEVELOPMENT ENVIRONMENT ===
+
+To start the development environment manually:
+
+  cd C:\Users\tfunk\pips\.auto-claude\specs\011-complete-domino-pip-detection
+  ./init.sh
+
+Services will start:
+- cv-service: http://localhost:8080
+- API docs: http://localhost:8080/docs
+
+=== IMPLEMENTATION NOTES ===
+
+Key Technical Decisions:
+1. Use cv2.HoughCircles() as primary detection (more robust than contours)
+2. Adaptive thresholding for lighting variance (not fixed thresholds)
+3. Rotation correction before splitting dominoes into halves
+4. Confidence scoring based on circularity, size variance, count validation
+5. Pydantic v2 models with Field validation for API responses
+
+Files to Modify:
+- cv-service/extract_dominoes.py (main implementation)
+- cv-service/main.py (API endpoint updates)
+- cv-service/requirements.txt (verify OpenCV ≥4.8.0)
+
+Files to Reference:
+- cv-service/hybrid_extraction.py (OpenCV patterns)
+- cv-service/main.py (Pydantic v2 patterns)
+- extract_dominoes.py (existing basic implementation)
+
+Critical Edge Cases:
+- Blank dominoes (0 pips) - return 0 with high confidence
+- Partial/occluded dominoes - low confidence (<0.5)
+- Rotated dominoes - handle 0-360° rotation
+- Poor lighting - adaptive thresholding compensates
+- Overlapping pips - morphological separation
+
+=== END SESSION 1 ===
+
+Next: Coder agent will implement subtasks sequentially following phase dependencies.
