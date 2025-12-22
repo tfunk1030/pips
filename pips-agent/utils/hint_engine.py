@@ -464,3 +464,400 @@ def generate_hint_level_2(
         hint_type="direction",
         region=target_region["name"],
     )
+
+
+# =============================================================================
+# Level 3 Hint Logic - Specific Cell Placement
+# =============================================================================
+
+# Templates for Level 3 cell placement hints
+CELL_PLACEMENT_HINT_TEMPLATES = [
+    "Place a {value} at row {row}, column {col} to satisfy the constraint on region '{region}'.",
+    "Cell at position ({row}, {col}) should have the value {value}.",
+    "Try placing {value} in the cell at row {row}, column {col}.",
+    "The cell at ({row}, {col}) in region '{region}' needs to be {value}.",
+    "Put a {value} in row {row}, column {col} - this satisfies the '{region}' constraint.",
+]
+
+# Templates when we can identify a domino placement
+DOMINO_PLACEMENT_HINT_TEMPLATES = [
+    "Place the [{pip1}, {pip2}] domino starting at row {row}, column {col}.",
+    "The domino [{pip1}, {pip2}] fits well starting at position ({row}, {col}).",
+    "Try the [{pip1}, {pip2}] domino at row {row}, column {col}.",
+]
+
+# Fallback when analysis can't determine specific placement
+CELL_HINT_FALLBACK_TEMPLATES = [
+    "Look at the cell at row {row}, column {col} in region '{region}' - consider what values satisfy the constraint.",
+    "Focus on position ({row}, {col}) and determine what value fits the '{region}' constraint.",
+    "The cell at ({row}, {col}) is key to solving region '{region}'.",
+]
+
+
+def _get_cell_positions_by_region(board: Dict[str, Any]) -> Dict[str, List[Tuple[int, int]]]:
+    """
+    Extract cell positions grouped by region.
+
+    Returns a dict mapping region names to lists of (row, col) tuples.
+    """
+    regions = board.get("regions", []) if isinstance(board, dict) else getattr(board, "regions", [])
+    shape = board.get("shape", []) if isinstance(board, dict) else getattr(board, "shape", [])
+
+    region_cells: Dict[str, List[Tuple[int, int]]] = {}
+
+    for row_idx, (shape_row, region_row) in enumerate(zip(shape, regions)):
+        for col_idx, (cell_char, region_char) in enumerate(zip(shape_row, region_row)):
+            # Only consider playable cells
+            if cell_char == '.':
+                if region_char not in region_cells:
+                    region_cells[region_char] = []
+                region_cells[region_char].append((row_idx, col_idx))
+
+    return region_cells
+
+
+def _get_available_tiles(dominoes: Dict[str, Any]) -> List[Tuple[int, int]]:
+    """Extract available domino tiles as list of (pip1, pip2) tuples."""
+    tiles = dominoes.get("tiles", []) if isinstance(dominoes, dict) else getattr(dominoes, "tiles", [])
+    return [(t[0], t[1]) for t in tiles if len(t) >= 2]
+
+
+def _get_pip_range(pips: Dict[str, Any]) -> Tuple[int, int]:
+    """Extract pip range from pips config."""
+    pip_min = pips.get("pip_min", 0) if isinstance(pips, dict) else getattr(pips, "pip_min", 0)
+    pip_max = pips.get("pip_max", 6) if isinstance(pips, dict) else getattr(pips, "pip_max", 6)
+    return pip_min, pip_max
+
+
+def _find_valid_placements_for_region(
+    region_name: str,
+    region_cells: List[Tuple[int, int]],
+    constraint: Dict[str, Any],
+    available_tiles: List[Tuple[int, int]],
+    pip_range: Tuple[int, int],
+) -> List[Dict[str, Any]]:
+    """
+    Find valid cell placements for a region based on its constraint.
+
+    Returns a list of possible placements with cell, value, and confidence info.
+    """
+    constraint_type = constraint.get("type", "") if isinstance(constraint, dict) else getattr(constraint, "type", "")
+    op = constraint.get("op", "==") if isinstance(constraint, dict) else getattr(constraint, "op", "==")
+    value = constraint.get("value", 0) if isinstance(constraint, dict) else getattr(constraint, "value", 0)
+
+    valid_placements = []
+    pip_min, pip_max = pip_range
+
+    # Get all pip values that appear on our available dominoes
+    available_pips: Set[int] = set()
+    for pip1, pip2 in available_tiles:
+        available_pips.add(pip1)
+        available_pips.add(pip2)
+
+    if constraint_type == "all_equal":
+        # For all_equal constraints, find which pip values can fill all cells
+        # Each cell must have the same value
+        cell_count = len(region_cells)
+
+        # We need enough domino halves with the same pip value
+        for pip_val in available_pips:
+            # Count how many times this pip appears across all dominoes
+            pip_count = sum(
+                (1 if pip1 == pip_val else 0) + (1 if pip2 == pip_val else 0)
+                for pip1, pip2 in available_tiles
+            )
+
+            if pip_count >= cell_count and region_cells:
+                # This pip value could fill the region
+                first_cell = region_cells[0]
+                valid_placements.append({
+                    "row": first_cell[0],
+                    "col": first_cell[1],
+                    "value": pip_val,
+                    "region": region_name,
+                    "confidence": "high" if pip_count == cell_count else "medium",
+                    "reason": "all_equal",
+                })
+
+    elif constraint_type == "sum":
+        # For sum constraints, find pip combinations that satisfy the sum
+        cell_count = len(region_cells)
+
+        if cell_count == 1:
+            # Single cell: value must equal the sum target
+            for pip_val in available_pips:
+                if _check_sum_constraint(pip_val, op, value):
+                    first_cell = region_cells[0]
+                    valid_placements.append({
+                        "row": first_cell[0],
+                        "col": first_cell[1],
+                        "value": pip_val,
+                        "region": region_name,
+                        "confidence": "high",
+                        "reason": "sum_single_cell",
+                    })
+
+        elif cell_count == 2:
+            # Two cells: find domino that satisfies sum constraint
+            for pip1, pip2 in available_tiles:
+                total = pip1 + pip2
+                if _check_sum_constraint(total, op, value):
+                    first_cell = region_cells[0]
+                    valid_placements.append({
+                        "row": first_cell[0],
+                        "col": first_cell[1],
+                        "value": pip1,
+                        "region": region_name,
+                        "confidence": "high",
+                        "reason": "sum_two_cell",
+                        "domino": (pip1, pip2),
+                    })
+
+        else:
+            # Multiple cells: harder to determine, use heuristics
+            # Find pip values that are likely to be part of the solution
+            target_avg = value / cell_count if value else 0
+            closest_pip = min(available_pips, key=lambda p: abs(p - target_avg)) if available_pips else 0
+
+            if region_cells and closest_pip is not None:
+                first_cell = region_cells[0]
+                valid_placements.append({
+                    "row": first_cell[0],
+                    "col": first_cell[1],
+                    "value": closest_pip,
+                    "region": region_name,
+                    "confidence": "low",
+                    "reason": "sum_heuristic",
+                })
+
+    return valid_placements
+
+
+def _check_sum_constraint(total: int, op: str, value: int) -> bool:
+    """Check if a total satisfies a sum constraint."""
+    if op == "==":
+        return total == value
+    elif op == "!=":
+        return total != value
+    elif op == "<":
+        return total < value
+    elif op == ">":
+        return total > value
+    elif op == "<=":
+        return total <= value
+    elif op == ">=":
+        return total >= value
+    return False
+
+
+def _analyze_puzzle_for_cell_hint(puzzle_spec: Any) -> List[Dict[str, Any]]:
+    """
+    Analyze the puzzle to find determinable cell placements.
+
+    Returns a list of placement suggestions sorted by confidence.
+    """
+    # Extract puzzle components
+    if isinstance(puzzle_spec, dict):
+        region_constraints = puzzle_spec.get("region_constraints", {})
+        board = puzzle_spec.get("board", {})
+        dominoes = puzzle_spec.get("dominoes", {})
+        pips = puzzle_spec.get("pips", {})
+    else:
+        region_constraints = puzzle_spec.region_constraints
+        board = puzzle_spec.board
+        dominoes = puzzle_spec.dominoes
+        pips = puzzle_spec.pips
+
+        # Convert to dict-like if needed
+        if not isinstance(region_constraints, dict):
+            if hasattr(region_constraints, 'items'):
+                region_constraints = dict(region_constraints.items())
+            elif hasattr(region_constraints, '__dict__'):
+                region_constraints = region_constraints.__dict__
+
+    board_dict = board if isinstance(board, dict) else {
+        "regions": getattr(board, "regions", []),
+        "shape": getattr(board, "shape", [])
+    }
+    dominoes_dict = dominoes if isinstance(dominoes, dict) else {
+        "tiles": getattr(dominoes, "tiles", [])
+    }
+    pips_dict = pips if isinstance(pips, dict) else {
+        "pip_min": getattr(pips, "pip_min", 0),
+        "pip_max": getattr(pips, "pip_max", 6)
+    }
+
+    # Get cell positions by region
+    region_cells = _get_cell_positions_by_region(board_dict)
+
+    # Get available tiles and pip range
+    available_tiles = _get_available_tiles(dominoes_dict)
+    pip_range = _get_pip_range(pips_dict)
+
+    # Collect all valid placements
+    all_placements = []
+
+    for region_name, constraint in region_constraints.items():
+        cells = region_cells.get(region_name, [])
+        if not cells:
+            continue
+
+        constraint_dict = constraint if isinstance(constraint, dict) else {
+            "type": getattr(constraint, "type", ""),
+            "op": getattr(constraint, "op", ""),
+            "value": getattr(constraint, "value", 0)
+        }
+
+        placements = _find_valid_placements_for_region(
+            region_name,
+            cells,
+            constraint_dict,
+            available_tiles,
+            pip_range,
+        )
+        all_placements.extend(placements)
+
+    # Sort by confidence (high first)
+    confidence_order = {"high": 0, "medium": 1, "low": 2}
+    all_placements.sort(key=lambda p: confidence_order.get(p.get("confidence", "low"), 3))
+
+    return all_placements
+
+
+def generate_hint_level_3(
+    puzzle_spec: Any,
+    previous_hints: Optional[List[str]] = None,
+    previous_cells: Optional[Set[Tuple[int, int]]] = None,
+) -> HintResult:
+    """
+    Generate a Level 3 specific cell placement hint.
+
+    Level 3 hints reveal a specific cell coordinate with its correct value,
+    giving the user a concrete placement to make.
+
+    Args:
+        puzzle_spec: The puzzle specification (PuzzleSpec model or dict)
+        previous_hints: List of previously given hint texts to avoid repetition
+        previous_cells: Set of (row, col) tuples already hinted to avoid repetition
+
+    Returns:
+        HintResult with specific cell placement information
+    """
+    if previous_hints is None:
+        previous_hints = []
+    if previous_cells is None:
+        previous_cells = set()
+
+    # Analyze puzzle to find determinable placements
+    placements = _analyze_puzzle_for_cell_hint(puzzle_spec)
+
+    # Filter out previously hinted cells
+    available_placements = [
+        p for p in placements
+        if (p["row"], p["col"]) not in previous_cells
+    ]
+
+    # If all cells have been hinted, reset
+    if not available_placements and placements:
+        available_placements = placements
+
+    # Handle edge case: no placements found
+    if not available_placements:
+        # Fallback: get any cell from the puzzle
+        if isinstance(puzzle_spec, dict):
+            board = puzzle_spec.get("board", {})
+        else:
+            board = puzzle_spec.board
+
+        board_dict = board if isinstance(board, dict) else {
+            "regions": getattr(board, "regions", []),
+            "shape": getattr(board, "shape", [])
+        }
+
+        region_cells = _get_cell_positions_by_region(board_dict)
+
+        # Get first available cell
+        for region_name, cells in region_cells.items():
+            if cells:
+                first_cell = cells[0]
+                template = random.choice(CELL_HINT_FALLBACK_TEMPLATES)
+                hint_text = template.format(
+                    row=first_cell[0],
+                    col=first_cell[1],
+                    region=region_name,
+                )
+                return HintResult(
+                    content=hint_text,
+                    hint_type="cell",
+                    region=region_name,
+                    cell={"row": first_cell[0], "col": first_cell[1]},
+                )
+
+        # Ultimate fallback
+        return HintResult(
+            content="Analyze the puzzle constraints to determine where to place the next domino.",
+            hint_type="cell",
+        )
+
+    # Select the best placement (highest confidence)
+    selected = available_placements[0]
+
+    # Generate hint text
+    row = selected["row"]
+    col = selected["col"]
+    value = selected["value"]
+    region = selected["region"]
+    confidence = selected.get("confidence", "medium")
+
+    # Check if we have domino info for a more specific hint
+    domino = selected.get("domino")
+    if domino and confidence == "high":
+        template = random.choice(DOMINO_PLACEMENT_HINT_TEMPLATES)
+        hint_text = template.format(
+            pip1=domino[0],
+            pip2=domino[1],
+            row=row,
+            col=col,
+        )
+    elif confidence == "high" or confidence == "medium":
+        template = random.choice(CELL_PLACEMENT_HINT_TEMPLATES)
+        hint_text = template.format(
+            value=value,
+            row=row,
+            col=col,
+            region=region,
+        )
+    else:
+        template = random.choice(CELL_HINT_FALLBACK_TEMPLATES)
+        hint_text = template.format(
+            row=row,
+            col=col,
+            region=region,
+        )
+
+    # Avoid exact repetition
+    attempts = 0
+    while hint_text in previous_hints and attempts < 5:
+        if confidence == "high" or confidence == "medium":
+            template = random.choice(CELL_PLACEMENT_HINT_TEMPLATES)
+            hint_text = template.format(
+                value=value,
+                row=row,
+                col=col,
+                region=region,
+            )
+        else:
+            template = random.choice(CELL_HINT_FALLBACK_TEMPLATES)
+            hint_text = template.format(
+                row=row,
+                col=col,
+                region=region,
+            )
+        attempts += 1
+
+    return HintResult(
+        content=hint_text,
+        hint_type="cell",
+        region=region,
+        cell={"row": row, "col": col, "value": value},
+    )
