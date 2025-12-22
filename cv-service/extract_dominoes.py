@@ -120,7 +120,7 @@ def preprocess_domino_image(
 
 def preprocess_for_hough(
     image: np.ndarray,
-    blur_size: int = 5
+    blur_size: int = 3
 ) -> np.ndarray:
     """
     Preprocess image specifically for HoughCircles detection.
@@ -181,6 +181,12 @@ def preprocess_for_contours(
     else:
         gray = image.copy()
 
+    # Crop a small margin from edges to avoid border artifacts
+    h, w = gray.shape[:2]
+    margin = max(3, min(h, w) // 20)  # 5% margin or at least 3 pixels
+    if h > 2 * margin and w > 2 * margin:
+        gray = gray[margin:h-margin, margin:w-margin]
+
     # Apply bilateral filter for edge-preserving smoothing
     filtered = cv2.bilateralFilter(gray, 9, 50, 50)
 
@@ -195,10 +201,14 @@ def preprocess_for_contours(
         c_value
     )
 
-    # Morphological cleanup
+    # Morphological cleanup - use erosion to separate touching pips
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
     cleaned = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
     cleaned = cv2.morphologyEx(cleaned, cv2.MORPH_OPEN, kernel)
+
+    # Additional erosion to separate merged blobs
+    kernel_small = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2, 2))
+    cleaned = cv2.erode(cleaned, kernel_small, iterations=1)
 
     save_debug_image("06_contour_preprocessed.png", cleaned)
 
@@ -400,8 +410,9 @@ def detect_pips_hough(
     # Calculate default min_dist based on image size
     h, w = preprocessed.shape[:2]
     if min_dist is None:
-        # Default: circles should be at least 1/6 of min dimension apart
-        min_dist = max(int(min(h, w) / 6), 10)
+        # Default: circles should be at least 1/10 of min dimension apart
+        # This allows for 6 pips in a 3x2 grid on a domino half
+        min_dist = max(int(min(h, w) / 10), 5)
 
     # Scale radius parameters based on image size
     # For small domino images, we need to adjust radius ranges
@@ -518,12 +529,15 @@ def detect_pips_contours(
     h, w = preprocessed.shape[:2]
 
     # Calculate default area bounds based on image size
-    # For a domino half, pips are typically 5-15% of the half width
+    # For a domino half, pips are typically small circles
+    # A pip on an 80x80 half might be 5-12 pixel radius = 78-452 area
     img_scale = (h * w) / 10000.0  # Normalize to 100x100 reference
     if min_area is None:
-        min_area = max(int(10 * img_scale), 10)
+        # Minimum area for a pip - allow small pips
+        min_area = max(int(20 * img_scale), 5)
     if max_area is None:
-        max_area = min(int(500 * img_scale), h * w // 10)
+        # Maximum area - pip shouldn't be more than 1/6 of the image
+        max_area = min(int(800 * img_scale), h * w // 6)
 
     # Ensure min < max
     if min_area >= max_area:
@@ -1131,12 +1145,21 @@ def detect_domino_pips(
     working_image = image.copy()
 
     # Step 1: Rotation detection and correction (optional)
+    # Only rotate if the canvas aspect ratio suggests the domino might be rotated
+    # A properly oriented domino image is wider than tall (aspect ratio > 1.5)
     if auto_rotate:
         try:
-            angle, center, size, box_points, contour = detect_rotation_angle_from_image(working_image)
-            # Only rotate if angle is significant (> 5 degrees)
-            if abs(angle) > 5.0:
-                working_image = rotate_domino(working_image, angle, expand_canvas=True)
+            h, w = working_image.shape[:2]
+            canvas_aspect = w / max(h, 1)
+
+            # Only attempt rotation if canvas is NOT clearly horizontal
+            # (i.e., canvas is square-ish or taller than wide)
+            if canvas_aspect < 1.5:
+                angle, center, size, box_points, contour = detect_rotation_angle_from_image(working_image)
+
+                # Only rotate if we detect a significant angle
+                if abs(angle) > 5.0:
+                    working_image = rotate_domino(working_image, angle, expand_canvas=True)
         except ValueError:
             # No contours found or other issue - continue without rotation
             pass
@@ -1167,31 +1190,47 @@ def detect_domino_pips(
 
         if use_hough_primary:
             # Try HoughCircles first (adaptive version)
+            hough_count = 0
+            hough_info = {}
             try:
-                pip_count, circles, detection_info = detect_pips_hough_adaptive(
+                hough_count, circles, hough_info = detect_pips_hough_adaptive(
                     half_image,
                     param2_range=(15, 40, 5),
                     max_pips=6
                 )
             except ValueError:
+                pass
+
+            # Also try contour detection for comparison
+            # Use lower min_circularity to catch slightly oval pips in real photos
+            contour_count = 0
+            contour_info = {}
+            try:
+                contour_count, contours, contour_info = detect_pips_contours(
+                    half_image,
+                    min_circularity=0.4  # Lower threshold for real photo pips
+                )
+            except ValueError:
+                pass
+
+            # Decide which result to use:
+            # Contour detection is more reliable for real photos (Hough over-detects noise)
+            # Use contours as primary, Hough as validation/fallback
+
+            contour_ran = 'image_size' in contour_info
+            hough_ran = 'image_size' in hough_info
+
+            if contour_ran:
+                # Contours are generally more accurate for real domino images
+                pip_count = contour_count
+                detection_info = contour_info
+            elif hough_ran:
+                # Fall back to Hough if contours failed
+                pip_count = hough_count
+                detection_info = hough_info
+            else:
                 pip_count = 0
                 detection_info = {}
-
-            # Fallback to contours if Hough failed or returned invalid count
-            if fallback_to_contours and (pip_count == 0 or not validate_pip_count(pip_count)):
-                try:
-                    contour_count, contours, contour_info = detect_pips_contours(
-                        half_image,
-                        min_circularity=0.5
-                    )
-                    # Use contour result if it's valid and Hough wasn't
-                    if validate_pip_count(contour_count) and (
-                        pip_count == 0 or not validate_pip_count(pip_count)
-                    ):
-                        pip_count = contour_count
-                        detection_info = contour_info
-                except ValueError:
-                    pass
         else:
             # Use contour-based detection primarily
             try:
@@ -1293,7 +1332,7 @@ def detect_domino_pips(
 
 def detect_pips_hough_adaptive(
     image: np.ndarray,
-    param2_range: Tuple[int, int, int] = (20, 40, 5),
+    param2_range: Tuple[int, int, int] = (10, 35, 5),
     max_pips: int = 6
 ) -> Tuple[int, np.ndarray, dict]:
     """
@@ -1317,7 +1356,7 @@ def detect_pips_hough_adaptive(
     best_result = (0, None, {})
     best_score = -1
 
-    # Try different param2 values
+    # Try different param2 values (from most sensitive to least)
     for param2 in range(param2_range[0], param2_range[1], param2_range[2]):
         try:
             pip_count, circles, info = detect_pips_hough(
@@ -1326,19 +1365,21 @@ def detect_pips_hough_adaptive(
             )
 
             # Score this detection
-            # Prefer results with pip count in valid range
+            # Prefer results with pip count in valid range (0-6)
             if 0 <= pip_count <= max_pips:
-                # Score based on consistency (low variance is good)
+                # Score based on pip count (more pips = better, up to max)
+                # with penalty for high variance
                 variance_penalty = info.get("radius_variance", 0) / 100.0
-                score = pip_count * (1 - min(variance_penalty, 0.5))
+                # Give higher weight to finding more pips (common under-detection issue)
+                score = pip_count * (1 - min(variance_penalty, 0.3))
 
                 if score > best_score:
                     best_score = score
                     best_result = (pip_count, circles, info)
                     info["param2_used"] = param2
 
-            # If we get a valid count with low variance, stop searching
-            if pip_count > 0 and pip_count <= max_pips and info.get("radius_variance", 999) < 10:
+            # Stop if we detect 6 pips with low variance (best possible result)
+            if pip_count == max_pips and info.get("radius_variance", 999) < 20:
                 break
 
         except Exception:
