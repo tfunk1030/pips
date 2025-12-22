@@ -9,7 +9,8 @@
  * - Level 4: Partial solution (3-5 cells)
  */
 
-import React, { useCallback, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -20,6 +21,13 @@ import {
   View,
 } from 'react-native';
 import { colors, radii, spacing } from '../../theme';
+
+// ════════════════════════════════════════════════════════════════════════════
+// Storage Keys
+// ════════════════════════════════════════════════════════════════════════════
+
+/** Storage key for persisting the last used hint level */
+const HINT_LEVEL_STORAGE_KEY = '@pips_solver/last_hint_level';
 
 // ════════════════════════════════════════════════════════════════════════════
 // Types
@@ -102,6 +110,40 @@ export function HintModal({
   const [selectedLevel, setSelectedLevel] = useState<HintLevel | null>(null);
 
   /**
+   * Load the last used hint level from AsyncStorage when modal becomes visible
+   */
+  useEffect(() => {
+    if (!visible) return;
+
+    const loadLastHintLevel = async () => {
+      try {
+        const storedLevel = await AsyncStorage.getItem(HINT_LEVEL_STORAGE_KEY);
+        if (storedLevel) {
+          const parsedLevel = parseInt(storedLevel, 10);
+          if (parsedLevel >= 1 && parsedLevel <= 4) {
+            setSelectedLevel(parsedLevel as HintLevel);
+          }
+        }
+      } catch {
+        // Silently ignore storage read errors - use default behavior
+      }
+    };
+
+    loadLastHintLevel();
+  }, [visible]);
+
+  /**
+   * Persist the hint level to AsyncStorage
+   */
+  const persistHintLevel = useCallback(async (level: HintLevel) => {
+    try {
+      await AsyncStorage.setItem(HINT_LEVEL_STORAGE_KEY, level.toString());
+    } catch {
+      // Silently ignore storage write errors
+    }
+  }, []);
+
+  /**
    * Handle hint level button press
    */
   const handleLevelPress = useCallback(
@@ -109,6 +151,9 @@ export function HintModal({
       setSelectedLevel(level);
       setLoading(true);
       setError(null);
+
+      // Persist the selected level asynchronously (don't await)
+      persistHintLevel(level);
 
       try {
         const hint = await onRequestHint(level);
@@ -122,7 +167,7 @@ export function HintModal({
         setLoading(false);
       }
     },
-    [onRequestHint]
+    [onRequestHint, persistHintLevel]
   );
 
   /**
