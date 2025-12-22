@@ -12,6 +12,7 @@ Key features:
 - Adaptive thresholding for varying lighting conditions
 - Histogram analysis fallback for when Hough detection fails
 - Intensity gradient analysis for edge-poor images
+- Perspective correction for distorted mobile camera images
 """
 
 import cv2
@@ -138,6 +139,439 @@ class GridLineResult:
             "partial_grid_info": self.partial_grid_info.to_dict() if self.partial_grid_info else None,
             "cells": [c.to_dict() for c in self.cells] if self.cells else None
         }
+
+
+@dataclass
+class PerspectiveCorrectionResult:
+    """
+    Result of perspective correction operation.
+
+    Attributes:
+        corrected_image: The perspective-corrected image
+        transform_matrix: The 3x3 perspective transformation matrix
+        source_points: Original corner points (top-left, top-right, bottom-right, bottom-left)
+        destination_points: Target corner points after correction
+        distortion_score: Measure of how distorted the original image was (0.0 = no distortion)
+        was_corrected: Whether correction was actually applied
+        original_size: Size of the original image (height, width)
+        corrected_size: Size of the corrected image (height, width)
+    """
+    corrected_image: Optional[np.ndarray] = None
+    transform_matrix: Optional[np.ndarray] = None
+    source_points: Optional[np.ndarray] = None
+    destination_points: Optional[np.ndarray] = None
+    distortion_score: float = 0.0
+    was_corrected: bool = False
+    original_size: Optional[Tuple[int, int]] = None
+    corrected_size: Optional[Tuple[int, int]] = None
+
+    def to_dict(self) -> Dict:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "source_points": self.source_points.tolist() if self.source_points is not None else None,
+            "destination_points": self.destination_points.tolist() if self.destination_points is not None else None,
+            "distortion_score": round(self.distortion_score, 4),
+            "was_corrected": self.was_corrected,
+            "original_size": list(self.original_size) if self.original_size else None,
+            "corrected_size": list(self.corrected_size) if self.corrected_size else None
+        }
+
+
+def order_corner_points(pts: np.ndarray) -> np.ndarray:
+    """
+    Order corner points in consistent order: top-left, top-right, bottom-right, bottom-left.
+
+    This is essential for perspective transform to work correctly, as the points
+    must be in a consistent order relative to the destination rectangle.
+
+    Args:
+        pts: Array of 4 corner points with shape (4, 2)
+
+    Returns:
+        Array of 4 points ordered as [top-left, top-right, bottom-right, bottom-left]
+    """
+    pts = pts.reshape(4, 2)
+
+    # Sort by sum (x + y): top-left has smallest sum, bottom-right has largest
+    s = pts.sum(axis=1)
+    # Sort by difference (y - x): top-right has smallest diff, bottom-left has largest
+    diff = np.diff(pts, axis=1).ravel()
+
+    rect = np.zeros((4, 2), dtype=np.float32)
+    rect[0] = pts[np.argmin(s)]      # Top-left
+    rect[2] = pts[np.argmax(s)]      # Bottom-right
+    rect[1] = pts[np.argmin(diff)]   # Top-right
+    rect[3] = pts[np.argmax(diff)]   # Bottom-left
+
+    return rect
+
+
+def detect_quadrilateral_corners(
+    image: np.ndarray,
+    min_area_ratio: float = 0.1,
+    max_area_ratio: float = 0.98,
+    approx_epsilon: float = 0.02,
+    edge_margin: int = 5,
+    debug_dir: Optional[str] = None
+) -> Optional[np.ndarray]:
+    """
+    Detect the four corner points of a quadrilateral region (puzzle boundary).
+
+    Uses edge detection and contour analysis to find the largest quadrilateral
+    contour in the image, which typically corresponds to the puzzle boundary.
+
+    Args:
+        image: Input BGR image
+        min_area_ratio: Minimum contour area as fraction of image area
+        max_area_ratio: Maximum contour area as fraction of image area
+        approx_epsilon: Epsilon parameter for polygon approximation (fraction of perimeter)
+        edge_margin: Margin from image edges to consider corners valid
+        debug_dir: Optional directory to save debug images
+
+    Returns:
+        Array of 4 corner points ordered as [TL, TR, BR, BL], or None if not found
+    """
+    if image is None:
+        return None
+
+    h, w = image.shape[:2]
+    img_area = h * w
+    min_area = img_area * min_area_ratio
+    max_area = img_area * max_area_ratio
+
+    # Convert to grayscale
+    if len(image.shape) == 3:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = image.copy()
+
+    # Apply Gaussian blur to reduce noise
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+
+    # Edge detection
+    edges = cv2.Canny(blurred, 50, 150)
+
+    # Dilate edges to close gaps
+    kernel = np.ones((3, 3), np.uint8)
+    edges = cv2.dilate(edges, kernel, iterations=2)
+
+    # Find contours
+    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    if not contours:
+        return None
+
+    # Sort contours by area (largest first)
+    contours = sorted(contours, key=cv2.contourArea, reverse=True)
+
+    best_quad = None
+    best_area = 0
+
+    for contour in contours[:10]:  # Check top 10 largest contours
+        area = cv2.contourArea(contour)
+
+        if area < min_area or area > max_area:
+            continue
+
+        # Approximate the contour to a polygon
+        perimeter = cv2.arcLength(contour, True)
+        epsilon = approx_epsilon * perimeter
+        approx = cv2.approxPolyDP(contour, epsilon, True)
+
+        # Look for quadrilaterals
+        if len(approx) == 4:
+            # Check if it's convex
+            if cv2.isContourConvex(approx):
+                # Verify corners are not too close to image edges
+                points = approx.reshape(4, 2)
+                if all(edge_margin < p[0] < w - edge_margin and
+                       edge_margin < p[1] < h - edge_margin for p in points):
+                    if area > best_area:
+                        best_quad = points
+                        best_area = area
+
+    if best_quad is None:
+        # Try alternative approach: find largest contour and fit bounding box
+        if len(contours) > 0:
+            largest = contours[0]
+            if cv2.contourArea(largest) >= min_area:
+                # Get minimum area rectangle
+                rect = cv2.minAreaRect(largest)
+                box = cv2.boxPoints(rect)
+                best_quad = np.int32(box)
+
+    if best_quad is not None:
+        # Order points consistently
+        best_quad = order_corner_points(best_quad.astype(np.float32))
+
+        # Save debug visualization
+        if debug_dir:
+            out_dir = Path(debug_dir)
+            out_dir.mkdir(parents=True, exist_ok=True)
+
+            debug_img = image.copy() if len(image.shape) == 3 else cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+            cv2.polylines(debug_img, [best_quad.astype(np.int32)], True, (0, 255, 0), 3)
+
+            # Draw corner labels
+            labels = ["TL", "TR", "BR", "BL"]
+            for i, (pt, label) in enumerate(zip(best_quad, labels)):
+                cv2.circle(debug_img, tuple(pt.astype(int)), 8, (0, 0, 255), -1)
+                cv2.putText(debug_img, label, (int(pt[0]) + 10, int(pt[1]) + 10),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+
+            cv2.imwrite(str(out_dir / "detected_corners.png"), debug_img)
+            cv2.imwrite(str(out_dir / "edges_for_corners.png"), edges)
+
+    return best_quad
+
+
+def compute_distortion_score(corners: np.ndarray) -> float:
+    """
+    Compute a score indicating how distorted the quadrilateral is from a rectangle.
+
+    Measures distortion based on:
+    1. Deviation of angles from 90 degrees
+    2. Difference in opposite side lengths
+    3. Non-parallelism of opposite sides
+
+    Args:
+        corners: Array of 4 corner points ordered as [TL, TR, BR, BL]
+
+    Returns:
+        Distortion score from 0.0 (perfect rectangle) to 1.0 (severely distorted)
+    """
+    if corners is None or len(corners) != 4:
+        return 0.0
+
+    corners = corners.reshape(4, 2).astype(np.float64)
+    tl, tr, br, bl = corners
+
+    # Calculate side lengths
+    top = np.linalg.norm(tr - tl)
+    right = np.linalg.norm(br - tr)
+    bottom = np.linalg.norm(bl - br)
+    left = np.linalg.norm(tl - bl)
+
+    if min(top, right, bottom, left) < 1:
+        return 0.0
+
+    # 1. Ratio difference for opposite sides (should be 1.0 for rectangle)
+    horizontal_ratio = min(top, bottom) / max(top, bottom) if max(top, bottom) > 0 else 1
+    vertical_ratio = min(left, right) / max(left, right) if max(left, right) > 0 else 1
+    ratio_score = 1.0 - (horizontal_ratio * vertical_ratio)
+
+    # 2. Angle deviation from 90 degrees
+    def angle_at_corner(p1, vertex, p2):
+        """Calculate angle at vertex in degrees."""
+        v1 = p1 - vertex
+        v2 = p2 - vertex
+        cos_angle = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2) + 1e-8)
+        cos_angle = np.clip(cos_angle, -1, 1)
+        return np.degrees(np.arccos(cos_angle))
+
+    angles = [
+        angle_at_corner(bl, tl, tr),  # Top-left
+        angle_at_corner(tl, tr, br),  # Top-right
+        angle_at_corner(tr, br, bl),  # Bottom-right
+        angle_at_corner(br, bl, tl),  # Bottom-left
+    ]
+
+    # Average deviation from 90 degrees
+    angle_deviations = [abs(a - 90) / 90 for a in angles]
+    angle_score = np.mean(angle_deviations)
+
+    # 3. Parallelism check using cross product
+    top_vec = tr - tl
+    bottom_vec = br - bl
+    left_vec = tl - bl
+    right_vec = tr - br
+
+    def parallelism(v1, v2):
+        """Return 0 if parallel, higher if not."""
+        n1 = v1 / (np.linalg.norm(v1) + 1e-8)
+        n2 = v2 / (np.linalg.norm(v2) + 1e-8)
+        cross = abs(np.cross(n1, n2))
+        return cross
+
+    h_parallel = parallelism(top_vec, bottom_vec)
+    v_parallel = parallelism(left_vec, right_vec)
+    parallel_score = (h_parallel + v_parallel) / 2
+
+    # Combined distortion score (weighted average)
+    distortion = 0.3 * ratio_score + 0.4 * angle_score + 0.3 * parallel_score
+
+    return min(distortion, 1.0)
+
+
+def correct_perspective(
+    image: np.ndarray,
+    source_corners: Optional[np.ndarray] = None,
+    target_size: Optional[Tuple[int, int]] = None,
+    distortion_threshold: float = 0.05,
+    auto_detect_corners: bool = True,
+    debug_dir: Optional[str] = None
+) -> PerspectiveCorrectionResult:
+    """
+    Correct perspective distortion in an image using getPerspectiveTransform.
+
+    This function handles images taken at an angle (e.g., mobile camera photos)
+    by detecting the puzzle quadrilateral and warping it to a rectangular view.
+
+    The correction process:
+    1. Detect or use provided corner points of the distorted quadrilateral
+    2. Calculate the distortion score to determine if correction is needed
+    3. If distortion exceeds threshold, compute perspective transform matrix
+    4. Apply warpPerspective to create corrected image
+
+    Args:
+        image: Input BGR or grayscale image
+        source_corners: Optional pre-detected corner points (4x2 array).
+                       If None and auto_detect_corners is True, corners are detected.
+        target_size: Optional (width, height) for output. If None, computed from corners.
+        distortion_threshold: Minimum distortion score to trigger correction (0.0 to 1.0).
+                             Lower values mean more aggressive correction.
+        auto_detect_corners: Whether to automatically detect corners if not provided
+        debug_dir: Optional directory to save debug images
+
+    Returns:
+        PerspectiveCorrectionResult containing corrected image and metadata
+    """
+    if image is None:
+        return PerspectiveCorrectionResult(was_corrected=False)
+
+    h, w = image.shape[:2]
+    result = PerspectiveCorrectionResult(
+        original_size=(h, w),
+        was_corrected=False
+    )
+
+    # Get source corners
+    if source_corners is None:
+        if auto_detect_corners:
+            source_corners = detect_quadrilateral_corners(image, debug_dir=debug_dir)
+        if source_corners is None:
+            # No corners detected, return original
+            result.corrected_image = image.copy()
+            result.corrected_size = (h, w)
+            return result
+
+    # Ensure corners are properly ordered and float32
+    source_corners = order_corner_points(source_corners.astype(np.float32))
+    result.source_points = source_corners
+
+    # Compute distortion score
+    distortion = compute_distortion_score(source_corners)
+    result.distortion_score = distortion
+
+    # Check if correction is needed
+    if distortion < distortion_threshold:
+        result.corrected_image = image.copy()
+        result.corrected_size = (h, w)
+        return result
+
+    # Calculate target rectangle dimensions from source corners
+    tl, tr, br, bl = source_corners
+
+    # Width: max of top and bottom edge lengths
+    width_top = np.linalg.norm(tr - tl)
+    width_bottom = np.linalg.norm(br - bl)
+    target_width = int(max(width_top, width_bottom))
+
+    # Height: max of left and right edge lengths
+    height_left = np.linalg.norm(tl - bl)
+    height_right = np.linalg.norm(tr - br)
+    target_height = int(max(height_left, height_right))
+
+    # Override with provided target size if given
+    if target_size is not None:
+        target_width, target_height = target_size
+
+    # Ensure minimum dimensions
+    target_width = max(target_width, 100)
+    target_height = max(target_height, 100)
+
+    # Define destination points (rectangular)
+    destination_corners = np.float32([
+        [0, 0],                          # Top-left
+        [target_width - 1, 0],           # Top-right
+        [target_width - 1, target_height - 1],  # Bottom-right
+        [0, target_height - 1]           # Bottom-left
+    ])
+    result.destination_points = destination_corners
+
+    # Compute perspective transformation matrix
+    transform_matrix = cv2.getPerspectiveTransform(source_corners, destination_corners)
+    result.transform_matrix = transform_matrix
+
+    # Apply perspective correction
+    corrected = cv2.warpPerspective(
+        image,
+        transform_matrix,
+        (target_width, target_height),
+        flags=cv2.INTER_LINEAR,
+        borderMode=cv2.BORDER_REPLICATE
+    )
+
+    result.corrected_image = corrected
+    result.corrected_size = (target_height, target_width)
+    result.was_corrected = True
+
+    # Save debug visualization
+    if debug_dir:
+        out_dir = Path(debug_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        # Draw source corners on original
+        debug_original = image.copy() if len(image.shape) == 3 else cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+        cv2.polylines(debug_original, [source_corners.astype(np.int32)], True, (0, 255, 0), 3)
+
+        # Add distortion score text
+        cv2.putText(debug_original, f"Distortion: {distortion:.3f}",
+                   (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+
+        cv2.imwrite(str(out_dir / "perspective_original.png"), debug_original)
+        cv2.imwrite(str(out_dir / "perspective_corrected.png"), corrected)
+
+        # Save transformation info
+        with open(str(out_dir / "perspective_info.txt"), "w") as f:
+            f.write(f"Distortion score: {distortion:.4f}\n")
+            f.write(f"Threshold: {distortion_threshold}\n")
+            f.write(f"Was corrected: {result.was_corrected}\n")
+            f.write(f"Original size: {w}x{h}\n")
+            f.write(f"Corrected size: {target_width}x{target_height}\n")
+            f.write(f"Source corners:\n{source_corners}\n")
+            f.write(f"Destination corners:\n{destination_corners}\n")
+
+    return result
+
+
+def correct_perspective_simple(
+    image: np.ndarray,
+    corners: np.ndarray
+) -> np.ndarray:
+    """
+    Simple perspective correction with minimal overhead.
+
+    Convenience function for quick perspective correction when you already
+    have the corner points and don't need detailed results.
+
+    Args:
+        image: Input image
+        corners: 4 corner points in any order (will be auto-ordered)
+
+    Returns:
+        Perspective-corrected image
+    """
+    if image is None or corners is None or len(corners) != 4:
+        return image
+
+    result = correct_perspective(
+        image,
+        source_corners=corners,
+        auto_detect_corners=False
+    )
+
+    return result.corrected_image if result.corrected_image is not None else image
 
 
 def ransac_fit_spacing(
@@ -1665,11 +2099,29 @@ if __name__ == "__main__":
     parser.add_argument("--min-spacing", type=float, default=30.0, help="Minimum cell spacing")
     parser.add_argument("--max-spacing", type=float, default=200.0, help="Maximum cell spacing")
     parser.add_argument("--partial", action="store_true", help="Enable partial/non-rectangular grid detection")
+    parser.add_argument("--perspective", action="store_true", help="Apply perspective correction before grid detection")
+    parser.add_argument("--distortion-threshold", type=float, default=0.05,
+                       help="Minimum distortion score to trigger perspective correction (0.0-1.0)")
     args = parser.parse_args()
 
     img = cv2.imread(args.image)
     if img is None:
         raise FileNotFoundError(f"Could not read image: {args.image}")
+
+    # Apply perspective correction if requested
+    perspective_result = None
+    if args.perspective:
+        perspective_result = correct_perspective(
+            img,
+            distortion_threshold=args.distortion_threshold,
+            auto_detect_corners=True,
+            debug_dir=args.debug_dir
+        )
+        if perspective_result.was_corrected:
+            img = perspective_result.corrected_image
+            print(f"Perspective correction applied (distortion: {perspective_result.distortion_score:.3f})")
+        else:
+            print(f"Perspective correction skipped (distortion: {perspective_result.distortion_score:.3f} < threshold: {args.distortion_threshold})")
 
     # Find ROI
     roi = find_puzzle_roi(img, debug_dir=args.debug_dir)
@@ -1716,6 +2168,13 @@ if __name__ == "__main__":
     print(f"Estimated cell size: {result.estimated_cell_width:.1f} x {result.estimated_cell_height:.1f}" if result.estimated_cell_width else "Cell size: N/A")
     print(f"Grid dimensions: {result.grid_dims}" if result.grid_dims else "Grid dims: N/A")
     print(f"Cells detected: {len(cells)}")
+
+    # Output perspective correction info if available
+    if perspective_result:
+        print(f"Perspective distortion: {perspective_result.distortion_score:.3f}")
+        print(f"Perspective corrected: {perspective_result.was_corrected}")
+        if perspective_result.was_corrected and perspective_result.corrected_size:
+            print(f"Corrected size: {perspective_result.corrected_size[1]}x{perspective_result.corrected_size[0]}")
 
     # Output partial grid info if available
     if result.partial_grid_info:
